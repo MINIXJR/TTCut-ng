@@ -27,6 +27,7 @@ sources:
   - data/ttavdata.cpp
   - avstream/ttac3acmod.cpp
   - data/ttstreampoint_audioworker.cpp
+  - data/ttstreampoint_audioworker.h
   - data/ttcutprojectdata.cpp
   - gui/ttcutmainwindow.cpp
 ---

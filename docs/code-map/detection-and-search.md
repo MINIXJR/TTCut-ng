@@ -1,21 +1,27 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-26
+base_commit: 2f9b961390528d59e643a6232ef1ef6bfb37acb8
+last_verified: 2026-10-02
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
   - data/ttsearchtask.cpp
+  - avstream/ttlumasample.h
   - data/ttsearchtask.h
   - data/ttsearchtask_aspectscan.cpp
   - data/ttsearchtask_aspectscan.h
   - data/ttsearchtask_blackframe.cpp
+  - data/ttsearchtask_blackframe.h
   - data/ttsearchtask_logo.cpp
+  - data/ttsearchtask_logo.h
   - data/ttsearchtask_scenechange.cpp
+  - data/ttsearchtask_scenechange.h
   - data/ttaspectdetect.cpp
   - data/ttaspectdetect.h
   - data/ttstreampoint.h
   - data/ttstreampoint_videoworker.cpp
+  - data/ttstreampoint_videoworker.h
   - data/ttstreampoint_audioworker.cpp
+  - data/ttstreampoint_audioworker.h
   - data/ttstreampointmodel.cpp
   - data/ttframesearchtask.cpp
   - data/ttframesearchtask.h
@@ -30,6 +36,7 @@ sources:
   - gui/ttaudiorepairdialog.h
   - gui/ttaudiorepairdialog.cpp
   - common/ttthreadtaskpool.cpp
+  - common/ttthreadtaskpool.h
   - common/ttthreadtask.cpp
   - common/ttsettings.h
   - common/ttsettings.cpp
@@ -56,7 +63,8 @@ Die Familie zerfällt nach **Ergebnisform**, nicht nach Codec:
 Daneben stehen drei Analysen, die **kein** Bild dekodieren und deshalb nicht von
 `TTSearchTask` erben, aber in denselben Aufgaben-Pool und dieselbe Marker-Liste
 münden: `TTStreamPointVideoWorker` (MPEG-2-Sequenz-Header),
-`TTStreamPointAudioWorker` (Stille, AC3-Formatwechsel) und seit
+`TTStreamPointAudioWorker` (Stille, AC3-Formatwechsel — ein Marker je
+Wechsel des Kanallayouts, Regel in `audio-es-input.md`) und seit
 `2026-08-19/20` `TTAudioAnomalyScanTask` (`data/ttaudioanomalyscantask.{h,cpp}`)
 — sequenzieller Scan einer AC3-Spur auf CRC-gültige, aber strukturell
 defekte Center+LFE-Bursts in Material, dessen LFE sonst digital still ist
@@ -136,7 +144,7 @@ flowchart TB
 
     subgraph NODEC["Ohne Bilddekodierung"]
         VWORK["TTStreamPointVideoWorker<br/>MPEG-2-Sequenz-Header"]
-        AWORK["TTStreamPointAudioWorker<br/>Stille + acmod"]
+        AWORK["TTStreamPointAudioWorker<br/>Stille + AC3-Kanallayout"]
         ANOMALY["TTAudioAnomalyScanTask<br/>AC3 C+LFE-Burst"]
     end
 

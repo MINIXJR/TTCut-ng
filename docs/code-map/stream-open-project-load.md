@@ -7,16 +7,20 @@ sources:
   - data/ttavlist.h
   - data/ttavlist.cpp
   - data/ttopenvideotask.cpp
+  - data/ttopenvideotask.h
   - data/ttopenaudiotask.cpp
   - data/ttopensubtitletask.cpp
+  - data/ttopensubtitletask.h
   - data/ttcutprojectdata.cpp
   - common/ttthreadtaskpool.cpp
+  - common/ttthreadtaskpool.h
   - common/ttthreadtask.cpp
   - gui/ttcutmainwindow.h
   - gui/ttcutmainwindow.cpp
   - gui/ttcutmainwindow_headless.cpp
   - gui/ttcutmain.cpp
   - gui/ttvideotreeview.cpp
+  - gui/ttvideotreeview.h
 ---
 
 # Code Map: Stream open and project load

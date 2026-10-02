@@ -11,6 +11,7 @@ sources:
   - avstream/ttfilebuffer.cpp
   - avstream/ttavtypes.cpp
   - data/ttopensubtitletask.cpp
+  - data/ttopensubtitletask.h
   - data/ttsubtitlelist.cpp
   - data/ttavdata.cpp
   - mpeg2window/ttmpeg2window2.cpp

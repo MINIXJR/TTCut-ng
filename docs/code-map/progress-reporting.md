@@ -1,17 +1,21 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-27
+base_commit: 2f9b961390528d59e643a6232ef1ef6bfb37acb8
+last_verified: 2026-10-02
 sources:
   - common/istatusreporter.h
+  - common/istatusreporter.cpp
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
   - data/ttsearchtask_aspectscan.cpp
   - data/ttstreampoint_videoworker.cpp
+  - data/ttstreampoint_videoworker.h
   - data/ttstreampoint_audioworker.cpp
+  - data/ttstreampoint_audioworker.h
   - common/ttexception.cpp
   - common/ttthreadtask.cpp
   - common/ttthreadtask.h
   - common/ttthreadtaskpool.cpp
+  - common/ttthreadtaskpool.h
   - common/ttcalibrationstore.h
   - common/ttcalibrationstore.cpp
   - common/ttprogressestimator.h

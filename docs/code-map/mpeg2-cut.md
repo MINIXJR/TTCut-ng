@@ -16,12 +16,14 @@ sources:
   - avstream/ttfilebuffer.h
   - extern/tttranscode.cpp
   - extern/tttranscode.h
+  - extern/ttencodeparameter.h
   - extern/ttmplexprovider.cpp
   - extern/ttmplexprovider.h
   - avstream/ttcutparameter.cpp
   - avstream/ttcutparameter.h
   - data/ttcutvideotask.cpp
   - data/ttopenvideotask.cpp
+  - data/ttopenvideotask.h
   - data/ttavdata.cpp
   - data/ttavdata.h
   - gui/ttcurrentframe.cpp

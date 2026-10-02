@@ -21,6 +21,7 @@ sources:
   - data/ttavdata.cpp
   - gui/ttcurrentframe.cpp
   - gui/ttcutsettingsmuxer.cpp
+  - gui/ttcutsettingsmuxer.h
   - common/ttstreamfiles.h
   - common/ttencodernames.h
   - avstream/ttesinfo.cpp

@@ -4,15 +4,18 @@ last_verified: 2026-09-27
 sources:
   - gui/ttcutmainwindow.cpp
   - gui/ttcutsettingsnavigation.cpp
+  - gui/ttcutsettingsnavigation.h
   - common/ttsettings.h
   - gui/ttquickjumpdialog.h
   - gui/ttquickjumpdialog.cpp
   - gui/ttquickjumpmodel.h
   - gui/ttquickjumpmodel.cpp
   - gui/ttquickjumpdelegate.cpp
+  - gui/ttquickjumpdelegate.h
   - gui/ttquickjumpworker.h
   - gui/ttquickjumpworker.cpp
   - common/ttthreadtaskpool.cpp
+  - common/ttthreadtaskpool.h
   - common/ttthreadtask.h
   - avstream/ttvideoindexlist.cpp
   - avstream/tth26xvideostream.h

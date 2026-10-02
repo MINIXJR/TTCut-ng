@@ -16,6 +16,7 @@ sources:
   - gui/ttcutpreview.cpp
   - data/ttpreviewclip.cpp
   - gui/ttcutsettingsaudio.cpp
+  - gui/ttcutsettingsaudio.h
   - gui/ttcutmainwindow.cpp
   - gui/ttcutmainwindow_headless.cpp
   - common/ttsettings.cpp
