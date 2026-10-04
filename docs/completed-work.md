@@ -68,6 +68,45 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Spurverwaltung (Ton- und Untertitelspuren)
 
+- **Marker für Tondatenschäden, Demux-Log, Scan-Log: drei Texte**
+  → **DONE (2026-10-04, Zweig `fix/audio-data-error-texts`)**.
+  - **Name** (`a4416e78`): „Tonstörungen" → „Ton-Datenfehler" (Quelltext
+    „Audio data error"). Der Marker steht für entfernten Müll oder einen
+    Rahmen mit falscher Prüfsumme; am Fall „Paul Panzer – Apaulkalypse"
+    (AC3-Rahmen 189153, 1:40:52,9) meldet `ttcut-audiofix` `crc_bad_frames`,
+    ffmpeg bestätigt es nur mit `-err_detect crccheck`, dekodiert stimmt der
+    Pegel auf 0,2 dB mit der MP2-Spur überein (Ähnlichkeit je 32-ms-Block
+    0,88, wie 50 von 170 Nachbarblöcken), der Anwender hört nichts.
+  - **Demux-Log** (`a4416e78`): „junk removed (1300 bytes) at video frame(s)
+    151322" stand dort, obwohl an der Stelle nichts entfernt wurde und die
+    1300 Bytes die angeschnittenen Rahmen am Rand waren. `audiofix_report`
+    schreibt je Art eine Zeile. Gate `audiofix_log_text` (auf dem alten
+    Text rot); ein neuer Demux derselben Aufnahme liefert byte-gleiche
+    ES-Dateien und eine gleiche `.info`.
+  - **Scan-Log** (`a4416e78`): „98.8%% null" — `QString::arg` kennt `%%`
+    nicht als Maskierung. Text in `TTAudioAnomalyScanTask::unsuitableMessage`,
+    geprüft in `test_anomalyscan`.
+- **Die eine Fehlerzeile in „1 -> N errors" von `repair_ac3_track`** →
+  **geklärt (2026-10-04), kein Defekt**. Sie ist der angeschnittene Rahmen
+  am Rand der Aufnahme. Gemessen an 05x08: die Rohspur aus der Aufnahme
+  liegt 1554 Bytes über ganzen Rahmen und gibt mit dem Aufruf aus
+  `ac3_decode_errors` genau eine Zeile, `[ac3] incomplete frame`;
+  `ttcut-audiofix` meldet dafür `edge_junk_bytes=1554` und sonst nichts; die
+  bereinigte Spur gibt null Zeilen. `repair_ac3_track` läuft vor der
+  Bereinigung, die Zeile steht deshalb vor und nach der Kopf-Reparatur
+  gleichermaßen im Zähler und verfälscht den Vergleich nicht.
+- **Marker „Tonstörungen" nannte die falsche Spur** → **DONE (2026-10-04,
+  Zweig `fix/audio-corruption-marker-track`, `a4416e78`)**. Der Marker trug
+  eine Spurnummer in der Reihenfolge der `.info`; die Tonliste sortiert AC3
+  nach vorn und lässt sich umordnen. Am Fall „Paul Panzer – Apaulkalypse"
+  (`.info`: MP2 vor AC3, Schaden in der AC3-Spur) stand „Spur 2", in der
+  Liste war Spur 2 die MP2-Spur — vom Anwender so gelesen. Jetzt nennt der
+  Marker den Dateinamen der Spur (erste Spalte der Tonliste):
+  „Tonstörungen: 151322–151322 (…_deu.ac3)". Die Marker-Erzeugung liegt in
+  `TTAVData::audioCorruptionPoints`. Gate `audio_corruption_marker` (auf
+  dem alten Stand rot: „(track 2)"). Marker in gespeicherten Projekten
+  behalten ihren alten Text.
+
 - **Audit-Lauf 8: Lese-Hypothesen H1–H7 der Karte `track-management.md`**
   → **DONE (2026-09-25, Zweig `cleanup/code-audit-run8`)**. Alle zur Laufzeit
   gemessen, bevor gebaut wurde (Protokoll `CLAUDE_TMP/TTCut-ng/code-audit-run8/messungen.md`).
