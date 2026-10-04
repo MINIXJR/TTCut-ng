@@ -480,6 +480,33 @@ void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, i
  * onOpenVideoFinished
  */
 /*!
+ * audioCorruptionPoints
+ */
+QList<TTStreamPoint> TTAVData::audioCorruptionPoints(const TTESInfo& esInfo, int offsetFrames, int* frames)
+{
+  QList<TTStreamPoint> points;
+  int covered = 0;
+  for (int t = 0; t < esInfo.audioTrackCount(); ++t) {
+    const QList<TTESRange> ranges = esInfo.audioTrack(t).corruptRanges;
+    for (const TTESRange& r : ranges) {
+      int pos = qMax(0, r.start - offsetFrames);
+      // The track is named by its file, which is what the audio list shows.
+      // A number would be the position in the .info - the list sorts AC3
+      // first and can be reordered, so it pointed at the wrong row.
+      // "Data error", not a disturbance: the range is removed junk or a
+      // frame with a bad checksum (the .info does not say which), and the
+      // latter can decode without any audible difference.
+      points.append(TTStreamPoint(pos, StreamPointType::Error,
+          tr("Audio data error: %1–%2 (%3)")
+              .arg(r.start).arg(r.end).arg(esInfo.audioTrack(t).file)));
+      covered += (r.end - r.start + 1);
+    }
+  }
+  if (frames) *frames = covered;
+  return points;
+}
+
+/*!
  * showExtraFrameClusterDialog
  * Classify .info doubled-PTS clusters against the MPEG-2 parser's field-pair
  * list and show the warning dialog. Runs once the video stream is built, so
@@ -603,18 +630,10 @@ void TTAVData::showExtraFrameClusterDialog(const TTAVItem* avItem, TTVideoStream
   // ttcut-audiofix sanitizer (.info audio_N_corrupt_ranges). Junk bytes
   // were already removed at demux time; the marker shows WHERE, so the
   // user can cut around the audible defect. Ranges arrive pre-clustered.
-  int audioCorruptZones = 0, audioCorruptFrames = 0;
-  for (int t = 0; t < esInfo.audioTrackCount(); ++t) {
-    const QList<TTESRange> ranges = esInfo.audioTrack(t).corruptRanges;
-    for (const TTESRange& r : ranges) {
-      int pos = qMax(0, r.start - offsetFrames);
-      clusters.append(TTStreamPoint(pos, StreamPointType::Error,
-          tr("Audio corruption: %1–%2 (track %3)")
-              .arg(r.start).arg(r.end).arg(t + 1)));
-      ++audioCorruptZones;
-      audioCorruptFrames += (r.end - r.start + 1);
-    }
-  }
+  int audioCorruptFrames = 0;
+  const QList<TTStreamPoint> audioCorrupt = audioCorruptionPoints(esInfo, offsetFrames, &audioCorruptFrames);
+  const int audioCorruptZones = audioCorrupt.size();
+  clusters.append(audioCorrupt);
 
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "extra-frame clusters:" << confirmedClusters

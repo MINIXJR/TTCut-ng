@@ -213,6 +213,11 @@ class TTAVData : public QObject
     //! The audio files the automatic search picks up next to a video:
     //! <base>*.<suffix> for every suffix TTAudioType can read.
     static QFileInfoList getAudioNames(const QFileInfo& vFileInfo);
+    // Markers for the per-track structural damage ttcut-audiofix reported
+    // (.info audio_N_corrupt_ranges), each offsetFrames before its range.
+    // frames (optional) receives the number of video frames covered.
+    static QList<TTStreamPoint> audioCorruptionPoints(const TTESInfo& esInfo, int offsetFrames,
+                                                      int* frames = nullptr);
 
   private:
     TTAVItem*      createAVItem();

@@ -611,6 +611,31 @@ audiofix_ranges_to_video_frames() {
         }'
 }
 
+# audiofix_report NAME JUNK_CSV CRC_CSV MID_BYTES EDGE_BYTES FPS
+# The log lines for one audio track the sanitizer reported on, one per kind
+# of finding: junk between frames was removed, a frame with a bad checksum
+# stays as it is. One "junk removed" line for both sent the reader looking
+# for a cut that is not there, with the size of the partial frames at the
+# recording edges as its byte count. Those two frames are no damage and get
+# an info line of their own.
+audiofix_report() {
+    local name="$1" junk_csv="$2" crc_csv="$3" mid_bytes="$4" edge_bytes="$5" fps="$6"
+    local junk_ranges crc_ranges
+    junk_ranges=$(audiofix_ranges_to_video_frames "$junk_csv" "" "$fps")
+    crc_ranges=$(audiofix_ranges_to_video_frames "" "$crc_csv" "$fps")
+    if [ -n "$junk_ranges" ]; then
+        warn "  $name: junk removed ($mid_bytes bytes) at video frame(s) $(format_ranges_hms "$junk_ranges" "$fps")"
+    fi
+    if [ -n "$crc_ranges" ]; then
+        warn "  $name: bad checksum, frame(s) left untouched, at video frame(s) $(format_ranges_hms "$crc_ranges" "$fps")"
+    fi
+    if [ -z "$junk_ranges$crc_ranges" ]; then
+        info "  $name: structure OK (trimmed $edge_bytes bytes of partial frame at the recording edges)"
+    elif [ "$edge_bytes" -gt 0 ]; then
+        info "  $name: trimmed $edge_bytes bytes of partial frame at the recording edges"
+    fi
+}
+
 # format_ranges_hms RANGES FPS
 # Render a frame-range CSV ("S-E,S-E,..." — an optional ":MS" suffix per
 # range, as in es_missing_ranges, is ignored) human-readable for the log:
@@ -2113,7 +2138,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     # than in junk_regions. They are removed like any junk (that
                     # is why they count towards the byte total below), but they
                     # are not damage and must not reach audio_N_corrupt_ranges -
-                    # otherwise TTCut-ng marks a "Tonstoerung" on every single
+                    # otherwise TTCut-ng puts a "Ton-Datenfehler" marker on every single
                     # recording. Empty when an older ttcut-audiofix is in PATH,
                     # which then behaves exactly as before.
                     EDGEB=$(echo "$AFIX_OUT" | grep -oP '^edge_junk_bytes=\K[0-9]+' || echo 0)
@@ -2122,11 +2147,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     AUDIOFIX_DROPPED[$i]=$(echo "$AFIX_OUT" | grep -oP '^dropped_frames=\K[0-9]+' || echo 0)
                     # ms positions (junk + CRC) -> video frames, clustered (<=2s)
                     AUDIOFIX_CORRUPT_RANGES[$i]=$(audiofix_ranges_to_video_frames "$JUNK" "$CRCB" "$FRAME_RATE_DEC")
-                    if [ -n "${AUDIOFIX_CORRUPT_RANGES[$i]}" ]; then
-                        warn "  $(basename "$AF"): junk removed (${AUDIOFIX_JUNK_BYTES[$i]} bytes) at video frame(s) $(format_ranges_hms "${AUDIOFIX_CORRUPT_RANGES[$i]}" "$FRAME_RATE_DEC")"
-                    else
-                        info "  $(basename "$AF"): structure OK (trimmed ${AUDIOFIX_JUNK_BYTES[$i]} bytes of partial frame at the recording edges)"
-                    fi
+                    audiofix_report "$(basename "$AF")" "$JUNK" "$CRCB" "$MIDB" "${EDGEB:-0}" "$FRAME_RATE_DEC"
                 else
                     rm -f "$TEMP_FIXED"
                     warn "  $(basename "$AF"): sanitize failed (rc=$FIX_RC), leaving untouched"
@@ -3059,7 +3080,7 @@ EOF
             echo "audio_${i}_ac3_fixed=true" >> "$OUTPUT_INFO"
             echo "audio_${i}_ac3_fixed_frames=${AC3_FIX_RESULTS[$i]}" >> "$OUTPUT_INFO"
         fi
-        # corrupt_ranges is what TTCut-ng turns into a "Tonstoerung" marker, so
+        # corrupt_ranges is what TTCut-ng turns into a "Ton-Datenfehler" marker, so
         # it carries real damage only. The byte counters are human diagnostics
         # (TTESInfo deliberately does not parse them) and are written whenever
         # the sanitizer removed anything at all - including the partial frames

@@ -344,6 +344,21 @@ static void testSyntheticIntegration()
 // collectFrameStats() must refuse such a track (empty result + log line)
 // instead of computing positions against the wrong grid.
 // ---------------------------------------------------------------------------
+// The log line of the suitability gate. QString::arg does not know "%%" as
+// an escape - the line used to read "98.8%% null".
+static void testUnsuitableMessage()
+{
+    TTAudioAnomalyScanTask::GateStatus gate;
+    gate.materialUnsuitable = true;
+    gate.lfeNullPercent = 98.8;
+    gate.frames51 = 131219;
+    const QString msg = TTAudioAnomalyScanTask::unsuitableMessage(0, gate, 99.0);
+    check(msg.contains("track 1:"), "unsuitable message: 1-based track number: " + msg);
+    check(msg.contains("(98.8% null over 131219 5.1 frames, need >= 99.0%)"),
+          "unsuitable message: percentages with one percent sign: " + msg);
+    check(!msg.contains("%%"), "unsuitable message: no doubled percent sign: " + msg);
+}
+
 static void testNon48kRefused()
 {
     const QString file = QStringLiteral("/usr/local/src/CLAUDE_TMP/TTCut-ng/anomaly_44100.ac3");
@@ -437,6 +452,7 @@ int main(int argc, char** argv)
     }
 
     testEvaluate();
+    testUnsuitableMessage();
     testVideoFrameForTime();
     testSyntheticIntegration();
     testNon48kRefused();
