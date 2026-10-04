@@ -5,6 +5,27 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **The marker for damaged audio data names the track by its file and is
+  called "Audio data error"** (German „Ton-Datenfehler", formerly
+  „Tonstörungen"). It gave a track number counted in `.info` order, while
+  the audio list sorts AC3 first and can be reordered — "track 2" pointed at
+  the MP2 row when the damage was in the AC3 track; it now carries the file
+  name the list shows. The new name no longer promises an audible defect:
+  the marker stands for removed junk bytes or a frame with a bad checksum,
+  and such a frame can decode without any difference (measured on one
+  recording). Markers in saved projects keep their old text. Gate:
+  `audio_corruption_marker`.
+- **Log line of the anomaly scan** printed "98.8%% null"; one percent sign
+  now.
+- **ttcut-demux no longer reports "junk removed" where nothing was
+  removed.** For a track whose only finding was a frame with a bad checksum
+  the log said "junk removed (N bytes) at video frame(s) X" — the frame at X
+  stays untouched, and N was the size of the partial frames at the recording
+  edges. The log now has one line per kind: "junk removed (N bytes) at …"
+  with the bytes removed there, "bad checksum, frame(s) left untouched, at
+  …", and an info line for the edge frames. The `.info` and the demuxed
+  files are unchanged (compared byte for byte on one recording). Gate:
+  `audiofix_log_text`.
 - **Repaired and layout-converted AC3 frames no longer stand out.** A frame
   that TTCut-ng re-encodes (audio repair, channel layout normalisation) was
   louder than its stream-copied neighbours — by 8 dB on players that apply

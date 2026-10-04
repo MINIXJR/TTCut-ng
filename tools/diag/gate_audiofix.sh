@@ -471,7 +471,7 @@ EOF
             fi
         fi
     fi
-    echo "NOTE: Step 3 (GUI acceptance -- 'Tonstoerungen:'/'Bildstoerungen:' markers visible in TTCut-ng on $FULLDIR) is a human check, not automated here."
+    echo "NOTE: Step 3 (GUI acceptance -- 'Ton-Datenfehler:'/'Bildstoerungen:' markers visible in TTCut-ng on $FULLDIR) is a human check, not automated here."
 fi
 
 echo "----"; echo "gate_audiofix: $PASS pass, $FAIL fail"

@@ -399,6 +399,21 @@ QVector<TTAudioAnomalyScanTask::FrameStat> TTAudioAnomalyScanTask::collectFrameS
 }
 
 // ---------------------------------------------------------------------------
+// unsuitableMessage() — the log line of the material-suitability gate.
+// ---------------------------------------------------------------------------
+QString TTAudioAnomalyScanTask::unsuitableMessage(int trackIndex, const GateStatus& gate,
+                                                  double needPercent)
+{
+  return QString("Audio anomaly scan track %1: LFE not predominantly silent "
+                 "(%2% null over %3 5.1 frames, need >= %4%) - no anomaly "
+                 "statement possible for this track")
+      .arg(trackIndex + 1)
+      .arg(QString::number(gate.lfeNullPercent, 'f', 1))
+      .arg(gate.frames51)
+      .arg(QString::number(needPercent, 'f', 1));
+}
+
+// ---------------------------------------------------------------------------
 // operation() — decode, evaluate, translate findings to video-frame markers.
 // ---------------------------------------------------------------------------
 void TTAudioAnomalyScanTask::operation()
@@ -457,13 +472,7 @@ void TTAudioAnomalyScanTask::operation()
   // explicitly calls for a log line on the unsuitable path.
   if (gate.materialUnsuitable) {
     log->infoMsg(__FILE__, __LINE__,
-        QString("Audio anomaly scan track %1: LFE not predominantly silent "
-                "(%2%% null over %3 5.1 frames, need >= %4%%) - no anomaly "
-                "statement possible for this track")
-            .arg(mTrackIndex + 1)
-            .arg(QString::number(gate.lfeNullPercent, 'f', 1))
-            .arg(gate.frames51)
-            .arg(QString::number(cfg->anomalyLfeNullPercent(), 'f', 1)));
+        unsuitableMessage(mTrackIndex, gate, cfg->anomalyLfeNullPercent()));
   }
 
   QList<TTStreamPoint> points;

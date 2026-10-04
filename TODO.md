@@ -253,29 +253,14 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `.claude/skills/release/SKILL.md`) / `lrelease` pflegen.
 - Undo/Redo for cut list operations
 - Direct VDR .rec folder support (open recording without manual demux)
-- **Marker „Tonstörungen": falsche Spur, Prüfsummenfehler ohne hörbare
-  Folge, Demux-Meldungen** (gemessen 2026-10-04 an „Paul Panzer –
-  Apaulkalypse" und 05x08; nichts davon behoben)
-  - **Die Spurnummer im Marker ist die Position in der `.info`, nicht in der
-    Tonliste.** `TTAVData` schreibt `(track %3)` mit dem `.info`-Index
-    (`data/ttavdata.cpp`, „Audio corruption"), die Tonliste sortiert AC3 nach
-    vorn (`TTAudioItem::operator<`). Steht in der `.info` MP2 vor AC3, meint
-    „Spur 2" die AC3-Spur, in der Liste ist Spur 2 aber die MP2-Spur — vom
-    Anwender so gelesen.
-  - **Ein Rahmen mit falscher Prüfsumme wird als Tonstörung gemeldet, auch
-    wenn sein Ton nicht abweicht.** AC3-Rahmen 189153 (1:40:52,9):
-    `ttcut-audiofix` meldet `crc_bad_frames`, ffmpeg bestätigt es nur mit
-    `-err_detect crccheck`. Dekodiert stimmt der Pegel auf 0,2 dB mit der
-    MP2-Spur überein, die Ähnlichkeit je 32-ms-Block (0,88) liegt im Bereich
-    normaler Nachbarblöcke; der Anwender hört nichts. Welche Bits falsch
-    sind, ist nicht bestimmt.
-  - **`ttcut-demux` meldet „junk removed (N bytes) at video frame(s) …"**,
-    sobald ein Bereich gemeldet wird — auch wenn die Bytes nur die
-    angeschnittenen Rahmen am Rand sind und der Bereich von einem
-    Prüfsummenfehler stammt, an dem nichts entfernt wurde
-    (`tools/ttcut-demux/ttcut-demux`, Abschnitt „AUDIO ES SANITIZE").
-  - **Eine Fehlerzeile im Ausgangszustand der AC3-Spur von 05x08**
-    (`repair_ac3_track`: „1 -> 59 errors"); wo sie liegt, ist nicht bestimmt.
+- **Marker „Ton-Datenfehler" trennt entfernten Müll nicht von einem
+  Prüfsummenfehler** (2026-10-04). Die `.info` führt beides im selben Feld
+  (`audio_N_corrupt_ranges`), der Marker kann die Art deshalb nicht nennen —
+  nur das Demux-Log tut es. Ein Rahmen mit falscher Prüfsumme kann ohne
+  hörbaren Unterschied dekodieren (gemessen an einem Fall: Pegel auf 0,2 dB
+  gleich der MP2-Spur), entfernter Müll ist an keinem Fall gemessen. Erst
+  mit einer Kennung der Art in der `.info` ließe sich der Marker auf Stellen
+  beschränken, an denen Daten fehlen.
 
 ### Audio Format Support
 
@@ -403,9 +388,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   - Übersehene Störungen: unbekannt. Für ein besseres Merkmal fehlt die
     Grundlage (zwei bestätigte Störungen aus einer Aufnahme). Belegbar ist
     nur: Marker als Kandidat ausweisen, Vertrauen weglassen.
-- **Log-Text des Scans gibt „%%" aus** („98.8%% null"): `QString::arg`
-  kennt `%%` nicht als Maskierung (`data/ttaudioanomalyscantask.cpp`,
-  Meldung „LFE not predominantly silent").
 
 ## Low Priority
 
@@ -442,13 +424,19 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   - **Mischkoeffizienten** der Umrechnung 5.1 ↔ Stereo sind die Vorgaben
     von libswresample; die Wirkung der übernommenen Mischpegel auf einen
     Abspieler, der 5.1 nach Stereo mischt, ist nicht gemessen.
-  - **Pegel auf 05x08 über der Toleranz** (gemessen 2026-10-04).
-    `gate_ac3_reencode_real.sh` meldet an den AC3-Rahmen 70696, 71335 und
-    87840 eine schlechteste Abweichung von 0,42 / 0,22 / 0,21 dB bei
-    0,2 dB erlaubt (Versatz 0, Kopffelder gleich; Kompression im Bereich
-    bis 5,24 dB). Die Kontrolle 05x05, Rahmen 38437, besteht mit 0,08 dB.
-    Alle drei Stellen sind laute Effekte; Kanal und Rahmen der Abweichung
-    sind nicht bestimmt.
+  - **An lauten, dichten Stellen ist die Neu-Kodierung gröber** (gemessen
+    2026-10-04 an drei Stellen einer DVB-Aufnahme: Explosion, Schuss, laute
+    Szene; 5.1 bei 448 kbit/s). Fehler der neu kodierten Rahmen gegen die
+    Quelle, je Kanal im Mittel: −19 bis −22 dB an der Explosion, −23 bis
+    −29 dB am Schuss, −27 bis −30 dB an der lauten Szene; an einer ruhigen
+    Stelle −32 bis −36 dB. Ein reiner ffmpeg-Lauf (dieselben Rahmen
+    dekodiert und mit `ac3`, 448k neu kodiert) liegt je Kanal auf 0,8 dB
+    gleich — es ist die Grenze des Encoders, kein Fehler von
+    `TTAc3Reencoder`. Folge für `gate_ac3_reencode_real.sh`: die
+    Pegelprüfung (0,2 dB je Rahmen und Kanal) schlägt dort an, mit 0,42 /
+    0,22 / 0,21 dB; die größte Abweichung liegt in SL/SR bei −23 dBFS. Die
+    Toleranz stammt von der ruhigen Stelle (0,08 dB). Hörbarkeit nicht
+    geprüft.
 
 - **Zeitsprung-Dialog auf dem zweiten Bildschirm** (Audit-Lauf 16, N4, nicht
   gemessen). `TTQuickJumpDialog` nimmt Vorgabegröße und Klemmung vom

@@ -80,6 +80,8 @@ public:
                                  double lfeNullPercent,
                                  double lfeMinPeakDb,
                                  GateStatus* gateOut = nullptr);
+  // Log line for a track the gate rejected (GateStatus::materialUnsuitable).
+  static QString unsuitableMessage(int trackIndex, const GateStatus& gate, double needPercent);
   // Audio time (s) -> video display frame index, inverse of
   // (index - extrasBefore)/fps; iterates until stable.
   static int videoFrameForTime(double seconds, double fps,

@@ -83,8 +83,8 @@
     </message>
     <message>
         <location filename="../data/ttavdata.cpp" line="640"/>
-        <source>Audio corruption: %1–%2 (track %3)</source>
-        <translation>Tonstörungen: %1–%2 (Spur %3)</translation>
+        <source>Audio data error: %1–%2 (%3)</source>
+        <translation>Ton-Datenfehler: %1–%2 (%3)</translation>
     </message>
     <message>
         <location filename="../data/ttavdata.cpp" line="663"/>

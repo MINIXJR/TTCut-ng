@@ -102,6 +102,7 @@ progressestimator      unit  120  test_progressestimator
 streampoint_anomaly    unit  120  test_streampoint_anomaly
 esinfo                 unit  120  test_esinfo
 audiofix_esinfo        unit  120  test_audiofix_esinfo
+audio_corruption_marker unit 120  test_audio_corruption_marker
 mpeg2order             unit  120  test_mpeg2order
 mkv_framerate          unit  300  test_mkvmux
 mux_script             unit  120  test_mux_script
@@ -156,6 +157,7 @@ vdr_example_names      unit  120  -
 ocr_glyphs_selftest    unit  60   -
 demux_gapsync          unit  300  -
 ffmpeg_edge_packets    unit  120  -
+audiofix_log_text      unit  60   -
 audiofix_edge_ac3      unit  120  -
 audiofix_edge_mp2      unit  120  -
 ac3fix_contract        unit  120  -
@@ -339,6 +341,7 @@ gate_progressestimator()     { "$D/test_progressestimator"; }
 gate_streampoint_anomaly()   { "$D/test_streampoint_anomaly"; }
 gate_esinfo()                { "$D/test_esinfo"; }
 gate_audiofix_esinfo()       { "$D/test_audiofix_esinfo"; }
+gate_audio_corruption_marker() { "$D/test_audio_corruption_marker"; }
 gate_mpeg2order()            { "$D/test_mpeg2order"; }
 gate_mkv_framerate()         { "$D/gate_mkv_framerate.sh" "$W"; }
 gate_mux_script()             { "$D/test_mux_script" "$W"; }
@@ -424,6 +427,7 @@ gate_ocr_glyphs_selftest() {
 }
 gate_demux_gapsync()         { need "$DEMUX"; "$D/gate_demux_gapsync.sh"; }
 gate_ffmpeg_edge_packets()   { need "$DEMUX"; "$D/gate_ffmpeg_edge_packets.sh" "$DEMUX"; }
+gate_audiofix_log_text()     { need "$DEMUX"; "$D/gate_audiofix_log_text.sh" "$DEMUX"; }
 gate_audiofix_edge_ac3()     { need "$AUDIOFIX" "$A264"; "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$A264" 768; }
 gate_audiofix_edge_mp2()     { need "$AUDIOFIX" "$MP2";  "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$MP2" 576; }
 # tools/ttcut-screenshots.sh must fail when the application run fails or
