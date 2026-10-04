@@ -253,6 +253,29 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `.claude/skills/release/SKILL.md`) / `lrelease` pflegen.
 - Undo/Redo for cut list operations
 - Direct VDR .rec folder support (open recording without manual demux)
+- **Marker „Tonstörungen": falsche Spur, Prüfsummenfehler ohne hörbare
+  Folge, Demux-Meldungen** (gemessen 2026-10-04 an „Paul Panzer –
+  Apaulkalypse" und 05x08; nichts davon behoben)
+  - **Die Spurnummer im Marker ist die Position in der `.info`, nicht in der
+    Tonliste.** `TTAVData` schreibt `(track %3)` mit dem `.info`-Index
+    (`data/ttavdata.cpp`, „Audio corruption"), die Tonliste sortiert AC3 nach
+    vorn (`TTAudioItem::operator<`). Steht in der `.info` MP2 vor AC3, meint
+    „Spur 2" die AC3-Spur, in der Liste ist Spur 2 aber die MP2-Spur — vom
+    Anwender so gelesen.
+  - **Ein Rahmen mit falscher Prüfsumme wird als Tonstörung gemeldet, auch
+    wenn sein Ton nicht abweicht.** AC3-Rahmen 189153 (1:40:52,9):
+    `ttcut-audiofix` meldet `crc_bad_frames`, ffmpeg bestätigt es nur mit
+    `-err_detect crccheck`. Dekodiert stimmt der Pegel auf 0,2 dB mit der
+    MP2-Spur überein, die Ähnlichkeit je 32-ms-Block (0,88) liegt im Bereich
+    normaler Nachbarblöcke; der Anwender hört nichts. Welche Bits falsch
+    sind, ist nicht bestimmt.
+  - **`ttcut-demux` meldet „junk removed (N bytes) at video frame(s) …"**,
+    sobald ein Bereich gemeldet wird — auch wenn die Bytes nur die
+    angeschnittenen Rahmen am Rand sind und der Bereich von einem
+    Prüfsummenfehler stammt, an dem nichts entfernt wurde
+    (`tools/ttcut-demux/ttcut-demux`, Abschnitt „AUDIO ES SANITIZE").
+  - **Eine Fehlerzeile im Ausgangszustand der AC3-Spur von 05x08**
+    (`repair_ac3_track`: „1 -> 59 errors"); wo sie liegt, ist nicht bestimmt.
 
 ### Audio Format Support
 
@@ -361,6 +384,28 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   der Scan läuft heute nur als Hintergrund-Task in TTCut-ng nach dem Laden;
   ein CLI-Ableger könnte den gesamten Korpus batch-scannen, ohne jede Datei
   einzeln in der GUI zu öffnen.
+- **Der Scan trennt gewollten Ton nicht von Störungen** (gemessen
+  2026-10-04). Geprüft werden nur LFE-Insel und Sprung im Center; das
+  erfüllt jede Explosion in einem Film mit sonst stillem LFE.
+  - Zählung über alle 14 AC3-Spuren (8 aus dem Korpus als Rohspur, 6 aus
+    `ProjectX_Temp`): 6 ohne 5.1; 3 mit 5.1, aber LFE zu oft aktiv (kein
+    Urteil: The Rookie 07x12, 05x06 mit 98,8 %, 05x07 mit 98,9 % still);
+    3 geeignet ohne Fund (ServusTV, The Rookie 07x11, 05x05); 2 geeignet
+    mit je 3 Funden.
+  - Von den 6 Funden sind 2 bestätigte Störungen (beide 02x06), 4 nicht:
+    der schon bei der Kalibrierung notierte Fehlalarm auf 02x06 und alle
+    drei auf 05x08 (Explosion 0:37:42, Schuss 0:38:02, laute Szene 0:46:50,
+    vom Anwender am Bild geprüft). Alle sechs tragen Vertrauen 1,00.
+  - „Die übrigen Kanäle bleiben ruhig" trennt die Fälle nicht: der
+    bestätigte Abspann-Knacks hebt L/R um 17–20 dB, die laute Szene nur um
+    6–7 dB; die Spitze in L liegt beim Defekt bei −16,8, beim Fehlalarm bei
+    −17,4 dBFS.
+  - Übersehene Störungen: unbekannt. Für ein besseres Merkmal fehlt die
+    Grundlage (zwei bestätigte Störungen aus einer Aufnahme). Belegbar ist
+    nur: Marker als Kandidat ausweisen, Vertrauen weglassen.
+- **Log-Text des Scans gibt „%%" aus** („98.8%% null"): `QString::arg`
+  kennt `%%` nicht als Maskierung (`data/ttaudioanomalyscantask.cpp`,
+  Meldung „LFE not predominantly silent").
 
 ## Low Priority
 
@@ -397,6 +442,13 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   - **Mischkoeffizienten** der Umrechnung 5.1 ↔ Stereo sind die Vorgaben
     von libswresample; die Wirkung der übernommenen Mischpegel auf einen
     Abspieler, der 5.1 nach Stereo mischt, ist nicht gemessen.
+  - **Pegel auf 05x08 über der Toleranz** (gemessen 2026-10-04).
+    `gate_ac3_reencode_real.sh` meldet an den AC3-Rahmen 70696, 71335 und
+    87840 eine schlechteste Abweichung von 0,42 / 0,22 / 0,21 dB bei
+    0,2 dB erlaubt (Versatz 0, Kopffelder gleich; Kompression im Bereich
+    bis 5,24 dB). Die Kontrolle 05x05, Rahmen 38437, besteht mit 0,08 dB.
+    Alle drei Stellen sind laute Effekte; Kanal und Rahmen der Abweichung
+    sind nicht bestimmt.
 
 - **Zeitsprung-Dialog auf dem zweiten Bildschirm** (Audit-Lauf 16, N4, nicht
   gemessen). `TTQuickJumpDialog` nimmt Vorgabegröße und Klemmung vom
