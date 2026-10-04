@@ -62,11 +62,16 @@ public:
   qint64           audioFrameTo()   const { return mAudioFrameTo; }
   bool             hasAudioFrameRange() const
                      { return mAudioFrameFrom >= 0 && mAudioFrameTo >= mAudioFrameFrom; }
+  // Decoder planes a repair should preset for an AudioAnomaly marker (bit n =
+  // plane n, the convention of TTAudioRepairItem::channelMask()). 0 = not
+  // known: every other marker type, and markers from older project files.
+  quint8           audioChannelMask() const { return mAudioChannelMask; }
 
   void setFrameIndex(int index)              { mFrameIndex = index; }
   void setDescription(const QString& desc)   { mDescription = desc; }
   void setAudioFrameRange(qint64 from, qint64 to)
                      { mAudioFrameFrom = from; mAudioFrameTo = to; }
+  void setAudioChannelMask(quint8 mask)      { mAudioChannelMask = mask; }
 
   bool isAutoDetected() const;
 
@@ -113,6 +118,7 @@ private:
   float            mDuration;
   qint64           mAudioFrameFrom = -1;   // inclusive, -1 = unknown
   qint64           mAudioFrameTo   = -1;   // inclusive, -1 = unknown
+  quint8           mAudioChannelMask = 0;  // 0 = unknown
 };
 
 #endif // TTSTREAMPOINT_H

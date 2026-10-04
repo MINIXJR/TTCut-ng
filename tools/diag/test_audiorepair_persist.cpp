@@ -768,6 +768,8 @@ static void testStreamPointAudioFrameRangeRoundTrip(const QString& workDir)
     TTStreamPoint withRange(1234, StreamPointType::AudioAnomaly,
                              QStringLiteral("LFE/center burst"), 0.87f, 0.16f);
     withRange.setAudioFrameRange(5000, 5004);
+    // The planes a repair should preset (a stop marker on 5.1 names all six).
+    withRange.setAudioChannelMask(0x3F);
     check(withRange.hasAudioFrameRange(), "source: withRange has an audio frame range");
 
     // Without range: any other marker type, or an AudioAnomaly point from
@@ -797,6 +799,9 @@ static void testStreamPointAudioFrameRangeRoundTrip(const QString& workDir)
     // unconditionally for every point is caught too.
     check(xmlText.count(QStringLiteral("<AudioFrameFrom>")) == 1,
           "written xml has exactly one AudioFrameFrom element (not one per point)");
+    check(xmlText.contains("<AudioChannels>63</AudioChannels>"), "written xml contains AudioChannels 63");
+    check(xmlText.count(QStringLiteral("<AudioChannels>")) == 1,
+          "written xml has exactly one AudioChannels element (not for the point without a mask)");
 
     TTAVData avDst;
     QList<TTStreamPoint> loaded;
@@ -839,12 +844,15 @@ static void testStreamPointAudioFrameRangeRoundTrip(const QString& workDir)
         check(rWithRange->frameIndex() == 1234,     "reload: frameIndex round-trips");
         check(rWithRange->description() == QStringLiteral("LFE/center burst"),
               "reload: description round-trips");
+        check(rWithRange->audioChannelMask() == 0x3F,
+              QString("reload: channel mask round-trips (0x3F, got %1)").arg(rWithRange->audioChannelMask()));
     }
     if (rNoRange) {
         check(!rNoRange->hasAudioFrameRange(),
               "reload: legacy/no-range point still has no audio frame range "
               "(old-project load path unaffected)");
         check(rNoRange->frameIndex() == 42, "reload: no-range point frameIndex round-trips");
+        check(rNoRange->audioChannelMask() == 0, "reload: a point without the element loads with mask 0 (unknown)");
     }
 }
 

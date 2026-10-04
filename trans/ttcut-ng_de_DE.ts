@@ -765,6 +765,10 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <translation>Tonanomalie: C+LFE-Störimpuls (Spur %1, LFE-Spitze %2 dB)</translation>
     </message>
     <message>
+        <source>Audio anomaly: sound stops abruptly (track %1, drop %2 dB)</source>
+        <translation>Tonanomalie: Ton bricht ab (Spur %1, Abfall %2 dB)</translation>
+    </message>
+    <message>
         <location filename="../data/ttaudioanomalyscantask.cpp" line="482"/>
         <source> (overlaps gap repair)</source>
         <translation> (überschneidet sich mit Lücken-Reparatur)</translation>

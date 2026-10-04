@@ -163,13 +163,13 @@ TTAudioRepairDialog::TTAudioRepairDialog(TTAVItem* avItem, const TTStreamPoint& 
   qint64 approxFrom = 0, approxTo = 0;
   approxAc3RangeForMarker(mPoint, frameRate, mExtraFrameIndices, approxFrom, approxTo);
 
-  // v1 default: the scanner currently only ever reports C+LFE bursts (Task
-  // 6, TTAudioAnomalyScanTask::operation()). The marker's description is a
-  // fully localized tr() string with no locale-stable channel marker to
-  // parse back out, so parsing it would break under a translated build;
-  // this fixed default matches the spec's "bzw. Default C+LFE" fallback
-  // directly instead.
-  quint8 initialMask = (1u << 2) | (1u << 3); // C + LFE
+  // The marker names the planes to preset (TTStreamPoint::audioChannelMask):
+  // C+LFE for a finding of the LFE search, every plane of its frames for an
+  // abrupt stop. A marker without the information (older project files)
+  // gets C+LFE, the only kind of finding there was.
+  quint8 initialMask = mPoint.audioChannelMask() != 0
+      ? mPoint.audioChannelMask()
+      : quint8((1u << 2) | (1u << 3));
   qint64 initFrom = approxFrom, initTo = approxTo;
   // True as soon as initFrom/initTo are real AC3 frame numbers rather than a
   // video-frame estimate: either the marker carries the scanner's own range
