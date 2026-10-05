@@ -1,6 +1,6 @@
 ---
-base_commit: 2e5c29e13ce384daaa30e2f0407fa29f42e6b93c
-last_verified: 2026-10-02
+base_commit: 6ef4fde021c76323be391aa80a20f68dccfe3373
+last_verified: 2026-10-05
 sources:
   - data/ttaudioanomalyscantask.h
   - data/ttaudioanomalyscantask.cpp
@@ -19,6 +19,7 @@ sources:
   - data/ttavdata.cpp
   - data/ttcutprojectdata.cpp
   - data/ttstreampoint.h
+  - extern/ttaudiocutter.h
   - extern/ttaudiocutter.cpp
   - docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md
 ---
@@ -50,7 +51,7 @@ Legend: solid = data, dashed = trigger (who starts what).
 ```mermaid
 flowchart TD
     MW["TTCutMainWindow<br/>startAudioAnomalyScan"]
-    SCAN["TTAudioAnomalyScanTask<br/>collectFrameStats / evaluate"]
+    SCAN["TTAudioAnomalyScanTask<br/>collectFrameStats / evaluate / evaluateStops"]
     PTS["TTStreamPointModel<br/>AudioAnomaly markers"]
     WID["TTStreamPointWidget<br/>context menu"]
     DLG["TTAudioRepairDialog"]
@@ -97,17 +98,17 @@ flowchart TD
 | From → To | What crosses (data / order / invariant) |
 |---|---|
 | `MW` -.-> `SCAN` | `startAudioAnomalyScan`: file of `TTAVItem::firstAc3TrackIndex()` only (one AC3 track, TODO M8), the video frame rate, `TTAVData::extraFrameIndices()` and `audioGapFrameRanges()`. Automatic start and its latch (`maybeStartAutoAnomalyScan`, `anomalyScanStarted`) are in stream-points.md. |
-| `SCAN` → `PTS` | `pointsDetected` emits once, at the end of `operation()`; a cancel emits an empty list (partial results are discarded). One `TTStreamPoint` per finding: `frameIndex` = `videoFrameForTime(frameFrom · 32 ms)`, duration in seconds, description with the LFE peak (“overlaps gap repair” when it touches an audio-gap range), and the finding's own AC3 range via `setAudioFrameRange` (both bounds inclusive). The scan refuses any sample rate other than 48 kHz (empty stats, “not run”). |
-| `PTS` → `WID` | The marker row; the menu offers repair actions only for `AudioAnomaly` markers and only when the item has an AC3 track. |
-| `ITEM` → `WID` | `TTAudioRepairDialog::repairIndexForMarker(item, point, extras)` — the one marker ↔ repair link: on the item's first AC3 track, `findAudioRepairOverlapping(track, from, to)` over the marker's range (`approxAc3RangeForMarker`), i.e. the index of the first repair whose closed AC3 range touches it, or -1 (also for other marker types and items without AC3). Decides “Repair…” vs “Edit repair…”/“Remove repair”. |
-| `WID` → `DLG` | Marker, `repairTrackIndex` = the item's **first** AC3 track, `mExtraFrameIndices`. The dialog is modal (`exec()`). On accept the widget appends the “(repair planned)” suffix to the marker text. |
+| `SCAN` → `PTS` | `pointsDetected` emits once, at the end of `operation()`; a cancel emits an empty list (partial results are discarded). One `TTStreamPoint` per finding of either search, sorted by position: `frameIndex` = `videoFrameForTime(frameFrom · 32 ms)`, duration in seconds, description with the LFE peak (LFE search) or the drop in dB (stop search; “overlaps gap repair” when it touches an audio-gap range), the finding's own AC3 range via `setAudioFrameRange` (both bounds inclusive) the planes of the finding via `setAudioChannelMask` — C+LFE for an LFE finding, every plane of its frames for a stop — and its kind via `setAudioAnomalyKind` (`LfeBurst` / `AbruptStop`). A stop marker covers three AC3 frames: the one with the boundary and one on each side. The scan refuses any sample rate other than 48 kHz (empty stats, “not run”). |
+| `PTS` → `WID` | The marker row; the menu offers repair actions only for `AudioAnomaly` markers and only when the item has an AC3 track. A **new** repair (“Repair…”) only when `TTStreamPoint::offersNewAudioRepair()` — not for an `AbruptStop` marker, where muting with a short fade ends as hard as the stop itself (TODO.md); a marker without a kind (older project files) counts as an LFE finding. |
+| `ITEM` → `WID` | `TTAudioRepairDialog::repairIndexForMarker(item, point, extras)` — the one marker ↔ repair link: on the item's first AC3 track, `findAudioRepairOverlapping(track, from, to)` over the marker's range (`approxAc3RangeForMarker`), i.e. the index of the first repair whose closed AC3 range touches it, or -1 (also for other marker types and items without AC3). Decides “Repair…” vs “Edit repair…”/“Remove repair”; an existing repair stays editable and removable behind every kind of marker. |
+| `WID` → `DLG` | Marker, `repairTrackIndex` = the item's **first** AC3 track, `mExtraFrameIndices`. Before the dialog opens the widget emits `jumpToFrame(marker frame)`, so the main window shows the spot (a right click does not navigate; the dialog has no jump button). The dialog is modal (`exec()`). A menu closed without a choice does nothing (`handleContextAction` returns on a null action). Its channel boxes start from the marker's `audioChannelMask()`; a marker without one (0: older project files) gets C+LFE; an existing repair's own mask wins over both. On accept the widget appends the “(repair planned)” suffix to the marker text. |
 | `WID` → `ITEM` | `removeAudioRepairAt(repairIndex)` and removal of the “planned” suffix (all language variants). |
 | `WID` -.-> `DEL` / `ITEM` → `DEL` | “Delete” and “Delete all” of the marker list reach the main-window slots, which look up `repairIndexForMarker` per marker (the same link as the context menu). |
 | `DEL` → `ITEM` / `DEL` → `PTS` | A marker with a repair goes only together with it: one question (“Delete all”: one question for all, `%n` repairs), No keeps both; Yes removes the repairs (highest index first, so the others stay valid) and then the marker(s). A marker without a repair is removed without a question. |
 | `DLG` → `TABLE` | Audition and the probe build of `accept`: the current spin-box range (`currentFrameFrom` = round(start ms / frame ms), `currentFrameTo` = round(end ms / frame ms) − 1, end exclusive in the spin box) and channel mask, `targetAcmod = -1` (keep the source layout). |
 | `FT` → `AUD` | `writePreviewWindow` walks the packets by ordinal and writes a ±3 s window around the range to `ttcut_repair_preview_<instance>_{before,after}.ac3` in the temp directory, replacement bytes where the table has the frame; mpv plays it. The files are removed in the destructor. |
-| `DLG` → `ITEM` | `accept`: rejects end < start and an empty channel mask, then builds the table once in the source layout (`targetAcmod = -1`, like the audition) and rejects any build error with the message, the dialog staying open (channel-layout or frame-size change inside the range, a channel the track does not have, range past the file end). Only then it removes the edited repair (if any) and appends `TTAudioRepairItem(track, from, to, mask)`. The cut's target layout is unknown here; mixed target layouts are caught only at cut time (`ITEM` → `CUT`). |
-| `ITEM` → `PROJ` | Save: `<Repair>` (FrameFrom, FrameTo, Channels, Method) under the `<Audio>` section whose position equals `trackIndex()`; the enabled flag is not written. Markers go to the stream-point section with `AudioFrameFrom`/`AudioFrameTo`. |
+| `DLG` → `ITEM` | `accept` (the button reads “Plan repair”): rejects end < start and an empty channel mask, then builds the table once in the source layout (`targetAcmod = -1`, like the audition) and rejects any build error with the message, the dialog staying open (channel-layout or frame-size change inside the range, a channel the track does not have, range past the file end). Only then it removes the edited repair (if any) and appends `TTAudioRepairItem(track, from, to, mask)`. The cut's target layout is unknown here; mixed target layouts are caught only at cut time (`ITEM` → `CUT`). |
+| `ITEM` → `PROJ` | Save: `<Repair>` (FrameFrom, FrameTo, Channels, Method) under the `<Audio>` section whose position equals `trackIndex()`; the enabled flag is not written. Markers go to the stream-point section with `AudioFrameFrom`/`AudioFrameTo` and, when known, `AudioChannels` (read back only in 1…0x3F, anything else stays “unknown”) and `AnomalyKind` (`LfeBurst` / `AbruptStop`; any other text reads as unknown). |
 | `PROJ` → `PEND` | `parseAudioSection` builds items with `trackIndex = <Order>`, then validates: negative/reversed range, unknown AC3 frame size (`ac3FrameByteSize`) or `(frameTo + 1) · frameBytes > file size` → `setEnabled(false)` with a warning; never dropped. Parked by `(TTAVItem*, order)` via `setPendingAudioRepairs`. |
 | `PEND` → `ITEM` | `onOpenAudioFinished` appends the parked repairs when the track with that order arrives; their `trackIndex` is the position the track reaches after `sortByProjectOrder`. |
 | `PROJ` → `ANNO` / `ITEM` → `ANNO` | `onStreamPointsLoaded`: every `AudioAnomaly` marker whose approximate AC3 range overlaps a **disabled** repair gets the “(repair DISABLED …)” suffix instead of “planned”. |
@@ -169,16 +170,47 @@ flowchart TD
   same table code; the audition (and the accept probe) with `targetAcmod = -1`,
   the cut with the segments' majority acmod when normalising (unmeasured for
   a repair in a segment whose target differs from the source).
+- **A cut reports its repairs.** `cutAudioTracks` keeps one line per track
+  with repairs in `TTAVData::audioRepairNotes()` (applied, frames the cutter
+  wrote from the table — `TTAudioCutter::repairedFrames()` —, outside the
+  cut, disabled), logs it, and `TTCutMainWindow::onCutFinished` appends the
+  lines to the completion box. Cleared with each `cutAudioTracks` call, so
+  after a preview they describe the preview clip.
 - **A failed repair fails its track, and a failed track fails the cut**
   (`mRequireAllInputs`); for H.26x preview clips a failed audio cut only
   logs and the clip is muxed without audio (cut-preview.md).
 - **Scan statistics:** one `FrameStat` per decoded frame, plus one failed
   entry for a packet the decoder rejects on send, to keep the numbering in
   step with the packet ordinal; a packet accepted on send that yields no
-  frame adds nothing.
-- **Material gate:** LFE must be (near) silent in ≥ `anomalyLfeNullPercent`
-  of the 5.1 frames, otherwise “unsuitable, no statement” (logged, no
-  markers).
+  frame adds nothing. Besides the 5.1 fields of the LFE search a `FrameStat`
+  carries the power of the six 256-sample blocks of the frame (all planes
+  but the LFE added) and the number of planes; `channels == 0` marks a frame
+  the stop search must not use (decode failure, sample format, frame size).
+- **Two searches, both pure functions over the statistics.** `evaluate()`
+  (LFE search): a burst in centre and LFE, dropped when the reported range
+  is longer than `kMaxLfeFindingFrames` (15 frames, 0.48 s). `evaluateStops()`
+  (stop search): at a block boundary the level falls from the three blocks
+  before (above −35 dBFS) to the two after; a **hole** — one of the six
+  blocks from the boundary is back within 10 dB of the level before — counts
+  from 45 dB, a **lasting stop** from 30 dB; boundaries within 19 blocks are
+  one event; a stop followed only by silence (< −80 dBFS) up to the end of
+  the track is `ttcut-demux`'s padding and is not reported. The thresholds
+  are constants in the task's header, not settings; what they rest on:
+  `docs/completed-work.md`, “Tonanomalie-Scan: LFE-Grenze und Abbruch-Suche”.
+- **Material gate, LFE search only:** LFE must be (near) silent in
+  ≥ `anomalyLfeNullPercent` of the 5.1 frames, otherwise “unsuitable, no
+  statement” (logged, no LFE markers). The stop search runs on every decoded
+  frame, whatever its layout, and does not depend on the gate.
+- **The channel preset is a mask of decoder planes** (bit n = plane n, the
+  convention of `TTAudioRepairItem::channelMask()`), carried
+  `Finding::channelMask` → `TTStreamPoint::audioChannelMask()` →
+  `<AudioChannels>` → dialog. 0 means unknown. For a stop marker the dialog
+  is reachable only through an existing repair (whose own mask wins), so
+  its preset is unused until a repair method for stops exists.
+- **The kind of an anomaly marker** (`AudioAnomalyKind`, one enum for the
+  scan's `Finding` and the marker) travels `Finding::kind` →
+  `TTStreamPoint::audioAnomalyKind()` → `<AnomalyKind>` and decides one
+  thing: whether a new repair is offered.
 
 ## Redundancy / consolidation candidates
 

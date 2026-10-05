@@ -5,6 +5,10 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **Closing a marker's context menu without choosing no longer opens the
+  audio repair dialog.** It did so on every marker, also on a hand-placed
+  one: an empty choice was taken for "Repair…". Gate:
+  `marker_delete_repair`.
 - **The marker for damaged audio data names the track by its file and is
   called "Audio data error"** (German „Ton-Datenfehler", formerly
   „Tonstörungen"). It gave a track number counted in `.info` order, while
@@ -299,6 +303,33 @@ All notable changes to TTCut-ng are documented in this file.
   look like a field stream. It now stays unknown.
 
 ### Changed
+- **A cut says what became of the planned audio repairs.** The completion
+  box and the log carry one line per audio track with repairs: how many
+  were applied, how many frames were replaced, how many were not applied
+  because they lie outside the cut or are disabled. Until now an applied
+  repair showed only in the cut not failing. In the repair dialog the
+  accepting button reads "Plan repair" ("Vormerken") instead of "OK":
+  accepting changes nothing yet, the repair is noted for the cut. Gates:
+  `audiorepair_cut`, `repairdialog_model`.
+- **The audio anomaly scan looks for short defects.** A finding of the LFE
+  search longer than about half a second is dropped — measured on two
+  recordings, these were deep tones, an explosion and a shot, not defects.
+  A second search reports places where the sound of all channels stops
+  abruptly: a click at a hard cut (a drop of 30 dB that lasts), or a short
+  deep hole (the sound is back within 32 ms; reported from 45 dB — the
+  shallower holes measured were not heard). Both give "Audio anomaly"
+  markers; they are hints where to listen, not verdicts — on the reference
+  recording three of four markers are confirmed defects, the fourth lies in
+  an ad break and was not judged. A repair is offered for an LFE marker
+  only: muting with a short fade ends as hard as an abrupt stop itself (no
+  difference heard between original and repaired), so a stop marker stays a
+  hint. "Repair…" jumps to the marker's frame before the dialog opens; the
+  dialog's "Go to frame" button is gone. The project file stores the kind
+  of an anomaly marker
+  (`<AnomalyKind>`) and the channels of its frames (`<AudioChannels>`).
+  Gates: `anomalyscan`, `repairdialog_model`, `audiorepair_persist`,
+  `marker_delete_repair`; a real recording is checked with
+  `tools/diag/gate_anomaly_real.sh`.
 - **H.264 cuts report re-encoded frames that could not be adjusted to the
   source stream.** Such a frame used to stay in the result silently and could
   decode with artefacts. After the cut a dialog lists the frames with their

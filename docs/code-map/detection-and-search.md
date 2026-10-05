@@ -66,10 +66,11 @@ münden: `TTStreamPointVideoWorker` (MPEG-2-Sequenz-Header),
 `TTStreamPointAudioWorker` (Stille, AC3-Formatwechsel — ein Marker je
 Wechsel des Kanallayouts, Regel in `audio-es-input.md`) und seit
 `2026-08-19/20` `TTAudioAnomalyScanTask` (`data/ttaudioanomalyscantask.{h,cpp}`)
-— sequenzieller Scan einer AC3-Spur auf CRC-gültige, aber strukturell
-defekte Center+LFE-Bursts in Material, dessen LFE sonst digital still ist
-(`docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`,
-Komponente 1). Erbt wie die anderen beiden direkt `TTThreadTask`, verbindet
+— sequenzieller Scan einer AC3-Spur mit zwei Suchen: CRC-gültige, aber
+strukturell defekte Center+LFE-Bursts in Material, dessen LFE sonst digital
+still ist (`docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`,
+Komponente 1), und Stellen, an denen der Ton aller Kanäle schlagartig
+abbricht (Regeln und Schwellen in `audio-repair.md`). Erbt wie die anderen beiden direkt `TTThreadTask`, verbindet
 sich identisch (`finished`/`aborted` → `onAnalysisWorkerFinished`, zählt in
 `mStreamPointWorkersRunning`) und liefert `pointsDetected(QList<TTStreamPoint>)`
 an denselben Slot wie der Voll-Scan (`TTCutMainWindow::onPointsDetected`, seit
@@ -145,7 +146,7 @@ flowchart TB
     subgraph NODEC["Ohne Bilddekodierung"]
         VWORK["TTStreamPointVideoWorker<br/>MPEG-2-Sequenz-Header"]
         AWORK["TTStreamPointAudioWorker<br/>Stille + AC3-Kanallayout"]
-        ANOMALY["TTAudioAnomalyScanTask<br/>AC3 C+LFE-Burst"]
+        ANOMALY["TTAudioAnomalyScanTask<br/>AC3: C+LFE-Burst, Ton bricht ab"]
     end
 
     subgraph OUT["Ergebnis (GUI-Thread)"]
@@ -204,7 +205,7 @@ beibehalten.
 | `SCAN → pointsDetected` | Wird **auch bei Abbruch** ausgesendet, mit den bis dahin gefundenen Punkten. | Bewusst: Teilergebnisse sind brauchbar. Die Statuszeile des Widgets kennzeichnet den Lauf über `setAnalysisRunning(false, aborted)` als unvollständig. |
 | `ANOMALY → pointsDetected` | Weicht vom `SCAN`-Verhalten oben **bewusst ab**: bei Abbruch sendet `TTAudioAnomalyScanTask::operation()` eine **leere** Liste, keine Teilergebnisse. | Ein Abbruch darf nicht wie ein vollständiger Lauf mit kurzer Trefferliste aussehen (Spec Komponente 1, „Sichtbarkeit"). `pointsDetected` feuert bei ihr nur genau einmal, ganz am Ende von `operation()`. |
 | `LOADEXIT → MW` (`maybeStartAutoAnomalyScan()`) | Zwei unabhängige Einsprünge — `TTAVData::onAVDataReloaded()` (jeder Pool-Exit) und `TTCutMainWindow::onAVItemChanged()` (setzt `mpCurrentAVDataItem`) — beide über `QTimer::singleShot(0, …)`, damit der Scan erst nach der restlichen Ladekette einreiht statt mitten in ihr. | Notwendig, weil `TTAVData::onOpenVideoFinished` den modalen „Defective Frames"-Dialog vor `currentAVItemChanged()` zeigen kann; der Pool-Exit wartet nicht auf diesen Dialog, `onAVDataReloaded()` kann also mit `mpCurrentAVDataItem == nullptr` feuern (gemessen 2026-08-20 auf realem 1,6-GB-Material). Welcher der beiden Einsprünge tatsächlich startet, hängt vom Material ab; die Wächter in `maybeStartAutoAnomalyScan()` (`anomalyScanStarted()`, laufende Analyse, vorhandene `AudioAnomaly`-Marker, `audioAnomalyScanEnabled()`, `mProjectLoadInProgress`) machen jeden weiteren Aufruf zum No-op. Ruft intern `startAudioAnomalyScan()` — denselben Helfer wie der Button-Pfad über `WIDGET`/`MW`; kein zweiter Verdrahtungscode. |
-| `NODEC → MODEL` (`ANOMALY`-Anteil) | `TTAudioAnomalyScanTask` liefert `TTStreamPoint`s vom Typ `AudioAnomaly` mit **zwei** Koordinaten: `frameIndex`/`duration` (Video-Anzeigeindex, `duration` endexklusiv in Sekunden — dieselbe Konvention wie alle anderen Markertypen) **und** `audioFrameFrom()`/`audioFrameTo()` (exakter AC3-Quell-Frame-Bereich, **beide Grenzen inklusiv** — dieselbe Konvention wie `TTAudioRepairItem`). | Die Video-Koordinate ist eine verlustbehaftete Projektion (Rundung auf 40-ms-Videoraster gegen das 32-ms-Audioraster); der Reparaturdialog verwendet deshalb `audioFrameFrom/To`, nicht `frameIndex/duration`, sobald sie vorhanden sind (`hasAudioFrameRange()`). Ein aus einer älteren Projektdatei geladener `AudioAnomaly`-Marker hat `-1/-1` (unbekannt) und muss auf die Schätzung zurückfallen. |
+| `NODEC → MODEL` (`ANOMALY`-Anteil) | `TTAudioAnomalyScanTask` liefert `TTStreamPoint`s vom Typ `AudioAnomaly` mit **zwei** Koordinaten: `frameIndex`/`duration` (Video-Anzeigeindex, `duration` endexklusiv in Sekunden — dieselbe Konvention wie alle anderen Markertypen) **und** `audioFrameFrom()`/`audioFrameTo()` (exakter AC3-Quell-Frame-Bereich, **beide Grenzen inklusiv** — dieselbe Konvention wie `TTAudioRepairItem`). Dazu `audioChannelMask()`: die Kanäle, die der Reparaturdialog vorwählt (C+LFE bei einem LFE-Fund, alle Kanäle der Rahmen bei einem Abbruch; 0 = unbekannt) und `audioAnomalyKind()` (`LfeBurst` / `AbruptStop`): für einen Abbruch-Marker bietet das Kontextmenü keine neue Reparatur an (`offersNewAudioRepair()`, Begründung in `audio-repair.md`). | Die Video-Koordinate ist eine verlustbehaftete Projektion (Rundung auf 40-ms-Videoraster gegen das 32-ms-Audioraster); der Reparaturdialog verwendet deshalb `audioFrameFrom/To`, nicht `frameIndex/duration`, sobald sie vorhanden sind (`hasAudioFrameRange()`). Ein aus einer älteren Projektdatei geladener `AudioAnomaly`-Marker hat `-1/-1` (unbekannt) und muss auf die Schätzung zurückfallen. |
 | `POOLQ → BAR` (`statusReport`) | Die Aufgaben dieser Familie melden `Start`/`Step`/`Finished` — `Init` sendet nur `TTAVData` auf den Schnitt-Pfaden. Der `Start`-Zweig in `onStatusReport` öffnet den Dialog. | Zwei Aufgaben ⇒ zwei `Start`. Das Kreuz des Dialogs bricht deshalb ab (`closeEvent → onBtnCancelClicked`, `7d6dad0d`): reines Verstecken hätte die zweite `Start`-Meldung wieder aufgezogen. |
 | `BAR.cancel → onAbortStreamPoints` | Nicht direkt an den Pool, sondern über die Fenstermethode, damit `mStreamPointAnalysisAborted` gesetzt wird. | Ohne dieses Flag meldet das Widget einen abgebrochenen Lauf als normal beendet. |
 | `finished` **und** `aborted` → `deleteLater` | `TTThreadTask::run()` wirft `TTAbortException`, wenn die Aufgabe schon vor dem Start abgebrochen wurde — dann kommt **nur** `aborted`, nie `finished`. | Nur `finished` zu verbinden leckt jede vor dem Start abgebrochene Aufgabe. Alle vier Aufgaben verbinden beide Signale. Bei den drei gerichteten Suchen war das Leck die kleinere Hälfte: ohne `found` bleibt auch `mpRunningSearch` gesetzt und blockiert jede weitere Suche. |
