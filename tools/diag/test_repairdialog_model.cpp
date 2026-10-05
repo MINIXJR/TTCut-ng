@@ -27,6 +27,8 @@
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QCheckBox>
+#include <QDialogButtonBox>
+#include <QPushButton>
 #include <QProcess>
 #include <QSpinBox>
 #include <QtGlobal>
@@ -54,23 +56,24 @@ static const QString kVideoFile =
     QStringLiteral("/usr/local/src/TTCut-ng/tools/testdata/tux_test.264");
 static const QString kAudioFile =
     QStringLiteral("/usr/local/src/TTCut-ng/tools/testdata/tux_test.ac3");
-// Same synthetic 5.1 fixture (and same builder) test_audiorepair and
-// test_anomalyscan use - it is the only material here that actually contains
-// an anomaly for the scanner to find.
-static const QString kAnomalySample =
-    QStringLiteral("/usr/local/src/CLAUDE_TMP/TTCut-ng/anomaly_sample.ac3");
+// Same synthetic 5.1 fixture (and same builder) test_anomalyscan uses - it is
+// the only material here that actually contains an anomaly for the scanner to
+// find. The burst is 0.2 s long: the scan drops LFE findings longer than
+// 0.48 s, so the 1.2 s anomaly_sample.ac3 gives none.
+static const QString kAnomalyShort =
+    QStringLiteral("/usr/local/src/CLAUDE_TMP/TTCut-ng/anomaly_short.ac3");
 static const QString kMakeScript =
     QStringLiteral("/usr/local/src/TTCut-ng/tools/diag/make_anomaly_sample.sh");
 
 static bool ensureAnomalySample()
 {
-    if (QFileInfo::exists(kAnomalySample)) return true;
-    QDir().mkpath(QFileInfo(kAnomalySample).absolutePath());
+    if (QFileInfo::exists(kAnomalyShort)) return true;
+    QDir().mkpath(QFileInfo(kAnomalyShort).absolutePath());
     QProcess proc;
-    proc.start(kMakeScript, {kAnomalySample});
+    proc.start(kMakeScript, {kAnomalyShort, QStringLiteral("0.2")});
     if (!proc.waitForStarted(5000)) return false;
     if (!proc.waitForFinished(180000)) return false;
-    return proc.exitCode() == 0 && QFileInfo::exists(kAnomalySample);
+    return proc.exitCode() == 0 && QFileInfo::exists(kAnomalyShort);
 }
 
 int main(int argc, char** argv)
@@ -139,6 +142,13 @@ int main(int argc, char** argv)
             if (dlg.channelCheckBoxForTest(ch)->isChecked() != expected[ch]) channelsOk = false;
         }
         check(channelsOk, "prefill channels = C+LFE only");
+
+        // The accepting button says what it does: it notes the repair for
+        // the cut, nothing is changed yet (user decision 2026-10-05).
+        const auto* box = dlg.findChild<QDialogButtonBox*>();
+        check(box && box->button(QDialogButtonBox::Ok) && box->button(QDialogButtonBox::Ok)->text() == "Plan repair",
+              QString("accept button reads \"Plan repair\" (got: %1)")
+                  .arg(box && box->button(QDialogButtonBox::Ok) ? box->button(QDialogButtonBox::Ok)->text() : QString("-")));
 
         // --- accept() with the ORIGINAL prefill values ---
         check(item->audioRepairList().isEmpty(), "no repair item before accept()");
@@ -252,12 +262,12 @@ int main(int argc, char** argv)
 
         if (!ensureAnomalySample()) {
             printf("\nFAILED (round trip: fixture %s could not be built)\n",
-                   qPrintable(kAnomalySample));
+                   qPrintable(kAnomalyShort));
             return 1;
         }
 
         QList<TTStreamPoint> points;
-        TTAudioAnomalyScanTask task(kAnomalySample, /*trackIndex=*/0, /*fps=*/25.0,
+        TTAudioAnomalyScanTask task(kAnomalyShort, /*trackIndex=*/0, /*fps=*/25.0,
                                     QList<int>(), QList<QPair<int,int>>());
         QObject::connect(&task, &TTAudioAnomalyScanTask::pointsDetected,
                          [&points](const QList<TTStreamPoint>& p) { points = p; });
@@ -265,7 +275,7 @@ int main(int argc, char** argv)
 
         check(!points.isEmpty(),
               QString("round trip: the scan found at least one anomaly in %1 (got %2)")
-                  .arg(kAnomalySample).arg(points.size()));
+                  .arg(kAnomalyShort).arg(points.size()));
         if (points.isEmpty()) {
             printf("\nFAILED (round trip: no finding to carry through)\n");
             return 1;
@@ -275,7 +285,7 @@ int main(int argc, char** argv)
         // evaluate() path - the marker must carry exactly these.
         int decodeFailures = 0;
         const QVector<TTAudioAnomalyScanTask::FrameStat> stats =
-            TTAudioAnomalyScanTask::collectFrameStats(kAnomalySample, &decodeFailures);
+            TTAudioAnomalyScanTask::collectFrameStats(kAnomalyShort, &decodeFailures);
         TTSettings* cfg = TTSettings::instance();
         const QList<TTAudioAnomalyScanTask::Finding> findings =
             TTAudioAnomalyScanTask::evaluate(stats, cfg->anomalyLfeRmsDb(),
@@ -300,7 +310,7 @@ int main(int argc, char** argv)
         // The finding's range belongs to the anomaly sample, so the dialog has
         // to work on that file: tux_test.ac3 switches layout inside this range
         // and accept() now refuses it (audio-repair.md H3).
-        TTAudioType    sampleType(kAnomalySample);
+        TTAudioType    sampleType(kAnomalyShort);
         TTAudioStream* sampleStream = sampleType.createAudioStream();
         check(sampleStream != nullptr, "round trip: anomaly sample opened as an audio stream");
         if (!sampleStream) { printf("\nFAILED\n"); return 1; }
@@ -396,6 +406,68 @@ int main(int argc, char** argv)
         TTAudioRepairDialog dlgAcross(item, across, /*trackIndex=*/0, QList<int>(), nullptr);
         only(dlgAcross, 0x01);
         refused(dlgAcross, "frame size changed", "the left channel across the 938/939 layout change");
+    }
+
+    // --- Case 7: channel preset from the marker (spec 2026-10-04). A marker
+    // of the LFE search and a marker without a mask (older project files)
+    // preset C+LFE; a stop marker presets the planes it names.
+    {
+        auto maskOf = [](TTAudioRepairDialog& d) {
+            quint8 m = 0;
+            for (int ch = 0; ch < 6; ++ch) if (d.channelCheckBoxForTest(ch)->isChecked()) m |= quint8(1u << ch);
+            return m;
+        };
+        TTAudioType    sampleType(kAnomalyShort);
+        TTAudioStream* sampleStream = sampleType.createAudioStream();
+        check(sampleStream != nullptr, "preset: 5.1 sample opened as an audio stream");
+        if (sampleStream) {
+            sampleStream->createHeaderList();
+            TTAVItem* sampleItem = new TTAVItem(nullptr);
+            sampleItem->appendAudioEntry(sampleStream);
+
+            TTStreamPoint legacy(750, StreamPointType::AudioAnomaly, "x", 1.0f, 0.096f);
+            legacy.setAudioFrameRange(937, 939);
+            TTAudioRepairDialog d1(sampleItem, legacy, 0, QList<int>(), nullptr);
+            check(maskOf(d1) == 0x0C, QString("preset without a mask: C+LFE (got %1)").arg(maskOf(d1)));
+
+            TTStreamPoint lfe = legacy;
+            lfe.setAudioChannelMask(0x0C);
+            TTAudioRepairDialog d1b(sampleItem, lfe, 0, QList<int>(), nullptr);
+            check(maskOf(d1b) == 0x0C, QString("preset of an LFE marker: C+LFE (got %1)").arg(maskOf(d1b)));
+
+            TTStreamPoint stop51 = legacy;
+            stop51.setAudioChannelMask(0x3F);
+            TTAudioRepairDialog d2(sampleItem, stop51, 0, QList<int>(), nullptr);
+            check(maskOf(d2) == 0x3F, QString("preset of a 5.1 stop marker: all six (got %1)").arg(maskOf(d2)));
+        }
+
+        // Review focus 5: a stop on a stereo stretch - two channels, and OK accepts it.
+        const QString stereoFile = QStringLiteral("/usr/local/src/CLAUDE_TMP/TTCut-ng/stop_sample_stereo.ac3");
+        if (!QFileInfo::exists(stereoFile))
+            QProcess::execute(QStringLiteral("/usr/local/src/TTCut-ng/tools/diag/make_stop_sample.sh"),
+                              {stereoFile, QStringLiteral("stereo")});
+        TTAudioType    stereoType(stereoFile);
+        TTAudioStream* stereoStream = stereoType.createAudioStream();
+        check(stereoStream != nullptr, "preset: stereo stop fixture opened");
+        if (stereoStream) {
+            stereoStream->createHeaderList();
+            TTAVItem* stereoItem = new TTAVItem(nullptr);
+            stereoItem->appendAudioEntry(stereoStream);
+            // The stop at 10.003 s: AC3 frames 312-314, as the scan reports it.
+            TTStreamPoint stop20(250, StreamPointType::AudioAnomaly, "x", 0.0f, 0.096f);
+            stop20.setAudioFrameRange(312, 314);
+            stop20.setAudioChannelMask(0x03);
+            TTAudioRepairDialog d3(stereoItem, stop20, 0, QList<int>(), nullptr);
+            check(maskOf(d3) == 0x03, QString("preset of a stereo stop marker: L+R (got %1)").arg(maskOf(d3)));
+            boxes.clear();
+            d3.accept();
+            check(stereoItem->audioRepairList().size() == 1 && boxes.isEmpty(),
+                  QString("OK accepts the stereo preset (%1 item(s), box: %2)")
+                      .arg(stereoItem->audioRepairList().size()).arg(boxes.join(" | ")));
+            if (stereoItem->audioRepairList().size() == 1)
+                check(stereoItem->audioRepairList().first().channelMask() == 0x03,
+                      "the stored repair carries L+R");
+        }
     }
 
     printf("\n%s (%d failures)\n", gFailures == 0 ? "ALL PASS" : "FAILED", gFailures);

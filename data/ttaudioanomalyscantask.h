@@ -56,12 +56,38 @@ public slots:
 public:
   // Pure evaluation over per-frame stats — separated from decoding so the
   // harness can test it without an AC3 file. One entry per 32 ms AC3 frame.
-  struct FrameStat { float lfeRms; float centerRms; float centerMaxDiff; bool is51; };
+  // blockPower/channels serve the stop search: power (mean square) of the six
+  // 256-sample blocks of the frame, all planes but the LFE added, and the
+  // number of planes of the decoded frame. channels == 0 marks a frame the
+  // stop search must not use (decode failure, sample format, frame size).
+  struct FrameStat { float lfeRms; float centerRms; float centerMaxDiff; bool is51;
+                     float blockPower[6]; quint8 channels; };
+  // The kind travels with the marker (TTStreamPoint::audioAnomalyKind).
+  using FindingKind = AudioAnomalyKind;
   // frameFrom/frameTo: AC3 frame index range, both inclusive (matches
   // TTAudioRepairItem::frameFrom()/frameTo() and TTStreamPoint's
   // audioFrameFrom()/audioFrameTo() - unlike TTStreamPoint::duration(),
   // which is end-exclusive).
-  struct Finding { qint64 frameFrom; qint64 frameTo; float lfePeak; float confidence; };
+  // channelMask: the planes a repair should preset, in the convention of
+  // TTAudioRepairItem::channelMask() (bit n = decoder plane n).
+  struct Finding { qint64 frameFrom; qint64 frameTo; float lfePeak; float confidence;
+                   FindingKind kind = FindingKind::LfeBurst; float dropDb = 0.0f;
+                   quint8 channelMask = 0x0C; };
+
+  // Thresholds of the two searches, measured 2026-10-04
+  // (docs/completed-work.md, "Tonanomalie-Scan: LFE-Grenze und
+  // Abbruch-Suche"). One place on purpose.
+  static constexpr int    kMaxLfeFindingFrames = 15;      // 0.48 s; defect 8, wrong findings >= 23
+  static constexpr int    kStopPreBlocks       = 3;       // 16 ms before the boundary
+  static constexpr int    kStopPostBlocks      = 2;       // 11 ms after: the holes measured are two blocks long
+  static constexpr double kStopDropDb          = 30.0;    // a lasting stop counts from here
+  static constexpr int    kStopHoleBlocks      = 6;       // sound back within 32 ms: a hole
+  static constexpr double kStopHoleReturnDb    = 10.0;    // "back" = within this of the level before
+  static constexpr double kStopHoleDropDb      = 45.0;    // a hole counts from here (not heard: 31-41, heard: 52)
+  static constexpr double kStopMinLevelDb      = -35.0;   // level before the stop
+  static constexpr int    kStopMergeBlocks     = 19;      // ~100 ms: one event
+  static constexpr double kStopTailSilenceDb   = -80.0;   // silence up to the end = demux padding
+  static constexpr int    kStopTailGuardBlocks = 2;       // the tail is judged from here on, past the falling edge
   // Result of the material-suitability hard gate (Vorbedingung), always
   // written when gateOut is non-null - regardless of whether the gate
   // passed. Without this, an empty findings list is ambiguous: "material
@@ -80,6 +106,12 @@ public:
                                  double lfeNullPercent,
                                  double lfeMinPeakDb,
                                  GateStatus* gateOut = nullptr);
+  // Second search: places where the sound of all channels together stops
+  // abruptly. Two forms: a lasting stop (drop of kStopDropDb), and a hole -
+  // the sound is back within kStopHoleBlocks - which counts only when it is
+  // kStopHoleDropDb deep. Pure, like evaluate(). Reports the frame with the
+  // boundary and one frame on each side.
+  static QList<Finding> evaluateStops(const QVector<FrameStat>& stats);
   // Log line for a track the gate rejected (GateStatus::materialUnsuitable).
   static QString unsuitableMessage(int trackIndex, const GateStatus& gate, double needPercent);
   // Audio time (s) -> video display frame index, inverse of

@@ -3033,6 +3033,7 @@ QList<float> TTAVData::cutAudioTracks(
   // that tells the user what to do never left the log file (final review
   // M14). Cleared here so a previous run's reasons can never be reported.
   mAudioCutFailureReasons.clear();
+  mAudioRepairNotes.clear();
   if (!avItem || trackIndices.isEmpty()) return firstDrifts;
 
   for (int idx : trackIndices) {
@@ -3083,6 +3084,8 @@ QList<float> TTAVData::cutAudioTracks(
     TTAudioRepair::FrameTable repairTable;
     bool repairFailed = false;
     QString repairFailMsg;
+    // What becomes of this track's repairs, for audioRepairNotes().
+    int repairsApplied = 0, repairsOutside = 0, repairsDisabled = 0;
     if (ext.compare(QStringLiteral("ac3"), Qt::CaseInsensitive) == 0) {
       const TTAudioHeader* hdr = stream->headerAt(0);
       double audioFrameSec = (hdr && hdr->frame_time > 0) ? hdr->frame_time / 1000.0 : 0.032;
@@ -3100,6 +3103,7 @@ QList<float> TTAVData::cutAudioTracks(
                         "project-load validation, see the warning logged then) and is "
                         "NOT applied to this cut")
                     .arg(idx + 1).arg(item.frameFrom()).arg(item.frameTo()));
+          ++repairsDisabled;
           continue;
         }
 
@@ -3124,7 +3128,7 @@ QList<float> TTAVData::cutAudioTracks(
           targetAcmod = target;
           touches = true;
         }
-        if (!touches) continue; // never written by TTAudioCutter::cut -- skip
+        if (!touches) { ++repairsOutside; continue; } // never written by TTAudioCutter::cut -- skip
         if (mixedTargets) {
           repairFailed = true;
           // tr(), not QStringLiteral: this one is actionable and is shown to
@@ -3144,6 +3148,7 @@ QList<float> TTAVData::cutAudioTracks(
           break;
         }
         repairTable.insert(itemTable);
+        ++repairsApplied;
       }
     }
     if (repairFailed) {
@@ -3176,6 +3181,23 @@ QList<float> TTAVData::cutAudioTracks(
         mAudioCutFailureReasons << tr("Audio track %1: the audio cut itself failed "
                                       "(see the log for the libav error)").arg(idx + 1);
       }
+    } else if (repairsApplied + repairsOutside + repairsDisabled > 0) {
+      // Say what became of the planned repairs. Nothing did before: an
+      // applied repair showed only in the cut not failing.
+      QString logLine = QString("Audio track %1: repairs applied: %2 (frames replaced: %3)")
+                            .arg(idx + 1).arg(repairsApplied).arg(cutter.repairedFrames());
+      QString note = tr("Audio track %1: repairs applied: %2 (frames replaced: %3)")
+                         .arg(idx + 1).arg(repairsApplied).arg(cutter.repairedFrames());
+      if (repairsOutside > 0) {
+        logLine += QString(", outside the cut: %1").arg(repairsOutside);
+        note    += tr(", outside the cut: %1").arg(repairsOutside);
+      }
+      if (repairsDisabled > 0) {
+        logLine += QString(", disabled: %1").arg(repairsDisabled);
+        note    += tr(", disabled: %1").arg(repairsDisabled);
+      }
+      log->infoMsg(__FILE__, __LINE__, logLine);
+      mAudioRepairNotes << note;
     }
     onCut(idx, outFile, avItem->audioListItemAt(idx).getLanguage(), ok);
   }

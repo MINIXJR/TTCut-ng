@@ -225,6 +225,10 @@ QList<TTAudioAnomalyScanTask::Finding> TTAudioAnomalyScanTask::evaluate(
     const qint64 frameFrom = qMax(0, fineFrom - 1);
     const qint64 frameTo   = qMin(n - 1, fineTo + 1);
 
+    // A defect of this kind is short (measured: 8 frames); a longer range is
+    // wanted sound - a deep tone, an explosion (measured: 23 frames and more).
+    if (frameTo - frameFrom + 1 > kMaxLfeFindingFrames) continue;
+
     float lfePeak = -200.0f;
     for (qint64 f = frameFrom; f <= frameTo; ++f)
       lfePeak = qMax(lfePeak, stats[f].lfeRms);
@@ -244,6 +248,70 @@ QList<TTAudioAnomalyScanTask::Finding> TTAudioAnomalyScanTask::evaluate(
     findings.append({frameFrom, frameTo, lfePeak, confidence});
   }
 
+  return findings;
+}
+
+// ---------------------------------------------------------------------------
+// evaluateStops() - pure, static, no I/O. See header.
+// ---------------------------------------------------------------------------
+QList<TTAudioAnomalyScanTask::Finding> TTAudioAnomalyScanTask::evaluateStops(
+    const QVector<FrameStat>& stats)
+{
+  QList<Finding> findings;
+  const int n = stats.size();
+  const qint64 nb = qint64(n) * 6;
+  if (nb < kStopPreBlocks + kStopPostBlocks) return findings;
+
+  auto power  = [&](qint64 b) { return stats[int(b / 6)].blockPower[b % 6]; };
+  auto usable = [&](qint64 b) { return stats[int(b / 6)].channels > 0; };
+  auto toDb   = [](double p) { return p > 1e-18 ? 10.0 * std::log10(p) : -180.0; };
+
+  // tailMax[b]: loudest block from b to the end. A stop after which nothing
+  // louder than kStopTailSilenceDb follows is the padding ttcut-demux appends.
+  QVector<float> tailMax(nb + 1, 0.0f);
+  for (qint64 b = nb - 1; b >= 0; --b)
+    tailMax[b] = qMax(tailMax[b + 1], usable(b) ? power(b) : 0.0f);
+  const double tailSilence = std::pow(10.0, kStopTailSilenceDb / 10.0);
+
+  qint64 bestBlock = -1, lastBlock = -1;
+  double bestDrop = 0.0;
+  auto flush = [&]() {
+    if (bestBlock < 0) return;
+    const int frame = int(bestBlock / 6);
+    Finding f{qMax(0, frame - 1), qMin(n - 1, frame + 1), -200.0f, 0.0f};
+    f.kind = FindingKind::AbruptStop;
+    f.dropDb = float(bestDrop);
+    f.channelMask = quint8((1u << stats[frame].channels) - 1u);
+    findings.append(f);
+    bestBlock = -1;
+  };
+
+  for (qint64 b = kStopPreBlocks; b + kStopPostBlocks <= nb; ++b) {
+    bool ok = true;
+    double pre = 0.0, post = 0.0;
+    for (int i = 1; i <= kStopPreBlocks;  ++i) { ok = ok && usable(b - i); pre  += power(b - i); }
+    for (int i = 0; i <  kStopPostBlocks; ++i) { ok = ok && usable(b + i); post += power(b + i); }
+    if (!ok) continue;
+    const double preDb = toDb(pre / kStopPreBlocks);
+    const double drop  = preDb - toDb(post / kStopPostBlocks);
+    if (preDb <= kStopMinLevelDb || drop < kStopDropDb) continue;
+
+    // Two forms: a hole - the sound is back within kStopHoleBlocks - counts
+    // only when it is deep. Measured on 02x06: holes of 31 to 41 dB are not
+    // heard, the one of 52 dB is; the click at a hard cut is a lasting stop
+    // of 32 dB (docs/completed-work.md, "Tonanomalie-Scan: LFE-Grenze und
+    // Abbruch-Suche").
+    bool hole = false;
+    for (int i = 0; i < kStopHoleBlocks && b + i < nb; ++i)
+      hole = hole || (usable(b + i) && toDb(power(b + i)) >= preDb - kStopHoleReturnDb);
+    if (hole && drop < kStopHoleDropDb) continue;
+    if (tailMax[qMin(nb, b + kStopTailGuardBlocks)] <= tailSilence) continue;
+
+    if (bestBlock >= 0 && b - lastBlock > kStopMergeBlocks) flush();
+    if (bestBlock < 0 || drop > bestDrop) { bestBlock = b; bestDrop = drop; }
+    lastBlock = b;
+  }
+  flush();
   return findings;
 }
 
@@ -358,6 +426,23 @@ QVector<TTAudioAnomalyScanTask::FrameStat> TTAudioAnomalyScanTask::collectFrameS
                     "5.1 frames in this format are skipped")
                 .arg(av_get_sample_fmt_name(static_cast<AVSampleFormat>(f->format))));
       }
+    }
+
+    // Stop search: every decoded frame counts, whatever its layout. An AC3
+    // frame is 1536 samples = six blocks of 256.
+    if (!decodeFailed && f && f->format == AV_SAMPLE_FMT_FLTP && f->nb_samples == 1536) {
+      const int nCh = qMin(f->ch_layout.nb_channels, 6);
+      const int lfe = av_channel_layout_index_from_channel(&f->ch_layout, AV_CHAN_LOW_FREQUENCY);
+      for (int b = 0; b < 6; ++b) {
+        double sum = 0.0;
+        for (int ch = 0; ch < nCh; ++ch) {
+          if (ch == lfe) continue;
+          const float* d = reinterpret_cast<const float*>(f->extended_data[ch]);
+          for (int s = b * 256; s < (b + 1) * 256; ++s) sum += double(d[s]) * double(d[s]);
+        }
+        st.blockPower[b] = float(sum / 256.0);
+      }
+      st.channels = quint8(nCh);
     }
 
     if (decodeFailed) ++failures;
@@ -476,20 +561,14 @@ void TTAudioAnomalyScanTask::operation()
   }
 
   QList<TTStreamPoint> points;
-  for (const Finding& f : findings) {
+  auto addPoint = [&](const Finding& f, QString desc) {
     const double startSec = f.frameFrom * kFrameDurSec;
     const double endSec   = (f.frameTo + 1) * kFrameDurSec;
     const int videoFrom = videoFrameForTime(startSec, mFrameRate, mExtraFrameIndices);
     const int videoTo   = videoFrameForTime(endSec,   mFrameRate, mExtraFrameIndices);
-
-    QString desc = tr("Audio anomaly: C+LFE burst (track %1, LFE peak %2 dB)")
-        .arg(mTrackIndex + 1)
-        .arg(QString::number(f.lfePeak, 'f', 1));
-
     const bool overlapsGap = std::any_of(mGapFrameRanges.cbegin(), mGapFrameRanges.cend(),
         [&](const auto& gap) { return videoFrom <= gap.second && videoTo >= gap.first; });
     if (overlapsGap) desc += tr(" (overlaps gap repair)");
-
     TTStreamPoint pt(videoFrom, StreamPointType::AudioAnomaly, desc,
                      f.confidence, float(endSec - startSec));
     // Hand the finding's own AC3 frame numbers through untouched (final
@@ -498,8 +577,20 @@ void TTAudioAnomalyScanTask::operation()
     // them - and the repair the user confirms is written in AC3 frames.
     // Both bounds inclusive, the same convention as TTAudioRepairItem.
     pt.setAudioFrameRange(f.frameFrom, f.frameTo);
+    pt.setAudioChannelMask(f.channelMask);
+    pt.setAudioAnomalyKind(f.kind);
     points.append(pt);
-  }
+  };
+  for (const Finding& f : findings)
+    addPoint(f, tr("Audio anomaly: C+LFE burst (track %1, LFE peak %2 dB)")
+        .arg(mTrackIndex + 1).arg(QString::number(f.lfePeak, 'f', 1)));
+  // The stop search runs on every decoded frame and does not depend on the
+  // LFE material gate.
+  const QList<Finding> stops = evaluateStops(stats);
+  for (const Finding& f : stops)
+    addPoint(f, tr("Audio anomaly: sound stops abruptly (track %1, drop %2 dB)")
+        .arg(mTrackIndex + 1).arg(QString::number(f.dropDb, 'f', 0)));
+  std::sort(points.begin(), points.end());
 
   if (decodeFailures > 0) {
     log->infoMsg(__FILE__, __LINE__,
@@ -510,7 +601,7 @@ void TTAudioAnomalyScanTask::operation()
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "TTAudioAnomalyScanTask: track" << mTrackIndex << stats.size()
                << "AC3 frames," << decodeFailures << "decode failures,"
-               << findings.size() << "finding(s)";
+               << findings.size() << "LFE finding(s)," << stops.size() << "stop(s)";
 
   onStatusReport(StatusReportArgs::Finished,
       tr("Audio anomaly scan complete: %n finding(s)", "", points.size()),

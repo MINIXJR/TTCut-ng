@@ -67,6 +67,8 @@ private slots:
   void onDeleteKey();
 
 public:
+  //! Texts of the actions the context menu offers for a row (harnesses).
+  QStringList contextMenuTextsForTest(int row);
 
 private:
   //! The actions onContextMenu offers for one marker (null when not offered)

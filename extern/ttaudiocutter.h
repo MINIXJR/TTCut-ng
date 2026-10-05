@@ -61,6 +61,9 @@ public:
 
     QString lastError() const { return mLastError; }
 
+    //! Frames the last cut() wrote from its repair table (0 without one).
+    int repairedFrames() const { return mRepairedFrames; }
+
 private:
     //! Per-call state of cut() (containers, timeline, accounting, AC3 chain);
     //! defined in the .cpp together with the named steps of the packet loop.
@@ -74,6 +77,7 @@ private:
 
     void setError(const QString& error);
     QString mLastError;
+    int     mRepairedFrames = 0;
 };
 
 #endif

@@ -2555,6 +2555,227 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Tonanomalie-Scan: LFE-Grenze und Abbruch-Suche** → **DONE (2026-10-04,
+  Zweig `feature/anomaly-stop-search`)**. Spec und Plan (nicht im Repo):
+  `docs/superpowers/{specs,plans}/2026-10-04-audio-anomaly-stop-search*`.
+  - **Umbau:** `TTAudioAnomalyScanTask::evaluate()` verwirft LFE-Funde über
+    15 AC3-Rahmen (0,48 s; die Störung hat 8 Rahmen, die fünf falschen Funde
+    23 und mehr). Neue reine Funktion `evaluateStops()`: `collectFrameStats`
+    hält je Rahmen die Leistung von sechs 256er-Blöcken (alle Kanäle außer
+    LFE addiert) und die Kanalzahl fest; gemeldet wird ein Abfall von den
+    drei Blöcken vor einer Grenze zu den zwei danach, Pegel davor über
+    −35 dBFS. Zwei Formen: **Loch** (einer der sechs Blöcke ab der Grenze
+    erreicht wieder den Pegel davor minus 10 dB) zählt ab 45 dB,
+    **bleibender Abbruch** ab 30 dB. Ereignisse innerhalb von 19 Blöcken
+    sind eines; ein Abbruch, nach dem bis zum Spurende nur Stille
+    (< −80 dBFS) folgt, ist das von `ttcut-demux` angehängte Ende. Marker
+    beider Suchen tragen eine Kanalmaske (`TTStreamPoint::audioChannelMask`,
+    `<AudioChannels>` in der Projektdatei); der Reparaturdialog wählt sie
+    vor.
+  - **Messung im Scan-eigenen Pfad** (`tools/diag/gate_anomaly_real.sh`,
+    drei frisch gedemuxte Aufnahmen). Die erste Fassung (drei Blöcke
+    danach, 30 dB für alles) verfehlte auf 02x06 das Loch bei 3099,730 s
+    (im 256er-Raster nur zwei volle Blöcke lang, größter Abfall 10,1 dB)
+    und meldete zusätzlich 74,560 s. Ohne Kompression dekodiert
+    (`drc_scale` 0): dieselben Stellen, höchstens 0,3 dB Unterschied. Zwei
+    Blöcke danach, 30 dB für alles, Urteile des Anwenders vom 2026-10-04:
+
+    | Stelle | Bild | Form | Abfall | Urteil |
+    |---|---|---|---|---|
+    | 144,699 s | 3617 | Loch, 2 Blöcke | 31,1 dB | „OK" |
+    | 969,525 s | 24238 | bleibender Abbruch | 32,4 dB | Knacks, bestätigt |
+    | 2360,949 s | 59024 | Loch, 2 Blöcke | 31,8 dB | „OK" |
+    | 2579,115 s | 64477 | Loch, 3 Blöcke | 40,8 dB | unauffällig |
+    | 3099,733 s | 77493 | Loch, 2 Blöcke | 51,9 dB | leiser Knacks, bestätigt |
+    | 3468,171 s | Werbeblock | Loch, 3 Blöcke | 45,4 dB | nicht beurteilt |
+    | 74,576 s | 1864 | Lücke von 70 ms | 29,3 dB (30,6 mit 3 Blöcken) | „nichts Ungewöhnliches" |
+
+    Endstand mit den zwei Formen: 02x06 LFE-Fund nur 63894–63901, Abbrüche
+    969,504 / 3099,712 / 3468,160 s; 05x08 und 05x05 nichts.
+  - **Was gehört von nicht gehört trennt** (02x06, Schnipsel durch Abzählen
+    der Sync-Rahmen geschnitten, gegen die Pegel des Scans geprüft):
+    Frequenzverteilung nicht (77493 und 64477 beide mittenbetont, Bass und
+    Höhen rund −20 dB); Länge nicht (alle fünf Löcher rund 17 ms, beidseitig
+    hart); Sprunghöhe an der Kante nicht. Je Kanal: alle vier 5.1-Löcher
+    sind im Center rund 50 dB tief; bei 77493 sind im Loch alle Kanäle
+    still (−98…−100 dBFS), bei 3617, 59024 und 64477 spielen mindestens
+    zwei andere Kanäle weiter (−53…−69 dBFS). Der Gesamtabfall misst also,
+    ob neben dem Center etwas weiterspielt. 24238: Wellenform am Scheitel
+    einer Bass-Schwingung abgeschnitten. 1864: natürlich ausklingender
+    Zischlaut, kein Sprung.
+  - **Zweite Tonspur:** alle fünf Löcher gibt es nur in der AC3-Spur, die
+    MP2-Spur spielt durch (Pegeländerung −4,8…+1,6 dB); 24238 und 1864
+    stehen in beiden Spuren. MP2 liegt an allen sieben Stellen 8,6 ms gegen
+    AC3 versetzt, Kreuzkorrelation 0,97–0,99.
+  - **Widerlegt: „VDR oder `ttcut-demux` erzeugt die Löcher"** (Vermutung
+    des Anwenders). Eigener TS/PES-Leser auf der VDR-Aufnahme (`00001.ts`,
+    PID 0x203): die 21 AC3-Rahmen um jede der sieben Stellen stehen
+    bytegleich in Aufnahme und gedemuxter Spur (fester Versatz 24 414 Byte
+    über die ganze Datei), 0 Continuity-Fehler, 0 Fehlermarkierungen,
+    Rahmen-Prüfsummen gültig (Gegenprobe mit gekipptem Byte schlägt an). Die
+    Löcher sind so kodiert empfangen worden.
+  - **Sichttest des Anwenders (2026-10-05, 02x06 frisch geöffnet):** nur die
+    vier erwarteten Marker. Reparatur am Abbruch-Marker bei Bild 24237 und
+    am Loch bei 77492, jeweils Original gegen Repariert: kein echter
+    Unterschied zu hören (am Loch nimmt er den Fehler schon im Original
+    fast nicht wahr). Gemessen (`test_audiorepair <ac3> 30296 30298 63`,
+    beide Fassungen dekodiert): die Reparatur greift (−110 dBFS von 5 bis
+    90 ms des Bereichs), blendet aber in rund 5 ms von −14 dBFS aus — ein
+    fast ebenso harter Abbruch, 52 ms früher. Folge: für
+    „Ton bricht ab"-Marker wird keine neue Reparatur angeboten
+    (`TTStreamPoint::offersNewAudioRepair`, Markerart als `<AnomalyKind>`
+    in der Projektdatei); offene Wege dazu in `TODO.md`. Geprüft in
+    `test_marker_delete_repair` (Fall 5).
+  - **Prüfung:** `test_anomalyscan` (Fälle A2, S1–S14, Tonproben
+    `make_anomaly_sample.sh <out> 0.2` und `make_stop_sample.sh` in 5.1 und
+    2.0), `test_repairdialog_model` (Fall 7), `test_audiorepair_persist`
+    (`<AudioChannels>`), `gate_anomaly_real.sh` für echte Aufnahmen.
+    Pegel um eine Stelle: `test_anomalyscan <ac3> 0 25 <sekunden…>`.
+  - **Fallen:** `printf("%.3f")` schreibt unter de_DE ein Dezimalkomma
+    (awk-Vergleich bricht) → `QString::number`. In einem
+    `aevalsrc`-Ausdruck läuft `pow(10, -3*(t-30)/0.1)` vor t = 19,7 s auf
+    unendlich, `0 * inf` ist NaN, die Spur war bis dorthin still →
+    Exponent mit `max()` klemmen.
+  - **Befunde vor dem Umbau, aus `TODO.md` übernommen: „Der Scan trennt
+    gewollten Ton nicht von Störungen"** (gemessen 2026-10-04). Geprüft
+    wurden vor dem Umbau nur LFE-Insel und Sprung im Center; das
+    erfüllt jede Explosion in einem Film mit sonst stillem LFE.
+    - Zählung über 14 AC3-Spuren (8 aus dem Korpus als Rohspur, 6 frisch
+      gedemuxte Aufnahmen): 6 ohne 5.1; 3 mit 5.1, aber LFE zu oft aktiv (kein
+      Urteil: The Rookie 07x12, 05x06 mit 98,8 %, 05x07 mit 98,9 % still);
+      3 geeignet ohne Fund (ServusTV, The Rookie 07x11, 05x05); 2 geeignet
+      mit je 3 Funden.
+    - Sieben weitere Aufnahmen aus dem VDR-Archiv (unter 54 per Stichprobe
+      an drei Stellen als 5.1 erkannt, dann voll gescannt): bei allen kein
+      Urteil, LFE still in 46,5–97,5 % der 5.1-Rahmen (Ted, Navy CIS 23x15,
+      UFOs ×2, Lola rennt, Tatort 2011x01, Good bye, Lenin!). Jede hat eine
+      AC3-Spur, die zwischen 2.0 und 5.1 wechselt. Zusammen: von 15 Spuren
+      mit 5.1 ist der Scan auf 5 anwendbar. 173 Comedy-Aufnahmen sind bis auf
+      eine Stereo.
+    - Der Fund auf 02x06 bei 0:34:04,8 ist eine echte Störung (Anwender,
+      gehört 2026-10-04: bei Wiedergabe ab Videobild 51118 zu hören, ab 51121
+      nicht mehr). Gemessen: harte Sprünge im Center über 84 ms
+      (0:34:04,740–04,824), LFE-Puls von 19 ms. Es ist der einzige Fund, den
+      der Scan an den Merkmalen der Störung selbst erkannt hat. Alle sechs
+      Funde tragen Vertrauen 1,00.
+    - Der Abspann-Fund auf 02x06 (0:16:09, bisher „Abspann-Knacks") ist
+      falsch eingeordnet (Anwender, gehört 2026-10-04): der Scan meldet einen
+      gewollten tiefen Ton (LFE um −20 dBFS, 509 ms). Die Störung ist ein
+      Knacks an dessen Ende: Sprünge in Center und Rechts über 10 ms
+      (969,515–969,524 s der gedemuxten Spur), dann fallen alle sechs Kanäle
+      in 5 ms um 30–40 dB. Gegengeprüft: ab Videobild 24238 noch zu hören, ab
+      24239 nicht mehr. Der gemeldete Bereich (736 ms) ist fast ganz gewollter
+      Ton — eine Reparatur mit der Maske C+LFE hätte ihn entfernt. Eine
+      Sprungfolge nur im Center 127 ms vor dem Ton (9,6 ms) hört der Anwender
+      nicht als Störung.
+    - Die übrigen vier sind gewollter Ton, jeweils vom Anwender am
+      2026-10-04 geprüft: der dritte Fund auf 02x06 (1:04:24, ein tiefer Ton
+      wie im Abspann) und alle drei auf 05x08 (Explosion 0:37:42, Schuss
+      0:38:02, laute Szene 0:46:50).
+    - Vorgabe des Anwenders: gesucht sind lokal eng begrenzte Ereignisse,
+      keine Erhöhung der Lautstärke. Der Scan kennt keine Obergrenze für die
+      Länge. Dauer des LFE über −30 dBFS je Fund: 21 ms (0:34), 512 ms
+      (tiefer Ton im Abspann), 875 ms (Schuss), 1232 ms (tiefer Ton 1:04),
+      1259 ms (laute Szene), 4320 ms (Explosion).
+    - „Die übrigen Kanäle bleiben ruhig" trennt die Fälle nicht (Anstieg in
+      L/R: 17–20 dB am Abspann-Fund, 6–7 dB an der lauten Szene).
+    - Übersehene Störungen: unbekannt. Bekannt sind zwei echte Störungen aus
+      einer Aufnahme, beide kürzer als 100 ms; nur eine hat einen LFE-Anteil.
+      Belegbar ist bisher nur: Marker als Kandidat ausweisen, Vertrauen
+      weglassen.
+    - Einschätzung des Anwenders (2026-10-04): die Erkennung leistet so nicht,
+      was gedacht war; vor jedem Umbau braucht es mehr echte Störungen.
+    - **Versuch „Ton bricht schlagartig ab"** (2026-10-04, Wegwerf-Skripte
+      außerhalb des Repos). Kennzahl: Pegel je Kanal (C, L, R, SL, SR) in
+      5-ms-Schritten; er fällt vom 15-ms-Fenster davor zum 15-ms-Fenster
+      danach um mindestens 30 dB, bei einem Ausgangspegel über −35 dBFS. Nur
+      5.1-Abschnitte.
+      - 02x06 (54 min Sendung): 8 Stellen. Urteile des Anwenders nach Gehör:
+        Bild 24238 Knacks (Störung); 77493 sehr leiser Knacks, Marker; 81198
+        Grenzfall; 9516, 22213, 64477, 46172 und 56313 unauffällig (56313
+        zuerst als „anhören" eingestuft, beim zweiten Hören nichts). Sieben
+        der acht schlagen im Center an; 46172 nur in SL
+        und SR: dort liegt ein 20 ms langer Tonfetzen bei −33 dBFS in sonst
+        stillen Rückkanälen, der Center läuft unverändert weiter.
+      - Fünf der acht (9516, 22213, 64477, 77493, 81198) sind Löcher von
+        16,8–17,0 ms: der Ton fällt mitten in der Schwingung in allen Kanälen
+        auf null und setzt schlagartig wieder ein, an beliebiger Stelle im
+        AC3-Rahmen. Was die hörbaren von den unhörbaren Löchern trennt, ist
+        offen (Sprunghöhe am Rand und Pegel davor ordnen die fünf nicht).
+      - 05x08 und 05x05: keine einzige Stelle — auch nicht an Explosion,
+        Schuss und lauter Szene, die der LFE-Scan meldet. Ob dort Störungen
+        dieser Art übersehen werden, ist unbekannt.
+      - Die Störung bei 0:34 findet diese Kennzahl nicht (kein Abbruch,
+        sondern rechteckige Blöcke von je etwa 5 ms).
+      - Variante „alle Kanäle zusammen" (Leistung der fünf Hauptkanäle
+        addiert, sonst gleich): auf 02x06 bleiben 3 der 8 Stellen — 24238
+        (Störung), 77493 (leiser Knacks), 64477 (unauffällig); verloren geht
+        nur der Grenzfall 81198, die vier übrigen unauffälligen Stellen
+        fallen weg. Auf 05x08 keine Stelle. Der Anwender zieht diese Variante
+        vor, auch weil sie für jede Kanalzahl passt (Mono bis 7.1).
+      - Beide Varianten melden auf 05x05 genau eine Stelle: den Übergang in
+        die Stille, die `ttcut-demux` am Ende anhängt (704 ms). Ein Einbau
+        muss das angehängte Ende ausnehmen.
+      - Über ganze Spuren samt Werbung („alle zusammen"): 02x06 4 Stellen
+        in 66 min, 05x08 keine in 70 min; auf zwei MP2-Stereospuren (Comedy
+        Central, Korpus „Audio-Burst-Beispiele") 3 in 57 min und 4 in 54 min
+        — dort von niemandem gehört. Schlagartige *Einsätze* sind dagegen
+        häufig (76 bis 167 je Spur) und taugen nicht als Merkmal.
+      - Mit der Burst-Erkennung am Schnittrand hat die Kennzahl nichts zu
+        tun: an beiden Korpus-Fällen mit hörbarem Werbe-Knall am Cut-Out
+        (Schnittgrenzen 2547,80 s und 2374,6 s) meldet sie nichts. Dort
+        *setzt* der Werbeton 75–80 ms vor der Grenze ein und läuft über sie
+        hinaus; den Abbruch erzeugt erst der Schnitt. Im 5-ms-Pegelverlauf ist
+        der Einsatz deutlich zu sehen (Anstieg um 20–30 dB) — ein möglicher
+        Ansatz für die im Known-Limitations-Eintrag beschriebene Schwäche der
+        Burst-Erkennung, nicht untersucht.
+      - Klarstellung des Anwenders (2026-10-04): gesucht sind **Ausreißer in
+        Richtung laut**, nicht Abbrüche. Die Abbruch-Suche deckt das nicht
+        ab (die Störung bei 0:34 ist kein Abbruch); eine Entscheidung, den
+        LFE-Scan zu ersetzen, steht deshalb nicht.
+    - **Versuch „kurzer Ausreißer nach laut"** (2026-10-04, Wegwerf-Skripte).
+      Kennzahl je Kanal: Pegel je 5 ms liegt um X dB über dem üblichen Pegel
+      (Median) der 200 ms davor UND der 200 ms danach; nur Ereignisse bis
+      100 ms, Pegel über −40 dBFS.
+      - 02x06 (Sendung), X = 30 dB: 4 Stellen — die Störung bei 0:34 mit dem
+        höchsten Wert (LFE, 46 dB), dazu Bild 36289 (LFE), 58858 und 65480
+        (Center), vom Anwender gehört: alle drei unauffällig. Eine von vier
+        Meldungen berechtigt; Urteil des Anwenders: die Prüfung taugt so
+        nicht. Die beiden tiefen Töne und die Löcher werden nicht gemeldet.
+      - 05x08, X = 30 dB: 7 Stellen, keine davon Explosion, Schuss oder laute
+        Szene; fünf liegen dicht beieinander im Center bei 0:37:38–0:37:41.
+        Nicht gehört.
+      - Der Knacks im Abspann und der leise Knacks bei 77493 sind nach dieser
+        Kennzahl keine Ausreißer nach laut (Pegel dort nicht über der
+        Umgebung); sie findet nur die Abbruch-Suche.
+      - Stand je Kennzahl auf 02x06 (bestätigte Störungen: 0:34, Knacks im
+        Abspann 24238, leiser Knacks 77493): LFE-Scan mit Längengrenze 0,5 s
+        1 Meldung, 1 echt (0:34); Abbruch-Suche über alle Kanäle 3 Meldungen,
+        2 echt (24238, 77493); Ausreißer nach laut je Kanal 4 Meldungen,
+        1 echt (0:34). Keine einzelne Kennzahl findet alle drei.
+      - Fremde Verfahren, am Center von 02x06 gemessen (2026-10-04): der
+        Knacks-Entferner von ffmpeg (`adeclick`, Vorgaben) verändert 3992
+        Stellen der Sendung, die Knackse 24238 und 77493 gleichauf mit
+        unauffälligen Stellen. Drei Sucher aus Essentia (MTG, AGPL-3.0,
+        `src/algorithms/audioproblems/`), als eigener Nachbau mit ihren
+        Vorgabewerten — Treue zum Original nicht geprüft: der
+        DiscontinuityDetector meldet keine unserer Stellen (170 andere), der
+        ClickDetector meldet 490 Stellen, vorn zwei unauffällige Löcher
+        (22213, 64477), 77493 auf Rang 8, die Störung bei 0:34 gar nicht; der
+        NoiseBurstDetector meldet über 7000 Stellen. Ein Python-Paket von
+        Essentia gibt es für Python 3.14 nicht.
+      - Nicht trennscharf (gleicher Tag): dieselbe Kennzahl auf allen Kanälen
+        zusammen (Störung 0:34 bei 15 dB, 169 Stellen gleichauf) und auf der
+        Änderung von Sample zu Sample (24 dB, rund 100 gleichauf); Sprunghöhe
+        gegen die übliche Bewegung davor und danach (Tausende Stellen).
+    - Weitere Urteile des Anwenders auf 02x06 (2026-10-04): Bild 67561
+      Störung, anhören (Einsatz mit kleiner Kerbe 6 ms davor; von keiner
+      Kennzahl gezielt gefunden); 90068 und 59056 normale Einsätze.
+    - Kennzahlen, die nicht trennen (gleicher Versuch): Vorhersagefehler je
+      43-ms-Block (Knacks Rang 5, Störung 0:34 Rang 206 von 4925; vorn liegen
+      Einsätze aus der Stille) und stehender Sprung zwischen zwei Samples
+      (Knacks Rang 1, Störung 0:34 unter mehr als 100 gleich hohen).
+
 - **Neu kodierte AC3-Rahmen passen zu ihren kopierten Nachbarn** → **DONE
   (2026-10-02, Zweig `fix/ac3-reencode-alignment`)**. Betraf Tonreparatur
   und acmod-Normalisierung. Gemessen an einer DVB-Aufnahme (448 kbit/s,

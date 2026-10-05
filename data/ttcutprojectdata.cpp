@@ -566,6 +566,16 @@ void TTCutProjectData::serializeStreamPoints(const QList<TTStreamPoint>& points)
 
       addTextElement(elem, "AudioFrameTo", QString::number(pt.audioFrameTo()));
     }
+
+    // Planes a repair should preset (a stop marker names all planes of its
+    // frames). Written only when known; an older TTCut-ng skips the element.
+    if (pt.audioChannelMask() != 0)
+      addTextElement(elem, "AudioChannels", QString::number(pt.audioChannelMask()));
+
+    // Which search found an anomaly marker; decides whether a new repair is
+    // offered for it. Written only when known.
+    if (pt.audioAnomalyKind() != AudioAnomalyKind::Unknown)
+      addTextElement(elem, "AnomalyKind", TTStreamPoint::anomalyKindToString(pt.audioAnomalyKind()));
   }
 }
 
@@ -589,6 +599,8 @@ QList<TTStreamPoint> TTCutProjectData::deserializeStreamPoints()
       QString type, desc;
       float confidence = 0.0f, duration = 0.0f;
       qint64 audioFrameFrom = -1, audioFrameTo = -1;
+      int audioChannels = 0;
+      QString anomalyKind;
 
       for (int j = 0; j < children.size(); j++) {
         QDomElement child = children.at(j).toElement();
@@ -608,6 +620,10 @@ QList<TTStreamPoint> TTCutProjectData::deserializeStreamPoints()
           audioFrameFrom = child.text().toLongLong();
         else if (child.tagName() == "AudioFrameTo")
           audioFrameTo = child.text().toLongLong();
+        else if (child.tagName() == "AudioChannels")
+          audioChannels = child.text().toInt();
+        else if (child.tagName() == "AnomalyKind")
+          anomalyKind = child.text();
       }
 
       TTStreamPoint pt(frame, TTStreamPoint::stringToType(type),
@@ -618,6 +634,11 @@ QList<TTStreamPoint> TTCutProjectData::deserializeStreamPoints()
       // range into a repair.
       if (audioFrameFrom >= 0 && audioFrameTo >= audioFrameFrom)
         pt.setAudioFrameRange(audioFrameFrom, audioFrameTo);
+      // Six planes at most; anything else is a hand-edited file - stay on "unknown".
+      if (audioChannels > 0 && audioChannels <= 0x3F)
+        pt.setAudioChannelMask(quint8(audioChannels));
+      // An unknown text stays "unknown": the marker is treated as before.
+      pt.setAudioAnomalyKind(TTStreamPoint::stringToAnomalyKind(anomalyKind));
       points.append(pt);
     }
   }

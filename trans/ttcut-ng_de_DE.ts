@@ -246,6 +246,18 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>Tonspur %1: der Tonschnitt selbst ist fehlgeschlagen (libav-Fehler siehe Log)</translation>
     </message>
     <message>
+        <source>Audio track %1: repairs applied: %2 (frames replaced: %3)</source>
+        <translation>Tonspur %1: angewendete Reparaturen: %2 (ersetzte Frames: %3)</translation>
+    </message>
+    <message>
+        <source>, outside the cut: %1</source>
+        <translation>, außerhalb des Schnitts: %1</translation>
+    </message>
+    <message>
+        <source>, disabled: %1</source>
+        <translation>, deaktiviert: %1</translation>
+    </message>
+    <message>
         <location filename="../data/ttabortabletask.cpp" line="81"/>
         <location filename="../data/ttavdata.cpp" line="1917"/>
         <location filename="../data/ttavdata.cpp" line="1924"/>
@@ -765,6 +777,10 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <translation>Tonanomalie: C+LFE-Störimpuls (Spur %1, LFE-Spitze %2 dB)</translation>
     </message>
     <message>
+        <source>Audio anomaly: sound stops abruptly (track %1, drop %2 dB)</source>
+        <translation>Tonanomalie: Ton bricht ab (Spur %1, Abfall %2 dB)</translation>
+    </message>
+    <message>
         <location filename="../data/ttaudioanomalyscantask.cpp" line="482"/>
         <source> (overlaps gap repair)</source>
         <translation> (überschneidet sich mit Lücken-Reparatur)</translation>
@@ -920,6 +936,10 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <location filename="../gui/ttaudiorepairdialog.cpp" line="299"/>
         <source>Play repaired</source>
         <translation>Reparatur abspielen</translation>
+    </message>
+    <message>
+        <source>Plan repair</source>
+        <translation>Vormerken</translation>
     </message>
     <message>
         <location filename="../gui/ttaudiorepairdialog.cpp" line="300"/>
@@ -3559,7 +3579,7 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsstreampoints.ui" line="91"/>
         <source>An AC3 frame counts as LFE-active above this RMS level. Higher values report less.</source>
-        <translation>Ab diesem Effektivpegel gilt ein AC3-Rahmen als LFE-aktiv. Höhere Werte melden weniger.</translation>
+        <translation>Ab diesem Effektivpegel gilt ein AC3-Frame als LFE-aktiv. Höhere Werte melden weniger.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsstreampoints.ui" line="96"/>
@@ -3584,7 +3604,7 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsstreampoints.ui" line="122"/>
         <source>Precondition: at least this share of the 5.1 frames must have a silent LFE, otherwise the track is reported as unsuitable and nothing is detected.</source>
-        <translation>Vorbedingung: mindestens dieser Anteil der 5.1-Rahmen muss einen stillen LFE haben, sonst gilt die Spur als ungeeignet und es wird nichts gemeldet.</translation>
+        <translation>Vorbedingung: mindestens dieser Anteil der 5.1-Frames muss einen stillen LFE haben, sonst gilt die Spur als ungeeignet und es wird nichts gemeldet.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsstreampoints.ui" line="127"/>
@@ -4150,7 +4170,7 @@ Ausgabedatei:
 mplex found data after the last audio frame it could recognise and treated the stream as broken. This usually means a damaged frame in the recording itself - ttcut-demux records those in the .info file as corrupt_frame_ranges, and they appear as markers on the timeline. The MKV output does not have this problem, because its muxer skips such a frame instead of giving up on the track.</source>
         <translation>Der Multiplexer hat den Tonstrom nicht weiter gelesen; die Ausgabe hat ab dieser Stelle keinen Ton.
 
-mplex fand hinter dem letzten erkennbaren Tonrahmen weitere Daten und hat den Strom für defekt erklärt. Meist steckt ein beschädigter Rahmen in der Aufnahme selbst – ttcut-demux hält solche Stellen in der .info-Datei als corrupt_frame_ranges fest, und sie erscheinen als Marken auf der Zeitleiste. Die MKV-Ausgabe hat dieses Problem nicht, weil ihr Multiplexer einen solchen Rahmen überspringt statt die Spur aufzugeben.</translation>
+mplex fand hinter dem letzten erkennbaren Audio-Frame weitere Daten und hat den Strom für defekt erklärt. Meist steckt ein beschädigter Frame in der Aufnahme selbst – ttcut-demux hält solche Stellen in der .info-Datei als corrupt_frame_ranges fest, und sie erscheinen als Marken auf der Zeitleiste. Die MKV-Ausgabe hat dieses Problem nicht, weil ihr Multiplexer einen solchen Frame überspringt statt die Spur aufzugeben.</translation>
     </message>
 </context>
 <context>
