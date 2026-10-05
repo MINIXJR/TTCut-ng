@@ -62,7 +62,8 @@ public:
   // stop search must not use (decode failure, sample format, frame size).
   struct FrameStat { float lfeRms; float centerRms; float centerMaxDiff; bool is51;
                      float blockPower[6]; quint8 channels; };
-  enum class FindingKind { LfeBurst, AbruptStop };
+  // The kind travels with the marker (TTStreamPoint::audioAnomalyKind).
+  using FindingKind = AudioAnomalyKind;
   // frameFrom/frameTo: AC3 frame index range, both inclusive (matches
   // TTAudioRepairItem::frameFrom()/frameTo() and TTStreamPoint's
   // audioFrameFrom()/audioFrameTo() - unlike TTStreamPoint::duration(),

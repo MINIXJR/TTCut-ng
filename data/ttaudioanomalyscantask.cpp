@@ -578,6 +578,7 @@ void TTAudioAnomalyScanTask::operation()
     // Both bounds inclusive, the same convention as TTAudioRepairItem.
     pt.setAudioFrameRange(f.frameFrom, f.frameTo);
     pt.setAudioChannelMask(f.channelMask);
+    pt.setAudioAnomalyKind(f.kind);
     points.append(pt);
   };
   for (const Finding& f : findings)

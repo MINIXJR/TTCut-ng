@@ -297,17 +297,16 @@ void TTAudioRepairDialog::buildUi()
   QHBoxLayout* auditionLayout = new QHBoxLayout();
   mBtnPlayOriginal = new QPushButton(tr("Play original"), this);
   mBtnPlayRepaired = new QPushButton(tr("Play repaired"), this);
-  mBtnGotoFrame    = new QPushButton(tr("Go to frame"), this);
   auditionLayout->addWidget(mBtnPlayOriginal);
   auditionLayout->addWidget(mBtnPlayRepaired);
-  auditionLayout->addWidget(mBtnGotoFrame);
   mMainLayout->addLayout(auditionLayout);
 
   connect(mBtnPlayOriginal, &QPushButton::clicked, this, &TTAudioRepairDialog::onPlayOriginal);
   connect(mBtnPlayRepaired, &QPushButton::clicked, this, &TTAudioRepairDialog::onPlayRepaired);
-  connect(mBtnGotoFrame,    &QPushButton::clicked, this, &TTAudioRepairDialog::onGotoFrame);
 
   QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+  // Accepting changes nothing yet: the repair is noted for the cut.
+  buttons->button(QDialogButtonBox::Ok)->setText(tr("Plan repair"));
   connect(buttons, &QDialogButtonBox::accepted, this, &TTAudioRepairDialog::accept);
   connect(buttons, &QDialogButtonBox::rejected, this, &TTAudioRepairDialog::reject);
   mMainLayout->addWidget(buttons);
@@ -334,11 +333,6 @@ quint8 TTAudioRepairDialog::currentChannelMask() const
   for (int ch = 0; ch < 6; ++ch)
     if (mChkChannel[ch]->isChecked()) mask |= quint8(1u << ch);
   return mask;
-}
-
-void TTAudioRepairDialog::onGotoFrame()
-{
-  emit jumpToFrameRequested(mPoint.frameIndex());
 }
 
 void TTAudioRepairDialog::onMpvError(const QString& message)

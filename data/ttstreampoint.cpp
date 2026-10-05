@@ -80,6 +80,23 @@ StreamPointType TTStreamPoint::stringToType(const QString& str)
   return StreamPointType::ManualMarker;
 }
 
+QString TTStreamPoint::anomalyKindToString(AudioAnomalyKind kind)
+{
+  switch (kind) {
+    case AudioAnomalyKind::LfeBurst:   return "LfeBurst";
+    case AudioAnomalyKind::AbruptStop: return "AbruptStop";
+    case AudioAnomalyKind::Unknown:    break;
+  }
+  return QString();
+}
+
+AudioAnomalyKind TTStreamPoint::stringToAnomalyKind(const QString& str)
+{
+  if (str == "LfeBurst")   return AudioAnomalyKind::LfeBurst;
+  if (str == "AbruptStop") return AudioAnomalyKind::AbruptStop;
+  return AudioAnomalyKind::Unknown;
+}
+
 QStringList TTStreamPoint::repairPlannedSuffixVariants()
 {
   // Source EN string (TTStreamPointWidget::onContextMenu()) plus every

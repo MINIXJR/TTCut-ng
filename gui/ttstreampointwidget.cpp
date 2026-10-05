@@ -181,6 +181,17 @@ void TTStreamPointWidget::onContextMenu(const QPoint& pos)
   handleContextAction(chosen, index, acts);
 }
 
+QStringList TTStreamPointWidget::contextMenuTextsForTest(int row)
+{
+  QMenu menu;
+  ContextMenuActions acts;
+  buildContextMenu(menu, mModel->index(row, 0), acts);
+  QStringList texts;
+  for (const QAction* a : menu.actions())
+    if (!a->isSeparator()) texts << a->text();
+  return texts;
+}
+
 void TTStreamPointWidget::buildContextMenu(QMenu& menu, const QModelIndex& index, ContextMenuActions& acts)
 {
   if (index.isValid()) {
@@ -197,14 +208,19 @@ void TTStreamPointWidget::buildContextMenu(QMenu& menu, const QModelIndex& index
     if (type == StreamPointType::AudioAnomaly && mpAvItem) {
       acts.repairTrackIndex = mpAvItem->firstAc3TrackIndex();
       if (acts.repairTrackIndex >= 0) {
+        const TTStreamPoint point = mModel->pointAt(index.row());
         acts.repairIndex = TTAudioRepairDialog::repairIndexForMarker(
-            mpAvItem, mModel->pointAt(index.row()), mExtraFrameIndices);
+            mpAvItem, point, mExtraFrameIndices);
 
-        menu.addSeparator();
+        // An existing repair can always be edited and removed - the marker
+        // is the only handle on it. A new one is not offered for every kind
+        // of anomaly marker (TTStreamPoint::offersNewAudioRepair).
         if (acts.repairIndex >= 0) {
+          menu.addSeparator();
           acts.actEditRepair = menu.addAction(tr("Edit repair..."));
           acts.actRemoveRepair = menu.addAction(tr("Remove repair"));
-        } else {
+        } else if (point.offersNewAudioRepair()) {
+          menu.addSeparator();
           acts.actRepair = menu.addAction(tr("Repair..."));
         }
       }
@@ -220,6 +236,11 @@ void TTStreamPointWidget::buildContextMenu(QMenu& menu, const QModelIndex& index
 void TTStreamPointWidget::handleContextAction(const QAction* chosen, const QModelIndex& index,
                                               const ContextMenuActions& acts)
 {
+  // A menu closed without a choice. The actions a menu does not offer are
+  // null as well, so without this the first such comparison below would
+  // match - it opened the repair dialog on every marker.
+  if (!chosen) return;
+
   if (chosen == acts.actDelete) {
     emit deleteRequested(index.row());
   } else if (chosen == acts.actCutIn) {
@@ -228,8 +249,10 @@ void TTStreamPointWidget::handleContextAction(const QAction* chosen, const QMode
     emit setCutOut(acts.frameIndex);
   } else if (chosen == acts.actRepair || chosen == acts.actEditRepair) {
     const TTStreamPoint pt = mModel->pointAt(index.row());
+    // The dialog is modal: show the picture of the spot before it opens (a
+    // right click does not navigate).
+    emit jumpToFrame(pt.frameIndex());
     TTAudioRepairDialog dlg(mpAvItem, pt, acts.repairTrackIndex, mExtraFrameIndices, this);
-    connect(&dlg, &TTAudioRepairDialog::jumpToFrameRequested, this, &TTStreamPointWidget::jumpToFrame);
     if (dlg.exec() == QDialog::Accepted) {
       QString desc = pt.description();
       // Check every known-language variant (residuals R6) - a marker

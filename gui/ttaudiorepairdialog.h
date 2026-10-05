@@ -27,9 +27,10 @@ class TTMpvWrapper;
 // Repair dialog for one AudioAnomaly marker (audio-anomaly-repair Task 7,
 // design Komponente 4: docs/superpowers/specs/2026-08-19-audio-anomaly-
 // repair-design.md). Lets the user narrow the channel mask and AC3-frame
-// range the scanner proposed, audition before/after via mpv, jump the main
-// window to the marker's video frame for visual context, and on Accept
+// range the scanner proposed, audition before/after via mpv, and on Accept
 // write (or update) exactly one TTAudioRepairItem on the given TTAVItem.
+// The widget that opens it jumps the main window to the marker's frame
+// first (TTStreamPointWidget::handleContextAction).
 //
 // Code-based (no .ui file) - deliberately sidesteps this project's AUTOUIC-
 // stash-race pitfall (docs/code-map note reference_autouic_stash_race.md).
@@ -104,17 +105,9 @@ public:
   // without needing a real repair range/AVItem set up first.
   void playFileForTest(const QString& path) { playFile(path); }
 
-signals:
-  // Relayed by the widget that owns this dialog into its own jumpToFrame
-  // signal, which TTCutMainWindow already connects to onStreamPointJump -
-  // no separate main-window wiring needed for navigation (see
-  // TTStreamPointWidget::onContextMenu).
-  void jumpToFrameRequested(int frameIndex);
-
 private slots:
   void onPlayOriginal();
   void onPlayRepaired();
-  void onGotoFrame();
   void onMpvError(const QString& message);
   // Clears mAwaitingPlaybackStart - see that member's doc comment (review
   // fix 2, round 2). Connected to TTMpvWrapper::playbackRestarted, NOT
@@ -198,7 +191,6 @@ private:
   QSpinBox*    mSpinTo         = nullptr;
   QPushButton* mBtnPlayOriginal = nullptr;
   QPushButton* mBtnPlayRepaired = nullptr;
-  QPushButton* mBtnGotoFrame    = nullptr;
   QVBoxLayout* mMainLayout      = nullptr;
   TTMpvWrapper* mPlayer         = nullptr;
 };

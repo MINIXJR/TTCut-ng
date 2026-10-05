@@ -27,6 +27,15 @@ enum class StreamPointType {
   AudioAnomaly
 };
 
+// What an AudioAnomaly marker stands for. Unknown: every other marker type,
+// and anomaly markers from project files written before the scan had a
+// second search - those were findings of the LFE search.
+enum class AudioAnomalyKind {
+  Unknown = 0,
+  LfeBurst,     // short burst in centre and LFE
+  AbruptStop    // the sound of all channels stops abruptly
+};
+
 class TTStreamPoint
 {
 public:
@@ -66,12 +75,21 @@ public:
   // plane n, the convention of TTAudioRepairItem::channelMask()). 0 = not
   // known: every other marker type, and markers from older project files.
   quint8           audioChannelMask() const { return mAudioChannelMask; }
+  AudioAnomalyKind audioAnomalyKind() const { return mAudioAnomalyKind; }
+  // Whether a new repair is offered for this marker. Not for an abrupt
+  // stop: the repair mutes channels with a short fade, which ends as hard as
+  // the stop itself (heard and measured 2026-10-05, TODO.md). A repair that
+  // already exists behind such a marker stays editable and removable.
+  bool             offersNewAudioRepair() const
+                     { return mType == StreamPointType::AudioAnomaly
+                           && mAudioAnomalyKind != AudioAnomalyKind::AbruptStop; }
 
   void setFrameIndex(int index)              { mFrameIndex = index; }
   void setDescription(const QString& desc)   { mDescription = desc; }
   void setAudioFrameRange(qint64 from, qint64 to)
                      { mAudioFrameFrom = from; mAudioFrameTo = to; }
   void setAudioChannelMask(quint8 mask)      { mAudioChannelMask = mask; }
+  void setAudioAnomalyKind(AudioAnomalyKind kind) { mAudioAnomalyKind = kind; }
 
   bool isAutoDetected() const;
 
@@ -81,6 +99,9 @@ public:
   // Serialization helpers for .prj file
   static QString typeToString(StreamPointType type);
   static StreamPointType stringToType(const QString& str);
+  // Project file text of an anomaly kind; Unknown has none (empty string).
+  static QString anomalyKindToString(AudioAnomalyKind kind);
+  static AudioAnomalyKind stringToAnomalyKind(const QString& str);
 
   // Known literal variants of the " (repair planned)" marker-description
   // suffix TTStreamPointWidget appends to an AudioAnomaly marker when a
@@ -119,6 +140,7 @@ private:
   qint64           mAudioFrameFrom = -1;   // inclusive, -1 = unknown
   qint64           mAudioFrameTo   = -1;   // inclusive, -1 = unknown
   quint8           mAudioChannelMask = 0;  // 0 = unknown
+  AudioAnomalyKind mAudioAnomalyKind = AudioAnomalyKind::Unknown;
 };
 
 #endif // TTSTREAMPOINT_H

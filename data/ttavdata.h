@@ -446,6 +446,11 @@ class TTAVData : public QObject
     //! cut-task thread, same single-threaded usage as the call itself.
     QStringList mAudioCutFailureReasons;
 
+    //! What became of the planned audio repairs in the last cutAudioTracks()
+    //! call, one line per track that has repairs, in user-facing wording -
+    //! see audioRepairNotes(). Same threading as mAudioCutFailureReasons.
+    QStringList mAudioRepairNotes;
+
   public:
     // Count extra frames before a given frame index (for audio time correction)
     int countExtraFramesBefore(int frameIndex) const;
@@ -577,6 +582,14 @@ class TTAVData : public QObject
     //! actionable half of the reason does not stay in the log file alone
     //! (final review M14). Valid until the next cutAudioTracks() call.
     QStringList audioCutFailureReasons() const { return mAudioCutFailureReasons; }
+
+    //! One line per audio track with planned repairs, saying how many were
+    //! applied in the last cutAudioTracks() call, how many frames they
+    //! replaced, and how many were not applied because they lie outside the
+    //! cut or are disabled. Empty when no track has a repair. The completion
+    //! box shows them: without it nothing told the user that a repair took
+    //! effect. Valid until the next cutAudioTracks() call.
+    QStringList audioRepairNotes() const { return mAudioRepairNotes; }
 
     //! Cut the given subtitle tracks of avItem against the video keep list
     //! (seconds, end-exclusive). Synchronous, no task pool, no MPEG-2

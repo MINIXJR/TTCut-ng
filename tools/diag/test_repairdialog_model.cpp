@@ -27,6 +27,8 @@
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QCheckBox>
+#include <QDialogButtonBox>
+#include <QPushButton>
 #include <QProcess>
 #include <QSpinBox>
 #include <QtGlobal>
@@ -140,6 +142,13 @@ int main(int argc, char** argv)
             if (dlg.channelCheckBoxForTest(ch)->isChecked() != expected[ch]) channelsOk = false;
         }
         check(channelsOk, "prefill channels = C+LFE only");
+
+        // The accepting button says what it does: it notes the repair for
+        // the cut, nothing is changed yet (user decision 2026-10-05).
+        const auto* box = dlg.findChild<QDialogButtonBox*>();
+        check(box && box->button(QDialogButtonBox::Ok) && box->button(QDialogButtonBox::Ok)->text() == "Plan repair",
+              QString("accept button reads \"Plan repair\" (got: %1)")
+                  .arg(box && box->button(QDialogButtonBox::Ok) ? box->button(QDialogButtonBox::Ok)->text() : QString("-")));
 
         // --- accept() with the ORIGINAL prefill values ---
         check(item->audioRepairList().isEmpty(), "no repair item before accept()");

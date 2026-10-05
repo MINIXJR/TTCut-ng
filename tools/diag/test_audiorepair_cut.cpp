@@ -243,6 +243,64 @@ static void testSegmentBoundarySpan()
               .arg(avData.audioCutFailureReasons().join(" | ")));
 }
 
+// After a cut the user has to be able to see what became of the planned
+// repairs (user question 2026-10-05: "woher weiss der User, dass die
+// Reparatur angewendet wurde?"). TTAVData::audioRepairNotes() carries one
+// line per track that has repairs; TTCutMainWindow adds them to the
+// completion box.
+static void testRepairNotes()
+{
+    if (!QFileInfo::exists(kSampleFile)) { check(false, "repair notes: fixture missing"); return; }
+    const QString outFile = QDir(QFileInfo(kSampleFile).absolutePath())
+                                 .absoluteFilePath("test_audiorepair_cut_notes.ac3");
+    auto run = [&](const QList<TTAudioRepairItem>& repairs, const QList<QPair<double, double>>& keep,
+                   bool* cutOk) {
+        TTAudioType    aType(kSampleFile);
+        TTAudioStream* aStream = aType.createAudioStream();
+        if (!aStream) return QStringList{QStringLiteral("<no stream>")};
+        aStream->createHeaderList();
+        TTAVItem* avItem = new TTAVItem(nullptr);
+        avItem->appendAudioEntry(aStream);
+        for (const TTAudioRepairItem& r : repairs) avItem->appendAudioRepair(r);
+        QFile::remove(outFile);
+        TTAVData avData;
+        avData.cutAudioTracks(avItem, {0}, keep, false,
+            [&](int, const QString&) { return outFile; },
+            [&](int, const QString&, const QString&, bool ok) { *cutOk = ok; });
+        return avData.audioRepairNotes();
+    };
+    const quint8 kMask = 0b001100;
+    bool ok = false;
+
+    // the whole repair (frames 937-975 = 39 frames) lies inside the cut
+    QStringList notes = run({TTAudioRepairItem(0, 937, 975, kMask)}, {qMakePair(10.0, 50.0)}, &ok);
+    check(ok && notes == QStringList{"Audio track 1: repairs applied: 1 (frames replaced: 39)"},
+          "repair notes: one repair inside the cut: " + notes.join(" | "));
+
+    // the cut ends inside the repair: applied, with fewer frames
+    notes = run({TTAudioRepairItem(0, 937, 975, kMask)}, {qMakePair(10.0, 30.4)}, &ok);
+    check(ok && notes.size() == 1 && notes.first().startsWith("Audio track 1: repairs applied: 1 (frames replaced: ")
+              && !notes.first().contains("replaced: 39)") && !notes.first().contains("replaced: 0)"),
+          "repair notes: cut edge through the repair: " + notes.join(" | "));
+
+    // the repair lies in a part that is cut away
+    notes = run({TTAudioRepairItem(0, 937, 975, kMask)}, {qMakePair(40.0, 50.0)}, &ok);
+    check(ok && notes == QStringList{"Audio track 1: repairs applied: 0 (frames replaced: 0), outside the cut: 1"},
+          "repair notes: repair outside the cut: " + notes.join(" | "));
+
+    // a disabled repair is not applied, and the user is told
+    TTAudioRepairItem disabled(0, 937, 975, kMask);
+    disabled.setEnabled(false);
+    notes = run({disabled, TTAudioRepairItem(0, 1200, 1203, kMask)}, {qMakePair(10.0, 50.0)}, &ok);
+    check(ok && notes == QStringList{"Audio track 1: repairs applied: 1 (frames replaced: 4), disabled: 1"},
+          "repair notes: one disabled, one applied: " + notes.join(" | "));
+
+    // no repair, no note
+    notes = run({}, {qMakePair(10.0, 50.0)}, &ok);
+    check(ok && notes.isEmpty(), "repair notes: a track without repairs adds no note: " + notes.join(" | "));
+    QFile::remove(outFile);
+}
+
 // Two keep segments whose majority channel layouts differ (5.1, then
 // stereo; both 384 kbit/s, so every frame is 1536 bytes) and a repair item
 // across their boundary: with acmod normalization the segments want
@@ -459,6 +517,7 @@ int main(int argc, char** argv)
 
     // --- Step 5: segment-boundary span, same and mixed targets --------------
     testSegmentBoundarySpan();
+    testRepairNotes();
     testMixedTargetSpan();
 
     printf("\n%s (%d failures)\n", gFailures == 0 ? "ALL PASS" : "FAILED", gFailures);

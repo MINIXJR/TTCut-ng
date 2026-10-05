@@ -1587,10 +1587,15 @@ void TTCutMainWindow::onCutFinished()
     return;
   }
 
+  // What became of the planned audio repairs - the only place the user
+  // learns that one was applied.
+  const QStringList repairNotes = mpAVData->audioRepairNotes();
+  const QString repairs = repairNotes.isEmpty() ? QString() : "\n\n" + repairNotes.join("\n");
+
   if (mpAVData->lastCutWasAudioOnly()) {
     QString summary = mpAVData->lastCutOutputSummary();
     QMessageBox::information(this, tr("Audio Cut Complete"),
-        tr("Audio cutting has finished.\n\n%1").arg(summary) + lengths);
+        tr("Audio cutting has finished.\n\n%1").arg(summary) + lengths + repairs);
     return;
   }
 
@@ -1599,7 +1604,7 @@ void TTCutMainWindow::onCutFinished()
       qDebug() << "Showing completion dialog for:" << outputFile;
 
   QMessageBox::information(this, tr("Cutting Complete"),
-      tr("Video cutting has finished successfully.\n\nOutput file:\n%1").arg(outputFile) + lengths);
+      tr("Video cutting has finished successfully.\n\nOutput file:\n%1").arg(outputFile) + lengths + repairs);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

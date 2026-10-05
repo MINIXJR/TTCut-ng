@@ -55,6 +55,7 @@ struct TTAudioCutter::CutSession
     int64_t lastWrittenPtsTicks = 0;        // out time_base ticks
 
     int acmodReencoded = 0;                 // frames replaced by the acmod normalization
+    int repairedFrames = 0;                 // frames written from the repair table
 
     void reportProgress()
     {
@@ -217,6 +218,7 @@ bool TTAudioCutter::cut(const QString& inputFile,
                                       const std::function<bool()>& shouldAbort,
                                       const TTAudioRepair::FrameTable* repairTable)
 {
+    mRepairedFrames = 0;
     if (!QFile::exists(inputFile)) {
         setError(QString("Audio file not found: %1").arg(inputFile));
         return false;
@@ -437,8 +439,10 @@ bool TTAudioCutter::cut(const QString& inputFile,
                 } else {
                     writeStreamCopyPacket(s, pkt, pktTime);
                 }
-            } else if (!repairBytes ||
-                       !writeBytesPacket(s, outPts, pkt->duration, *repairBytes, pktTime, " (repair)")) {
+            } else if (repairBytes &&
+                       writeBytesPacket(s, outPts, pkt->duration, *repairBytes, pktTime, " (repair)")) {
+                s.repairedFrames++;
+            } else {
                 writeStreamCopyPacket(s, pkt, pktTime);
             }
             av_packet_unref(pkt);
@@ -458,6 +462,8 @@ bool TTAudioCutter::cut(const QString& inputFile,
     // Skipped on abort — the cut did not actually reach 100% of the keep list.
     if (!aborted && progressCb && s.totalKeepSec > 0.0 && s.lastPercent < 100)
         progressCb(100);
+
+    mRepairedFrames = s.repairedFrames;
 
     if (s.acmodReencoded > 0 && TTSettings::instance()->logFFmpegDecoder()) {
         qDebug() << "  AC3 acmod normalization: re-encoded" << s.acmodReencoded << "frames";

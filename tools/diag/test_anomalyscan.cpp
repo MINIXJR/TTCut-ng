@@ -540,6 +540,11 @@ static void testStopIntegration()
             check(points[0].hasAudioFrameRange() && points[0].audioFrameTo() - points[0].audioFrameFrom() == 2,
                   "stop marker covers three AC3 frames");
             check(points[0].audioChannelMask() == wantMask, QString("stop marker carries mask %1").arg(wantMask));
+            // Muting does not help at an abrupt stop (heard and measured
+            // 2026-10-05): the marker says what it is, and no new repair is
+            // offered for it.
+            check(points[0].audioAnomalyKind() == AudioAnomalyKind::AbruptStop, "stop marker carries its kind");
+            check(!points[0].offersNewAudioRepair(), "no new repair is offered for a stop marker");
             check(points[0].frameIndex() < points[1].frameIndex(), "markers ordered by position");
             check(qAbs(points[0].frameIndex() - 249) <= 2, QString("first stop marker near video frame 249 (got %1)").arg(points[0].frameIndex()));
         }
@@ -551,6 +556,15 @@ static void testStopIntegration()
                      [&lfePoints](const QList<TTStreamPoint>& p) { lfePoints = p; });
     lfeTask.runSynchron();
     check(lfePoints.size() == 1 && lfePoints[0].audioChannelMask() == 0x0C, "LFE marker carries mask C+LFE");
+    check(lfePoints.size() == 1 && lfePoints[0].audioAnomalyKind() == AudioAnomalyKind::LfeBurst
+              && lfePoints[0].offersNewAudioRepair(),
+          "LFE marker carries its kind, a repair is offered");
+    // A marker from an older project file has no kind: it was an LFE finding.
+    const TTStreamPoint legacy(100, StreamPointType::AudioAnomaly, "x", 1.0f, 0.3f);
+    check(legacy.audioAnomalyKind() == AudioAnomalyKind::Unknown && legacy.offersNewAudioRepair(),
+          "anomaly marker without a kind: a repair is offered");
+    check(!TTStreamPoint(100, StreamPointType::Silence, "x").offersNewAudioRepair(),
+          "no repair is offered for other marker types");
 }
 
 // ---------------------------------------------------------------------------
