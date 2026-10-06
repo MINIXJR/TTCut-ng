@@ -303,6 +303,15 @@ All notable changes to TTCut-ng are documented in this file.
   look like a field stream. It now stays unknown.
 
 ### Changed
+- **An abrupt stop of the sound can be repaired by a fade-out.** The anomaly
+  marker "sound stops abruptly" offers "Repair…" again: all channels fade
+  out before the stop (20 ms, adjustable from 10 to 100), stay silent across
+  it and return within 5 ms. The program looks for the stop itself; the end
+  of the fade-out can be moved in steps of 1 ms. The scan now tells such a
+  stop from a short hole ("hole in the sound"), for which no repair is
+  offered yet. A repair with a method this version does not know is
+  disabled on load. Gates: `audiorepair`, `repairdialog_model`,
+  `audiorepair_persist`, `audiorepair_cut`, `anomalyscan`.
 - **A cut says what became of the planned audio repairs.** The completion
   box and the log carry one line per audio track with repairs: how many
   were applied, how many frames were replaced, how many were not applied

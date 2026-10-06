@@ -253,6 +253,19 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `.claude/skills/release/SKILL.md`) / `lrelease` pflegen.
 - Undo/Redo for cut list operations
 - Direct VDR .rec folder support (open recording without manual demux)
+- **Reparatur-Dialog: flackernde Zeile unter den Knöpfen** (Beobachtung
+  des Anwenders, 2026-10-06): „unter den Button noch eine sehr schmale
+  Zeile in der irgendein Geflacker sichtbar ist"; auf einem Screenshot ist
+  sie nicht zu sehen. Am Code belegt ist nur die Zeile selbst: der Dialog
+  hängt das mpv-Bildfenster mit 1 Pixel Höhe als letztes Element unter die
+  Knöpfe (`TTAudioRepairDialog::ensurePlayer`, seit `10190992`,
+  2026-08-20) — mpv braucht auch für reinen Ton eine Bildfläche, und sie
+  muss vor `exec()` im Dialog sitzen. Was darin flackert, ist nicht
+  untersucht; die Vermutung des Anwenders (Wayland/X-Server) ist
+  ungeprüft. Der Anwender sieht sie in beiden Ansichten des Dialogs
+  (Stummschalten und Ausblenden); sein Urteil: „Ist auszuhalten, aber
+  unschön." Ob sie schon beim Öffnen flackert oder erst nach dem
+  Abspielen, ist nicht festgehalten.
 - **Blitz beim Start der Wiedergabe** (Beobachtung des Anwenders,
   2026-10-04, MPEG-2-Aufnahme): beim Klick auf Play erscheint kurz ein
   helleres Bild, wie ein Fotoblitz — an jeder Stelle, nicht nur an einer.
@@ -401,25 +414,25 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     nach laut je Kanal, Vorhersagefehler, stehender Sprung, Kantenkontrast,
     ffmpeg `adeclick`, drei Essentia-Sucher; an den Löchern außerdem
     Frequenzverteilung, Länge des Lochs und Sprunghöhe an der Kante.
-  - **Für „Ton bricht ab"-Marker gibt es keine Reparatur** (abgeschaltet
-    2026-10-05, Entscheidung des Anwenders: „erstmal deaktivieren"). Das
-    Kontextmenü bietet dort kein „Reparieren…" an; eine schon geplante
-    Reparatur bleibt bearbeit- und entfernbar. Grund: die Reparatur
-    schaltet Kanäle mit kurzer Blende stumm, und das endet so hart wie der
-    Abbruch selbst. Gemessen am Knacks bei Bild 24238 (AC3-Rahmen
-    30296–30298, alle Kanäle): der reparierte Ton fällt in rund 5 ms von
-    −14 dBFS auf Stille, 52 ms vor dem ursprünglichen Abbruch. Der Anwender
-    hört zwischen Original und Repariert keinen echten Unterschied, auch
-    nicht am Loch bei 77493 (dort nimmt er den Fehler schon im Original
-    fast nicht wahr). Die Kanal-Vorwahl dieser Marker (alle Kanäle der
-    Stelle, `<AudioChannels>`) bleibt im Code und in der Projektdatei, für
-    eine spätere passende Reparatur:
-    - für ein Loch das Füllen aus der zweiten Tonspur (nächster Punkt);
-    - für einen Abbruch, der in beiden Spuren steckt (24238), ein längeres
-      Ausblenden vor der Stelle. Ungebaut. Hörprobe (2026-10-05, alle
-      Kanäle vor dem ersten Sprung ausgeblendet, 20 und 50 ms): Urteil des
-      Anwenders „hier scheinen 20 ms zu reichen".
-    Wieder einschalten: `TTStreamPoint::offersNewAudioRepair`.
+  - **Für „Loch im Ton"-Marker gibt es keine Reparatur.** Ein bleibender
+    Abbruch („Ton bricht ab") wird seit 2026-10-06 ausgeblendet
+    (`docs/completed-work.md`, „Tonreparatur: Ausblenden vor dem Abbruch").
+    Für ein Loch hilft das nicht: Stummschalten mit kurzer Blende endet so
+    hart wie das Loch selbst (am Loch bei 77493 hörte der Anwender zwischen
+    Original und Repariert keinen echten Unterschied). Vorgesehen ist das
+    Füllen aus der zweiten Tonspur (unten: „Idee des Anwenders: die AC3-Spur
+    aus der zweiten Spur reparieren"; eigenes Vorhaben).
+    Die Kanal-Vorwahl der Marker (alle Kanäle der Stelle,
+    `<AudioChannels>`) bleibt dafür in Code und Projektdatei.
+  - **Marker „Ton bricht ab" aus Projekten vom 2026-10-04/05** tragen die
+    Art `AbruptStop` (Form nicht festgehalten) und bieten keine Reparatur.
+    Eine neue Analyse ersetzt sie durch „Ton bricht ab" (bleibend) oder
+    „Loch im Ton".
+  - **Die Abbruch-Suche der Ausblend-Reparatur stützt sich auf einen
+    echten Abbruch** (24238) und die erzeugten Tonproben: 20 dB Abfall,
+    Tonende bei Pegel davor −12 dB, Sprung ab dem 20-fachen des üblichen
+    Schritts in den 15 ms davor. Findet sie nichts, sagt der Dialog das und
+    der Anwender stellt das Ende nach Gehör ein.
   - **Idee: Vergleich mit der zweiten Tonspur.** Gemessen auf 02x06: alle
     fünf Löcher gibt es nur in der AC3-Spur, die MP2-Spur spielt durch; die
     Spuren liegen an allen sieben geprüften Stellen 8,6 ms versetzt
@@ -942,9 +955,12 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   - **Not found:** two spots the user hears in that recording, and holes shallower
     than 45 dB. Three such holes were not heard, but they are real dropouts of the
     AC3 track (17 ms each; the MP2 track of the same recording plays through).
-  - **No repair for a stop marker.** The repair mutes channels with a short fade,
-    which ends as hard as the stop itself; the user heard no difference between
-    original and repaired at a click and at a hole. Only LFE markers offer one.
+  - **A lasting stop is repaired by a fade-out** (20 ms before the stop, all
+    channels). Where it is placed and how long it is rest on one real stop and
+    generated samples; the end of the fade-out can be moved by ear.
+  - **No repair for a hole.** Muting with a short fade ends as hard as the hole
+    itself (the user heard no difference). Filling it from the second audio track
+    is not built.
   - **The thresholds rest on that one recording:** the 45 dB on one heard hole
     (52 dB) against three not heard (31–41 dB); the 30 dB lie between a confirmed
     click (32.4 dB) and an inconspicuous gap between two sounds (29.3 dB).

@@ -1,6 +1,6 @@
 ---
-base_commit: 6ef4fde021c76323be391aa80a20f68dccfe3373
-last_verified: 2026-10-05
+base_commit: afa0f81f50cda45c90da499729bc8d893225e732
+last_verified: 2026-10-06
 sources:
   - data/ttaudioanomalyscantask.h
   - data/ttaudioanomalyscantask.cpp
@@ -19,9 +19,11 @@ sources:
   - data/ttavdata.cpp
   - data/ttcutprojectdata.cpp
   - data/ttstreampoint.h
+  - data/ttstreampoint.cpp
   - extern/ttaudiocutter.h
   - extern/ttaudiocutter.cpp
   - docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md
+  - docs/superpowers/specs/2026-10-05-audio-repair-fade-out-design.md
 ---
 
 # Code Map: Audio anomaly repair
@@ -40,7 +42,8 @@ keep list, delay and acmod arithmetic of the audio cut
 ([cut-preview.md](cut-preview.md)), mpv ([playback.md](playback.md)), the
 project file in general ([project-lifecycle.md](project-lifecycle.md)) and
 the track list ([track-management.md](track-management.md)). The decisions
-behind the design are in `docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`;
+behind the design are in `docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`
+and, for the fade-out, `…/2026-10-05-audio-repair-fade-out-design.md`;
 deliberately postponed work is in `TODO.md` („Audio-Anomalie-Reparatur —
 bewusste Folgearbeiten“).
 
@@ -62,7 +65,8 @@ flowchart TD
     ANNO["TTCutMainWindow<br/>onStreamPointsLoaded"]
     DEL["TTCutMainWindow<br/>onStreamPointDelete / DeleteAll"]
     CUT["TTAVData::cutAudioTracks"]
-    TABLE["TTAudioRepair::buildRepairTable"]
+    TABLE["TTAudioRepair::buildRepairTable<br/>walkRange"]
+    STOP["TTAudioRepair::findStop<br/>walkRange / locateStop"]
     REENC["TTAc3Reencoder<br/>aligned re-encode"]
     FT["FrameTable<br/>AC3 frame → bytes"]
     CUTTER["TTAudioCutter::cut<br/>writeBytesPacket"]
@@ -77,7 +81,10 @@ flowchart TD
     ITEM -->|repair index| DEL
     DEL -->|remove repair, after asking| ITEM
     DEL -->|remove marker| PTS
-    DLG -->|range, mask: audition + accept probe| TABLE
+    DLG -->|marker frames, new fade-out| STOP
+    STOP -->|end of the fade-out, silence| DLG
+    STOP -->|packets, read-only edit| REENC
+    DLG -->|current item: audition + accept probe| TABLE
     FT -->|replacement frames| AUD
     DLG -->|TTAudioRepairItem| ITEM
     ITEM -->|repairs per track| PROJ
@@ -88,7 +95,7 @@ flowchart TD
     ANNO -->|annotated markers| PTS
     ITEM -->|enabled repairs of a track| CUT
     CUT -->|item, target acmod| TABLE
-    TABLE -->|packets, mask/fade edit| REENC
+    TABLE -->|packets, edit by method| REENC
     REENC -->|replacement frames, one frame late| FT
     FT -->|merged table| CUTTER
 ```
@@ -98,24 +105,26 @@ flowchart TD
 | From → To | What crosses (data / order / invariant) |
 |---|---|
 | `MW` -.-> `SCAN` | `startAudioAnomalyScan`: file of `TTAVItem::firstAc3TrackIndex()` only (one AC3 track, TODO M8), the video frame rate, `TTAVData::extraFrameIndices()` and `audioGapFrameRanges()`. Automatic start and its latch (`maybeStartAutoAnomalyScan`, `anomalyScanStarted`) are in stream-points.md. |
-| `SCAN` → `PTS` | `pointsDetected` emits once, at the end of `operation()`; a cancel emits an empty list (partial results are discarded). One `TTStreamPoint` per finding of either search, sorted by position: `frameIndex` = `videoFrameForTime(frameFrom · 32 ms)`, duration in seconds, description with the LFE peak (LFE search) or the drop in dB (stop search; “overlaps gap repair” when it touches an audio-gap range), the finding's own AC3 range via `setAudioFrameRange` (both bounds inclusive) the planes of the finding via `setAudioChannelMask` — C+LFE for an LFE finding, every plane of its frames for a stop — and its kind via `setAudioAnomalyKind` (`LfeBurst` / `AbruptStop`). A stop marker covers three AC3 frames: the one with the boundary and one on each side. The scan refuses any sample rate other than 48 kHz (empty stats, “not run”). |
-| `PTS` → `WID` | The marker row; the menu offers repair actions only for `AudioAnomaly` markers and only when the item has an AC3 track. A **new** repair (“Repair…”) only when `TTStreamPoint::offersNewAudioRepair()` — not for an `AbruptStop` marker, where muting with a short fade ends as hard as the stop itself (TODO.md); a marker without a kind (older project files) counts as an LFE finding. |
+| `SCAN` → `PTS` | `pointsDetected` emits once, at the end of `operation()`; a cancel emits an empty list (partial results are discarded). One `TTStreamPoint` per finding of either search, sorted by position: `frameIndex` = `videoFrameForTime(frameFrom · 32 ms)`, duration in seconds, description with the LFE peak (LFE search) or the drop in dB (stop search; “overlaps gap repair” when it touches an audio-gap range), the finding's own AC3 range via `setAudioFrameRange` (both bounds inclusive) the planes of the finding via `setAudioChannelMask` — C+LFE for an LFE finding, every plane of its frames for a stop — and its kind via `setAudioAnomalyKind`: `LfeBurst`, or the form `evaluateStops` found — `LastingStop` (“sound stops abruptly”) or `Hole` (“hole in the sound”, depth in dB); several drops within 19 blocks are one finding with the kind of the largest. A stop or hole marker covers three AC3 frames: the one with the boundary and one on each side. The scan refuses any sample rate other than 48 kHz (empty stats, “not run”). |
+| `PTS` → `WID` | The marker row; the menu offers repair actions only for `AudioAnomaly` markers and only when the item has an AC3 track. A **new** repair (“Repair…”) only when `TTStreamPoint::offersNewAudioRepair()`: for `LfeBurst`, for a marker without a kind (older project files — it was an LFE finding) and for `LastingStop`. Not for `Hole` (nothing built fills one, TODO.md) and not for `AbruptStop`, the kind of projects saved on 2026-10-04/05, whose form was not recorded. |
 | `ITEM` → `WID` | `TTAudioRepairDialog::repairIndexForMarker(item, point, extras)` — the one marker ↔ repair link: on the item's first AC3 track, `findAudioRepairOverlapping(track, from, to)` over the marker's range (`approxAc3RangeForMarker`), i.e. the index of the first repair whose closed AC3 range touches it, or -1 (also for other marker types and items without AC3). Decides “Repair…” vs “Edit repair…”/“Remove repair”; an existing repair stays editable and removable behind every kind of marker. |
-| `WID` → `DLG` | Marker, `repairTrackIndex` = the item's **first** AC3 track, `mExtraFrameIndices`. Before the dialog opens the widget emits `jumpToFrame(marker frame)`, so the main window shows the spot (a right click does not navigate; the dialog has no jump button). The dialog is modal (`exec()`). A menu closed without a choice does nothing (`handleContextAction` returns on a null action). Its channel boxes start from the marker's `audioChannelMask()`; a marker without one (0: older project files) gets C+LFE; an existing repair's own mask wins over both. On accept the widget appends the “(repair planned)” suffix to the marker text. |
+| `WID` → `DLG` | Marker, `repairTrackIndex` = the item's **first** AC3 track, `mExtraFrameIndices`. Before the dialog opens the widget emits `jumpToFrame(marker frame)`, so the main window shows the spot (a right click does not navigate; the dialog has no jump button). The dialog is modal (`exec()`). A menu closed without a choice does nothing (`handleContextAction` returns on a null action). The dialog has two views, chosen once in the constructor: the stored method when a repair is edited, else the marker's kind (`LastingStop` → fade-out, everything else → silence). Silence view: channel boxes from the marker's `audioChannelMask()` (0, older project files: C+LFE; an existing repair's own mask wins), start/end of the range. Fade-out view: “Fade-out ends at”, “Length” (20 ms, 10–100), no channel boxes. On accept the widget appends the “(repair planned)” suffix to the marker text. |
 | `WID` → `ITEM` | `removeAudioRepairAt(repairIndex)` and removal of the “planned” suffix (all language variants). |
 | `WID` -.-> `DEL` / `ITEM` → `DEL` | “Delete” and “Delete all” of the marker list reach the main-window slots, which look up `repairIndexForMarker` per marker (the same link as the context menu). |
 | `DEL` → `ITEM` / `DEL` → `PTS` | A marker with a repair goes only together with it: one question (“Delete all”: one question for all, `%n` repairs), No keeps both; Yes removes the repairs (highest index first, so the others stay valid) and then the marker(s). A marker without a repair is removed without a question. |
-| `DLG` → `TABLE` | Audition and the probe build of `accept`: the current spin-box range (`currentFrameFrom` = round(start ms / frame ms), `currentFrameTo` = round(end ms / frame ms) − 1, end exclusive in the spin box) and channel mask, `targetAcmod = -1` (keep the source layout). |
+| `DLG` → `STOP` / `STOP` → `DLG` | Only for a **new** fade-out repair: `findStop(file, marker frames)` → `StopPlacement` (end of the fade-out, end of the sound, silence in samples). Nothing found: the field stands on the start of the marker's middle frame, silence 1 ms, and a hint asks to set it by ear. The position is kept in samples (`mFadeEndSample`); the spin box shows whole ms and a step moves the sample position by one ms, inside the marker's frames (so the repair stays linked to its marker). The silence moves along and is not adjustable. Editing shows the stored values, no new search. |
+| `STOP` → `REENC` | `findStop` walks frames `frameFrom − 1 … frameTo + 1` (without the frame behind when the track ends there) through `walkRange` with an edit that only copies the planes (no LFE) — the same decode as the repair build, so its positions are positions in the samples the repair edits. `locateStop` (pure): the block boundary with the largest drop (≥ 20 dB, three 256-sample blocks before, two after); from one block behind it back to the first sample above the level before − 12 dB = end of the sound; the earliest sample step of ≥ 20 times the median step of the 20 ms before, within the 15 ms before the end of the sound = end of the fade-out, else the end of the sound. An error (file, layout change) → not found. |
+| `DLG` → `TABLE` | Audition and the probe build of `accept`, both from `currentItem()`, `targetAcmod = -1` (keep the source layout). Silence view: the spin-box range (`currentFrameFrom` = round(start ms / frame ms), `currentFrameTo` = round(end ms / frame ms) − 1, end exclusive in the spin box) and channel mask. Fade-out view: `makeFadeOutItem(track, mask, end, length, silence)`, whose frame range is every frame the curve touches. |
 | `FT` → `AUD` | `writePreviewWindow` walks the packets by ordinal and writes a ±3 s window around the range to `ttcut_repair_preview_<instance>_{before,after}.ac3` in the temp directory, replacement bytes where the table has the frame; mpv plays it. The files are removed in the destructor. |
-| `DLG` → `ITEM` | `accept` (the button reads “Plan repair”): rejects end < start and an empty channel mask, then builds the table once in the source layout (`targetAcmod = -1`, like the audition) and rejects any build error with the message, the dialog staying open (channel-layout or frame-size change inside the range, a channel the track does not have, range past the file end). Only then it removes the edited repair (if any) and appends `TTAudioRepairItem(track, from, to, mask)`. The cut's target layout is unknown here; mixed target layouts are caught only at cut time (`ITEM` → `CUT`). |
-| `ITEM` → `PROJ` | Save: `<Repair>` (FrameFrom, FrameTo, Channels, Method) under the `<Audio>` section whose position equals `trackIndex()`; the enabled flag is not written. Markers go to the stream-point section with `AudioFrameFrom`/`AudioFrameTo` and, when known, `AudioChannels` (read back only in 1…0x3F, anything else stays “unknown”) and `AnomalyKind` (`LfeBurst` / `AbruptStop`; any other text reads as unknown). |
-| `PROJ` → `PEND` | `parseAudioSection` builds items with `trackIndex = <Order>`, then validates: negative/reversed range, unknown AC3 frame size (`ac3FrameByteSize`) or `(frameTo + 1) · frameBytes > file size` → `setEnabled(false)` with a warning; never dropped. Parked by `(TTAVItem*, order)` via `setPendingAudioRepairs`. |
+| `DLG` → `ITEM` | `accept` (the button reads “Plan repair”): in the silence view it rejects end < start and an empty channel mask; then, in both views, it builds the table once in the source layout (`targetAcmod = -1`, like the audition) and rejects any build error with the message, the dialog staying open (channel-layout or frame-size change inside the range, a channel the track does not have, range past the file end, a fade-out that would start before the track). Only then it removes the edited repair (if any) and appends `currentItem()`. The cut's target layout is unknown here; mixed target layouts are caught only at cut time (`ITEM` → `CUT`). |
+| `ITEM` → `PROJ` | Save: `<Repair>` (FrameFrom, FrameTo, Channels, Method; for `fade-out` also FadeEnd, FadeLength, Silence in samples) under the `<Audio>` section whose position equals `trackIndex()`; the enabled flag is not written. Markers go to the stream-point section with `AudioFrameFrom`/`AudioFrameTo` and, when known, `AudioChannels` (read back only in 1…0x3F, anything else stays “unknown”) and `AnomalyKind` (`LfeBurst` / `LastingStop` / `Hole` / legacy `AbruptStop`; any other text reads as unknown). |
+| `PROJ` → `PEND` | `parseAudioSection` builds items with `trackIndex = <Order>`, then validates. The method first: an unknown method, or a `fade-out` whose three values are missing or do not give its frame range (`makeFadeOutItem` at 48 kHz), is disabled — never applied as something else. Then: negative/reversed range, unknown AC3 frame size (`ac3FrameByteSize`) or `(frameTo + 1) · frameBytes > file size` → `setEnabled(false)` with a warning; never dropped. Parked by `(TTAVItem*, order)` via `setPendingAudioRepairs`. |
 | `PEND` → `ITEM` | `onOpenAudioFinished` appends the parked repairs when the track with that order arrives; their `trackIndex` is the position the track reaches after `sortByProjectOrder`. |
 | `PROJ` → `ANNO` / `ITEM` → `ANNO` | `onStreamPointsLoaded`: every `AudioAnomaly` marker whose approximate AC3 range overlaps a **disabled** repair gets the “(repair DISABLED …)” suffix instead of “planned”. |
 | `ANNO` → `PTS` | The restored markers, annotated, go into the model in one `addPoints` call (the project path; a scan's markers take `onPointsDetected`). |
 | `ITEM` → `CUT` | `cutAudioTracks`, `.ac3` tracks only: every repair of this track index; disabled ones are skipped with a warning. Item seconds = frame · `frame_time` of the first header. Touching no keep window → skipped. A repair may reach past the window(s) it touches — the cutter writes only frames inside the windows, so the part outside is never looked up; this holds for the short preview windows as for the final cut. Only when the touched windows want **different** target acmods (normalising) the whole track fails with “reaches into cut segments with different channel layouts”. |
 | `CUT` → `TABLE` | The item and the common target acmod of the windows it touches (`targetAcmods[s]` when normalising, else -1). |
-| `TABLE` → `REENC` | `buildRepairTable` pushes every packet from `frameFrom − 2` (decoder warm-up) to one frame **behind** `frameTo`, in file order; the frames of the range with the edit that silences the masked channels (5 ms raised-cosine fades on the first and the last frame, in the source layout), and a request: the common target acmod and the bit rate of the replaced frames (`frame bytes · 8 · rate / 1536`; one file may switch bit rate, e.g. stereo 192 / 5.1 384 kbit/s). The frame behind the range only supplies the 256 samples that complete the last replacement and is exempt from the checks; a range ending with the file is completed with silence. Hard errors raised here (empty table + message): frame-size change among warm-up and range frames, channel-mode change inside the range, mask bit beyond the channel count, range past the file end. |
+| `TABLE` → `REENC` | `buildRepairTable` refuses an unknown method and a fade-out with invalid values or a start before the track, then runs `walkRange`, which pushes every packet from `frameFrom − 2` (decoder warm-up) to one frame **behind** `frameTo`, in file order; the frames of the range with the edit of the item's method, in the source layout — `silence-fade`: the masked channels are silenced, with 5 ms raised-cosine fades on the first and the last frame; `fade-out`: every channel is multiplied by `fadeOutGain` (1, raised cosine to 0 ending at the end of the fade-out, 0 through the silence, back to 1 within 5 ms; the mask is not used) after a check that the values give the item's frame range at the file's sample rate — and a request: the common target acmod and the bit rate of the replaced frames (`frame bytes · 8 · rate / 1536`; one file may switch bit rate, e.g. stereo 192 / 5.1 384 kbit/s). The frame behind the range only supplies the 256 samples that complete the last replacement and is exempt from the checks; a range ending with the file is completed with silence. Hard errors raised here (empty table + message): frame-size change among warm-up and range frames, channel-mode change inside the range, mask bit beyond the channel count, range past the file end. |
 | `REENC` → `FT` | One replacement per frame of the range, tagged with the frame number (= packet ordinal in the file), finished one push after its frame. Each is decoded with `drc_scale` 0 (the stream's dynamic range compression is not applied; the encoder cannot write compression words), carries the header fields of its source frame (`dialnorm`, mix levels incl. the extended ones, `dsurmod`, `bsmod`, production info, copyright, original — a field only when it means something in the source frame's own layout and its code is not reserved), and holds exactly the audio of the frame it replaces: the unit feeds the encoder 1280 zero samples first, drops the first packet and so compensates the encoder's 256-sample delay. A header change inside the range starts a new encoder without a seam. `buildRepairTable` rejects a replacement whose size differs from the source frame's. |
 | `FT` → `CUTTER` | Tables of all items merged. In the packet loop the frame number is `qRound64(pktTime / frameDurSec)`; a hit writes the replacement bytes with the packet's PTS offset (`writeBytesPacket`) and is not re-encoded by the acmod normalisation (it was built in the target layout already). |
 
@@ -145,7 +154,16 @@ flowchart TD
   `currentFrameTo` and `approxAc3RangeForMarker`).
 - **48 kHz only.** The scan refuses other rates; the dialog and the cut read
   the real frame duration, the fallback estimate in
-  `approxAc3RangeForMarker` uses a fixed 32 ms.
+  `approxAc3RangeForMarker` uses a fixed 32 ms. The load validation of a
+  fade-out repair computes its frame range with 48 kHz (the only rate a
+  marker can come from); `buildRepairTable` checks again with the file's
+  rate.
+- **A fade-out repair is three sample values** (`fadeEnd`, `fadeLength`,
+  `silenceLength`; frame `k` starts at sample `k · 1536`) next to the frame
+  range, which must be exactly the frames the curve touches — checked on
+  load and in the build. The stop search's numbers (20 dB, 12 dB, factor
+  20, 15 ms) rest on one real stop and generated samples
+  (`docs/completed-work.md`, “Tonreparatur: Ausblenden vor dem Abbruch”).
 - **CBR inside a repair range.** `buildRepairTable` fails on a frame-size
   change inside the range and encodes at that range's bit rate; the load
   validation checks the range against the file size with the **first**
@@ -153,8 +171,9 @@ flowchart TD
   real material, where all 140 654 packets had 1792 bytes; a file with a
   bit-rate switch before the range is unmeasured).
 - **Track index = visible list position.** Kept right by
-  `remapAudioRepairTracks` on remove and swap; on load by parking under
-  `<Order>`. Hand-edited `<Order>` gaps are unvalidated (TODO).
+  `remapAudioRepairTracks` on remove and swap (it copies the item and sets
+  the track, so method, fade values and the enabled flag survive); on load
+  by parking under `<Order>`. Hand-edited `<Order>` gaps are unvalidated (TODO).
 - **Markers are display only** (spec: “Wahrheit ist die Repair-Liste”). The
   marker ↔ repair link is range overlap on the first AC3 track, computed
   anew each time (`repairIndexForMarker`); there is no other UI for the
@@ -204,13 +223,13 @@ flowchart TD
 - **The channel preset is a mask of decoder planes** (bit n = plane n, the
   convention of `TTAudioRepairItem::channelMask()`), carried
   `Finding::channelMask` → `TTStreamPoint::audioChannelMask()` →
-  `<AudioChannels>` → dialog. 0 means unknown. For a stop marker the dialog
-  is reachable only through an existing repair (whose own mask wins), so
-  its preset is unused until a repair method for stops exists.
+  `<AudioChannels>` → dialog. 0 means unknown. A fade-out repair stores the
+  mask of its marker but applies its curve to every channel of the frames.
 - **The kind of an anomaly marker** (`AudioAnomalyKind`, one enum for the
   scan's `Finding` and the marker) travels `Finding::kind` →
-  `TTStreamPoint::audioAnomalyKind()` → `<AnomalyKind>` and decides one
-  thing: whether a new repair is offered.
+  `TTStreamPoint::audioAnomalyKind()` → `<AnomalyKind>` and decides two
+  things: whether a new repair is offered, and which view the dialog shows
+  for it.
 
 ## Redundancy / consolidation candidates
 
@@ -227,6 +246,6 @@ flowchart TD
   - shared purpose: libav open + stream lookup for one audio file
   - status: documented → TODO P9 (audio decoder opening); the ladder of `avstream/ttavutil.cpp:ttOpenInput` and the dialog's `probeFrameDurationMs` belong to it as well (audit run 10)
 - **Packet walk by frame ordinal**
-  - sites: `extern/ttaudiorepair.cpp:TTAudioRepair::buildRepairTable`, `gui/ttaudiorepairdialog.cpp:TTAudioRepairDialog::writePreviewWindow`
+  - sites: `extern/ttaudiorepair.cpp:walkRange` (table, audition, stop search), `gui/ttaudiorepairdialog.cpp:TTAudioRepairDialog::writePreviewWindow`
   - shared purpose: count audio packets to reach an AC3 frame number
   - status: kept separate → a few lines each, with different work per packet
