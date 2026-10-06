@@ -188,6 +188,32 @@ TTAudioRepairDialog::TTAudioRepairDialog(TTAVItem* avItem, const TTStreamPoint& 
     }
   }
 
+  // The view follows the repair method: the stored one when a repair is
+  // edited, else the marker's kind.
+  const bool editing = mExistingRepairIndex >= 0;
+  const TTAudioRepairItem existing = editing ? mAvItem->audioRepairList().at(mExistingRepairIndex) : TTAudioRepairItem();
+  mFadeOut = editing ? existing.isFadeOut() : mPoint.audioAnomalyKind() == AudioAnomalyKind::LastingStop;
+  mSamplesPerMs = qMax(1, qRound(TTAudioRepair::kAc3FrameSamples / mFrameDurationMs));
+  bool stopFound = true;
+  int  fadeLenMs = 20;
+  if (mFadeOut) {
+    if (editing) {
+      mFadeEndSample  = existing.fadeEnd();
+      mSilenceSamples = existing.silenceLength();
+      mFadeMask       = existing.channelMask();
+      fadeLenMs       = existing.fadeLength() / mSamplesPerMs;
+    } else {
+      QString searchError;
+      const TTAudioRepair::StopPlacement sp = TTAudioRepair::findStop(mAudioFile, approxFrom, approxTo, &searchError);
+      stopFound = sp.found;
+      // Nothing found: the start of the marker's middle frame - the frame
+      // in which the scan found the stop.
+      mFadeEndSample  = sp.found ? sp.fadeEnd : ((approxFrom + approxTo) / 2) * TTAudioRepair::kAc3FrameSamples;
+      mSilenceSamples = sp.found ? sp.silence : mSamplesPerMs;
+      mFadeMask       = initialMask;
+    }
+  }
+
   double startMs, endMs;
   if (haveExactRange) {
     // Editing an existing item, or a marker that carries the scanner's own
@@ -212,24 +238,43 @@ TTAudioRepairDialog::TTAudioRepairDialog(TTAVItem* avItem, const TTStreamPoint& 
 
   buildUi();
 
-  for (int ch = 0; ch < 6; ++ch)
-    mChkChannel[ch]->setChecked((initialMask & (1u << ch)) != 0);
+  if (mFadeOut) {
+    mShownFadeEndMs = qRound(mFadeEndSample / double(mSamplesPerMs));
+    // Inside the marker's frames, so that the repair stays linked to its marker.
+    const int lo = qMin(qRound(approxFrom * mFrameDurationMs), mShownFadeEndMs);
+    const int hi = qMax(qRound((approxTo + 1) * mFrameDurationMs), mShownFadeEndMs);
+    mSpinFadeEnd->setRange(lo, hi);
+    mSpinFadeEnd->setSingleStep(1);
+    mSpinFadeEnd->setValue(mShownFadeEndMs);
+    mSpinFadeLen->setRange(10, 100);
+    mSpinFadeLen->setValue(qBound(10, fadeLenMs, 100));
+    mLblHint->setVisible(!stopFound);
+    // The found position stays sample-exact: a step moves it by whole ms.
+    connect(mSpinFadeEnd, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int ms) {
+      mFadeEndSample += qint64(ms - mShownFadeEndMs) * mSamplesPerMs;
+      mShownFadeEndMs = ms;
+    });
+  } else {
+    for (int ch = 0; ch < 6; ++ch)
+      mChkChannel[ch]->setChecked((initialMask & (1u << ch)) != 0);
 
-  const int step = qMax(1, qRound(mFrameDurationMs));
-  const int lo = qMax(0, qRound(qMin(startMs, endMs)) - 5000);
-  const int hi = qRound(qMax(startMs, endMs)) + 5000;
-  mSpinFrom->setRange(lo, hi);
-  mSpinTo->setRange(lo, hi);
-  mSpinFrom->setSingleStep(step);
-  mSpinTo->setSingleStep(step);
-  mSpinFrom->setValue(qRound(startMs));
-  mSpinTo->setValue(qRound(endMs));
+    const int step = qMax(1, qRound(mFrameDurationMs));
+    const int lo = qMax(0, qRound(qMin(startMs, endMs)) - 5000);
+    const int hi = qRound(qMax(startMs, endMs)) + 5000;
+    mSpinFrom->setRange(lo, hi);
+    mSpinTo->setRange(lo, hi);
+    mSpinFrom->setSingleStep(step);
+    mSpinTo->setSingleStep(step);
+    mSpinFrom->setValue(qRound(startMs));
+    mSpinTo->setValue(qRound(endMs));
+  }
 
   QString header = tr("Track %1 - video frame %2, duration %3 ms\n%4")
       .arg(mTrackIndex + 1)
       .arg(mPoint.frameIndex())
       .arg(qRound(double(mPoint.duration()) * 1000.0))
       .arg(mPoint.description());
+  if (mFadeOut) header += "\n" + tr("Repair: fade-out before the stop");
   mLblHeader->setText(header);
 
   // Final-review Critical 1: the player MUST be built here, not on the first
@@ -271,28 +316,44 @@ void TTAudioRepairDialog::buildUi()
   mLblHeader->setWordWrap(true);
   mMainLayout->addWidget(mLblHeader);
 
-  QGroupBox* channelBox = new QGroupBox(tr("Channels to silence"), this);
-  QHBoxLayout* channelLayout = new QHBoxLayout(channelBox);
-  static const char* kChannelLabels[6] = {
-    QT_TR_NOOP("FL"), QT_TR_NOOP("FR"), QT_TR_NOOP("C"),
-    QT_TR_NOOP("LFE"), QT_TR_NOOP("SL"), QT_TR_NOOP("SR")
-  };
-  for (int ch = 0; ch < 6; ++ch) {
-    mChkChannel[ch] = new QCheckBox(tr(kChannelLabels[ch]), channelBox);
-    channelLayout->addWidget(mChkChannel[ch]);
-  }
-  mMainLayout->addWidget(channelBox);
+  if (mFadeOut) {
+    QGridLayout* fadeLayout = new QGridLayout();
+    fadeLayout->addWidget(new QLabel(tr("Fade-out ends at (ms)"), this), 0, 0);
+    mSpinFadeEnd = new QSpinBox(this);
+    mSpinFadeEnd->setSuffix(tr(" ms"));
+    fadeLayout->addWidget(mSpinFadeEnd, 0, 1);
+    fadeLayout->addWidget(new QLabel(tr("Length (ms)"), this), 1, 0);
+    mSpinFadeLen = new QSpinBox(this);
+    mSpinFadeLen->setSuffix(tr(" ms"));
+    fadeLayout->addWidget(mSpinFadeLen, 1, 1);
+    mMainLayout->addLayout(fadeLayout);
+    mLblHint = new QLabel(tr("No stop found. Please set the end of the fade-out by ear."), this);
+    mLblHint->setWordWrap(true);
+    mMainLayout->addWidget(mLblHint);
+  } else {
+    QGroupBox* channelBox = new QGroupBox(tr("Channels to silence"), this);
+    QHBoxLayout* channelLayout = new QHBoxLayout(channelBox);
+    static const char* kChannelLabels[6] = {
+      QT_TR_NOOP("FL"), QT_TR_NOOP("FR"), QT_TR_NOOP("C"),
+      QT_TR_NOOP("LFE"), QT_TR_NOOP("SL"), QT_TR_NOOP("SR")
+    };
+    for (int ch = 0; ch < 6; ++ch) {
+      mChkChannel[ch] = new QCheckBox(tr(kChannelLabels[ch]), channelBox);
+      channelLayout->addWidget(mChkChannel[ch]);
+    }
+    mMainLayout->addWidget(channelBox);
 
-  QGridLayout* rangeLayout = new QGridLayout();
-  rangeLayout->addWidget(new QLabel(tr("Start (ms)"), this), 0, 0);
-  mSpinFrom = new QSpinBox(this);
-  mSpinFrom->setSuffix(tr(" ms"));
-  rangeLayout->addWidget(mSpinFrom, 0, 1);
-  rangeLayout->addWidget(new QLabel(tr("End (ms)"), this), 1, 0);
-  mSpinTo = new QSpinBox(this);
-  mSpinTo->setSuffix(tr(" ms"));
-  rangeLayout->addWidget(mSpinTo, 1, 1);
-  mMainLayout->addLayout(rangeLayout);
+    QGridLayout* rangeLayout = new QGridLayout();
+    rangeLayout->addWidget(new QLabel(tr("Start (ms)"), this), 0, 0);
+    mSpinFrom = new QSpinBox(this);
+    mSpinFrom->setSuffix(tr(" ms"));
+    rangeLayout->addWidget(mSpinFrom, 0, 1);
+    rangeLayout->addWidget(new QLabel(tr("End (ms)"), this), 1, 0);
+    mSpinTo = new QSpinBox(this);
+    mSpinTo->setSuffix(tr(" ms"));
+    rangeLayout->addWidget(mSpinTo, 1, 1);
+    mMainLayout->addLayout(rangeLayout);
+  }
 
   QHBoxLayout* auditionLayout = new QHBoxLayout();
   mBtnPlayOriginal = new QPushButton(tr("Play original"), this);
@@ -333,6 +394,15 @@ quint8 TTAudioRepairDialog::currentChannelMask() const
   for (int ch = 0; ch < 6; ++ch)
     if (mChkChannel[ch]->isChecked()) mask |= quint8(1u << ch);
   return mask;
+}
+
+TTAudioRepairItem TTAudioRepairDialog::currentItem() const
+{
+  if (mFadeOut)
+    return TTAudioRepair::makeFadeOutItem(mTrackIndex, mFadeMask, mFadeEndSample,
+                                          mSpinFadeLen->value() * mSamplesPerMs, mSilenceSamples,
+                                          mSamplesPerMs * 1000);
+  return TTAudioRepairItem(mTrackIndex, currentFrameFrom(), currentFrameTo(), currentChannelMask());
 }
 
 void TTAudioRepairDialog::onMpvError(const QString& message)
@@ -431,16 +501,18 @@ QString TTAudioRepairDialog::writePreviewWindow(bool repaired, QString* error)
     return QString();
   }
 
-  const qint64 from = currentFrameFrom();
-  const qint64 to = currentFrameTo();
-  if (from < 0 || to < from) {
+  const TTAudioRepairItem item = currentItem();
+  const qint64 from = item.frameFrom();
+  const qint64 to = item.frameTo();
+  // A fade-out that would start before the track has from == -1: the builder
+  // says so below; the original still plays, from the start of the track.
+  if (!mFadeOut && (from < 0 || to < from)) {
     *error = tr("Invalid repair range.");
     return QString();
   }
 
   TTAudioRepair::FrameTable table;
   if (repaired) {
-    const TTAudioRepairItem item(mTrackIndex, from, to, currentChannelMask());
     QString buildError;
     table = TTAudioRepair::buildRepairTable(mAudioFile, item, /*targetAcmod=*/-1, &buildError);
     if (!buildError.isEmpty()) {
@@ -520,27 +592,26 @@ void TTAudioRepairDialog::accept()
     return;
   }
 
-  const qint64 from = currentFrameFrom();
-  const qint64 to = currentFrameTo();
-  if (to < from) {
-    QMessageBox::warning(this, tr("Audio repair"), tr("End must not be before start."));
-    return; // keep the dialog open, AVItem stays untouched
-  }
-  const quint8 mask = currentChannelMask();
-  if (mask == 0) {
-    QMessageBox::warning(this, tr("Audio repair"), tr("Select at least one channel to silence."));
-    return;
+  const TTAudioRepairItem item = currentItem();
+  if (!mFadeOut) {
+    if (item.frameTo() < item.frameFrom()) {
+      QMessageBox::warning(this, tr("Audio repair"), tr("End must not be before start."));
+      return; // keep the dialog open, AVItem stays untouched
+    }
+    if (item.channelMask() == 0) {
+      QMessageBox::warning(this, tr("Audio repair"), tr("Select at least one channel to silence."));
+      return;
+    }
   }
   // Build the replacement frames once, as the cut will: a range across a
-  // channel-layout or frame-size change, a channel the track does not have
-  // or a range past the file's end is refused here, while the user can still
+  // channel-layout or frame-size change, a channel the track does not have,
+  // a range past the file's end or a fade-out before its start is refused here, while the user can still
   // change it - not when the cut runs and fails (audio-repair.md H3). The
   // cut's target layout is not known here; like the audition, this builds
   // in the source layout.
   if (!mAudioFile.isEmpty()) {
     QString buildError;
-    TTAudioRepair::buildRepairTable(mAudioFile, TTAudioRepairItem(mTrackIndex, from, to, mask),
-                                    /*targetAcmod=*/-1, &buildError);
+    TTAudioRepair::buildRepairTable(mAudioFile, item, /*targetAcmod=*/-1, &buildError);
     if (!buildError.isEmpty()) {
       QMessageBox::warning(this, tr("Audio repair"),
                            tr("This repair cannot be applied:\n%1").arg(buildError));
@@ -551,7 +622,7 @@ void TTAudioRepairDialog::accept()
   if (mExistingRepairIndex >= 0)
     mAvItem->removeAudioRepairAt(mExistingRepairIndex);
 
-  mAvItem->appendAudioRepair(TTAudioRepairItem(mTrackIndex, from, to, mask));
+  mAvItem->appendAudioRepair(item);
 
   QDialog::accept();
 }

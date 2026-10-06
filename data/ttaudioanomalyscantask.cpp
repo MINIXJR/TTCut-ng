@@ -275,11 +275,12 @@ QList<TTAudioAnomalyScanTask::Finding> TTAudioAnomalyScanTask::evaluateStops(
 
   qint64 bestBlock = -1, lastBlock = -1;
   double bestDrop = 0.0;
+  bool   bestHole = false;
   auto flush = [&]() {
     if (bestBlock < 0) return;
     const int frame = int(bestBlock / 6);
     Finding f{qMax(0, frame - 1), qMin(n - 1, frame + 1), -200.0f, 0.0f};
-    f.kind = FindingKind::AbruptStop;
+    f.kind = bestHole ? FindingKind::Hole : FindingKind::LastingStop;
     f.dropDb = float(bestDrop);
     f.channelMask = quint8((1u << stats[frame].channels) - 1u);
     findings.append(f);
@@ -308,7 +309,7 @@ QList<TTAudioAnomalyScanTask::Finding> TTAudioAnomalyScanTask::evaluateStops(
     if (tailMax[qMin(nb, b + kStopTailGuardBlocks)] <= tailSilence) continue;
 
     if (bestBlock >= 0 && b - lastBlock > kStopMergeBlocks) flush();
-    if (bestBlock < 0 || drop > bestDrop) { bestBlock = b; bestDrop = drop; }
+    if (bestBlock < 0 || drop > bestDrop) { bestBlock = b; bestDrop = drop; bestHole = hole; }
     lastBlock = b;
   }
   flush();
@@ -588,7 +589,9 @@ void TTAudioAnomalyScanTask::operation()
   // LFE material gate.
   const QList<Finding> stops = evaluateStops(stats);
   for (const Finding& f : stops)
-    addPoint(f, tr("Audio anomaly: sound stops abruptly (track %1, drop %2 dB)")
+    addPoint(f, (f.kind == FindingKind::Hole
+                     ? tr("Audio anomaly: hole in the sound (track %1, depth %2 dB)")
+                     : tr("Audio anomaly: sound stops abruptly (track %1, drop %2 dB)"))
         .arg(mTrackIndex + 1).arg(QString::number(f.dropDb, 'f', 0)));
   std::sort(points.begin(), points.end());
 

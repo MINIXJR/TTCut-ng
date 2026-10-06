@@ -2555,6 +2555,76 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Tonreparatur: Ausblenden vor dem Abbruch** → **DONE (2026-10-06, Zweig
+  `feature/repair-fade-out`)**. Spec und Plan (nicht im Repo):
+  `docs/superpowers/{specs,plans}/2026-10-05-audio-repair-fade-out*`.
+  - **Anlass:** Die Reparatur an „Ton bricht ab"-Markern war seit
+    2026-10-05 abgeschaltet: Stummschalten mit 5-ms-Blende fällt in rund
+    5 ms von −14 dBFS auf Stille, 52 ms vor dem Abbruch — fast so hart wie
+    der Abbruch selbst (Bild 24238, AC3-Frames 30296–30298). Der Abbruch
+    steckt in beiden Tonspuren, lässt sich also nicht aus der zweiten
+    füllen.
+  - **Urteile des Anwenders:** Hörprobe außerhalb des Programms
+    (2026-10-05, alle Kanäle vor dem ersten Sprung ausgeblendet, 20 und
+    50 ms): „hier scheinen 20 ms zu reichen". Hörprobe über den
+    Programmweg mit AC3-Neu-Kodierung (2026-10-06,
+    `test_audiorepair --fade`, 20 ms): „Ja, hört sich für mich gut an".
+    Im laufenden Programm (2026-10-06, Marker bei Bild 24237): „angehört
+    und geschnitten. IO". Sichttest auf 02x06 am selben Tag — vier Marker
+    mit ihren Texten, kein „Reparieren..." an den beiden Löchern, die
+    Ausblend-Ansicht mit Vorbelegung 969515 ms / 20 ms, Bearbeiten nach
+    dem Vormerken, Speichern und Laden, die Zeile im Abschlussfenster, die
+    unveränderte Ansicht am LFE-Marker: „A bis G IO".
+  - **Kurve** (`TTAudioRepair::fadeOutGain`, alle Kanäle): voller Pegel,
+    Kosinus-Blende auf 0 über die Länge (Vorgabe 20 ms, 10–100), die am
+    **Ende der Ausblendung** endet; Stille bis 1 ms hinter dem Tonende;
+    in festen 5 ms zurück zum Original. Die Reparatur speichert drei
+    Werte in Samples (Ende, Länge, Stille); ihr Frame-Bereich folgt
+    daraus (`makeFadeOutItem`).
+  - **Abbruch-Suche** (`locateStop` rein, `findStop` dekodiert wie der
+    Reparatur-Bau): (1) Blockgrenze (256 Samples, Raster des Scans) mit
+    dem größten Abfall von drei Blöcken davor zu zwei danach, mindestens
+    20 dB; (2) Pegel davor = RMS der 16 ms, die einen Block vor der Grenze
+    enden; von einem Block hinter der Grenze rückwärts bis zum ersten
+    Sample über Pegel davor −12 dB — dahinter liegt das **Tonende**;
+    (3) in den 15 ms davor der früheste Sprung von mindestens dem
+    20-fachen des mittleren Schritts der 20 ms davor = Ende der
+    Ausblendung, ohne Sprung das Tonende.
+
+    | Stelle | Ende der Ausblendung | Tonende | Stille |
+    |---|---|---|---|
+    | 02x06, 24238, Wegwerf-Skript (ffmpeg) | 46536704 | 46537178 | 522 |
+    | dieselbe Stelle über den Programmweg | 46536704 | 46537178 | 522 |
+    | erzeugte Tonprobe, harter Schnitt bei 480144 (5.1 und Stereo) | 480401 | 480401 | 48 |
+
+    AC3 verschmiert einen harten Schnitt über einen Block: die dekodierte
+    Tonprobe hat keinen Sprung, ihr Ton endet 257 Samples hinter dem
+    Schnitt.
+  - **Verworfen (gemessen):** „größter Sprung irgendwo in den drei
+    Frames" fand an der Tonprobe nichts und hielt einen Einsatz nach einer
+    leisen Stelle für einen Sprung; „Sample-Position des größten
+    Pegelabfalls" lag 13–16 ms hinter dem Schnitt der Tonprobe.
+  - **Messung am Haltepunkt (24238, 20 ms, Programmweg):** reparierte
+    Frames 30296–30297; größter Sprung am Abbruch 0,1193 im Original,
+    0,0001 repariert. An den Tonproben: vor der Blende höchstens 0,0003
+    Abweichung, in der Stille höchstens 0,0004, Pegelverhältnis in der
+    Mitte der Blende 0,50.
+  - **Marker-Arten:** der Scan gibt die Form weiter, die er schon kannte:
+    `LastingStop` („Ton bricht ab", Ausblend-Reparatur) und `Hole` („Loch
+    im Ton", keine Reparatur); `AbruptStop` bleibt für Projekte vom
+    2026-10-04/05. 02x06: 969,5 s Abbruch, 3099,7 s und 3468,2 s Loch.
+  - **Dialog:** zweite Ansicht für die Ausblendung (Ende in 1-ms-Schritten
+    innerhalb der Marker-Frames, Länge); findet die Suche nichts, steht
+    das Feld auf dem Anfang des mittleren Frames und ein Hinweis erscheint.
+  - **Projektdatei:** `<FadeEnd>`, `<FadeLength>`, `<Silence>`; die
+    Reparaturart wird beim Laden ausgewertet (unbekannte Art oder
+    unpassende Werte → Eintrag deaktiviert). Spuren tauschen/entfernen
+    kopiert den Eintrag, statt ihn neu zu bauen.
+  - **Harnesses:** `test_audiorepair` (Kurve, Suche, Bau, Modus `--fade`),
+    `test_anomalyscan`, `gate_anomaly_real.sh` (Art je Stelle),
+    `test_audiorepair_persist`, `test_repairdialog_model`,
+    `test_marker_delete_repair`, `test_audiorepair_cut`.
+
 - **Tonanomalie-Scan: LFE-Grenze und Abbruch-Suche** → **DONE (2026-10-04,
   Zweig `feature/anomaly-stop-search`)**. Spec und Plan (nicht im Repo):
   `docs/superpowers/{specs,plans}/2026-10-04-audio-anomaly-stop-search*`.

@@ -66,6 +66,7 @@
 
 #include "avstream/ttavstream.h"
 #include "common/ttmessagelogger.h"
+#include "extern/ttaudiorepair.h"
 #include "extern/ttaudiorepairitem.h"
 #include "data/ttavdata.h"
 #include "data/ttavlist.h"
@@ -87,7 +88,8 @@ static const QString kAudioFile =
 static const QString kNoRepairProject =
     QStringLiteral("/usr/local/src/TTCut-ng/tools/testdata/tux_test.ttcut");
 
-// --- Case 1: write with two repair items on track 0, reload, compare -------
+// --- Case 1: write with three repair items on track 0 (unknown method,
+// default method, fade-out), reload, compare ---------------------------------
 static void testRoundTrip(const QString& workDir)
 {
     const QString projectPath = QDir(workDir).absoluteFilePath("repair_roundtrip.ttcut");
@@ -117,7 +119,9 @@ static void testRoundTrip(const QString& workDir)
     const TTAudioRepairItem itemB(0, 100, 105, 1); // default method
     srcItem->appendAudioRepair(itemA);
     srcItem->appendAudioRepair(itemB);
-    check(srcItem->audioRepairList().size() == 2, "source: two repair items attached");
+    // frames 1952-1953: fade from sample 2999040, zero at 3000000
+    srcItem->appendAudioRepair(TTAudioRepair::makeFadeOutItem(0, 0x03, 3000000, 960, 48, 48000));
+    check(srcItem->audioRepairList().size() == 3, "source: three repair items attached");
 
     avSrc.writeProjectFile(QFileInfo(projectPath), {}, TTLogoProjectData());
     check(QFileInfo::exists(projectPath), "project file written");
@@ -137,6 +141,10 @@ static void testRoundTrip(const QString& workDir)
     check(xmlText.contains("<Channels>12</Channels>"), "written xml contains Channels 12");
     check(xmlText.contains("<Method>mute</Method>"), "written xml contains Method mute");
     check(xmlText.contains("<FrameFrom>100</FrameFrom>"), "written xml contains FrameFrom 100 (second item)");
+    check(xmlText.contains("<Method>fade-out</Method>") && xmlText.contains("<FadeEnd>3000000</FadeEnd>")
+              && xmlText.contains("<FadeLength>960</FadeLength>") && xmlText.contains("<Silence>48</Silence>"),
+          "written xml contains the fade-out repair with its three values");
+    check(xmlText.count("<FadeEnd>") == 1, "the three values are written for the fade-out repair only");
 
     TTAVData avDst;
     QEventLoop dstLoop;
@@ -157,8 +165,8 @@ static void testRoundTrip(const QString& workDir)
     check(dstItem->audioCount() == 1, "reload: one audio track loaded");
 
     QList<TTAudioRepairItem> repairs = dstItem->audioRepairList();
-    check(repairs.size() == 2, QString("reload: two repair items present (got %1)").arg(repairs.size()));
-    if (repairs.size() != 2) return;
+    check(repairs.size() == 3, QString("reload: three repair items present (got %1)").arg(repairs.size()));
+    if (repairs.size() != 3) return;
 
     // Order of application isn't contractually fixed by the brief, so match
     // by frameFrom rather than assuming list order.
@@ -175,14 +183,21 @@ static void testRoundTrip(const QString& workDir)
         check(rA->frameTo() == 1938, "repair A frameTo round-trips");
         check(rA->channelMask() == 12, "repair A channelMask round-trips");
         check(rA->method() == "mute", "repair A method round-trips");
-        check(rA->isEnabled(), "repair A isEnabled defaults true after load");
+        check(!rA->isEnabled(), "repair A (unknown method) is disabled after load");
     }
     if (rB) {
         check(rB->trackIndex() == 0, "repair B trackIndex round-trips");
         check(rB->frameTo() == 105, "repair B frameTo round-trips");
         check(rB->channelMask() == 1, "repair B channelMask round-trips");
         check(rB->method() == "silence-fade", "repair B method round-trips (default)");
+        check(rB->isEnabled(), "repair B isEnabled defaults true after load");
     }
+    const TTAudioRepairItem* rC = nullptr;
+    for (const TTAudioRepairItem& r : repairs) if (r.isFadeOut()) rC = &r;
+    check(rC != nullptr, "reload: fade-out repair found");
+    if (rC) check(rC->isEnabled() && rC->frameFrom() == 1952 && rC->frameTo() == 1953 && rC->channelMask() == 0x03
+                      && rC->fadeEnd() == 3000000 && rC->fadeLength() == 960 && rC->silenceLength() == 48,
+                  "reload: fade-out repair round-trips with range and values, enabled");
 }
 
 // --- Case 2: a project without any <Repair> element loads an empty list ----
@@ -863,6 +878,69 @@ static void testStreamPointAudioFrameRangeRoundTrip(const QString& workDir)
     }
 }
 
+// Review focus 3: swapping tracks renumbers the repairs - a fade-out repair
+// must come out with its values, not as a rebuilt silence repair.
+static void testFadeOutFollowsSwap(const QString& workDir)
+{
+    TTAVData avData;
+    QEventLoop loop;
+    bool done = false;
+    QObject::connect(&avData, &TTAVData::readProjectFileFinished, [&](const QString&) { done = true; loop.quit(); });
+    QTimer::singleShot(20000, &loop, &QEventLoop::quit);
+    avData.readProjectFile(QFileInfo(QDir(workDir).absoluteFilePath("repair_reorder.ttcut")));
+    if (!done) loop.exec();
+    check(done && avData.avCount() == 1 && avData.avItemAt(0)->audioCount() == 2, "fade swap: two-track project loaded");
+    if (!done || avData.avCount() != 1 || avData.avItemAt(0)->audioCount() != 2) return;
+    TTAVItem* item = avData.avItemAt(0);
+    item->appendAudioRepair(TTAudioRepair::makeFadeOutItem(0, 0x03, 3000000, 960, 48, 48000));
+    item->onSwapAudioItems(0, 1);
+    const TTAudioRepairItem* fade = nullptr;
+    const QList<TTAudioRepairItem> repairs = item->audioRepairList();
+    for (const TTAudioRepairItem& r : repairs) if (r.isFadeOut()) fade = &r;
+    check(fade != nullptr, "fade swap: the repair is still a fade-out after the swap");
+    if (fade) check(fade->trackIndex() == 1 && fade->fadeEnd() == 3000000 && fade->fadeLength() == 960
+                        && fade->silenceLength() == 48 && fade->frameFrom() == 1952 && fade->frameTo() == 1953,
+                    "fade swap: it followed its track and kept its values");
+}
+
+// A fade-out repair whose values are missing or do not fit its frame range
+// is disabled on load, never applied as something else.
+static void testFadeOutLoadValidation(const QString& workDir)
+{
+    const QString projectPath = QDir(workDir).absoluteFilePath("repair_fade_validation.ttcut");
+    QFile f(projectPath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) { check(false, "fade validation: write project"); return; }
+    QTextStream out(&f);
+    auto repair = [&](int from, int to, const QString& extra) {
+        out << "   <Repair><FrameFrom>" << from << "</FrameFrom><FrameTo>" << to << "</FrameTo><Channels>3</Channels>"
+               "<Method>fade-out</Method>" << extra << "</Repair>\n";
+    };
+    out << "<!DOCTYPE TTCut-Projectfile>\n<TTCut-Projectfile>\n <Version>1.0</Version>\n <Video>\n  <Order>0</Order>\n"
+           "  <Name>" << kVideoFile << "</Name>\n  <Audio>\n   <Order>0</Order>\n   <Name>" << kAudioFile << "</Name>\n";
+    repair(100, 101, QString());                                                                      // no values
+    repair(200, 205, "<FadeEnd>3000000</FadeEnd><FadeLength>960</FadeLength><Silence>48</Silence>");  // wrong range
+    repair(1952, 1953, "<FadeEnd>3000000</FadeEnd><FadeLength>960</FadeLength><Silence>48</Silence>");
+    out << "  </Audio>\n </Video>\n</TTCut-Projectfile>\n";
+    f.close();
+
+    TTAVData avData;
+    QEventLoop loop;
+    bool done = false;
+    QObject::connect(&avData, &TTAVData::readProjectFileFinished, [&](const QString&) { done = true; loop.quit(); });
+    QTimer::singleShot(20000, &loop, &QEventLoop::quit);
+    avData.readProjectFile(QFileInfo(projectPath));
+    if (!done) loop.exec();
+    check(done && avData.avCount() == 1, "fade validation: project loaded");
+    if (!done || avData.avCount() != 1) return;
+    const QList<TTAudioRepairItem> repairs = avData.avItemAt(0)->audioRepairList();
+    check(repairs.size() == 3, QString("fade validation: three repairs kept (got %1)").arg(repairs.size()));
+    for (const TTAudioRepairItem& r : repairs) {
+        if (r.frameFrom() == 100)  check(!r.isEnabled(), "fade validation: fade-out without values is disabled");
+        if (r.frameFrom() == 200)  check(!r.isEnabled(), "fade validation: values that do not fit the range are disabled");
+        if (r.frameFrom() == 1952) check(r.isEnabled(),  "fade validation: a consistent fade-out stays enabled");
+    }
+}
+
 int main(int argc, char** argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -885,6 +963,8 @@ int main(int argc, char** argv)
     testNoRepairElement();
     testUnknownAudioChildIgnored(workDir);
     testReorderReassignsTrack(workDir);
+    testFadeOutFollowsSwap(workDir);
+    testFadeOutLoadValidation(workDir);
     testRemoveShiftsTrackIndex(workDir);
     testLoadValidationDisablesOutOfRange(workDir, QDir(workDir).absoluteFilePath("audiorepair_persist.log"));
     testLoadValidationRejectsMalformedRanges(workDir, QDir(workDir).absoluteFilePath("audiorepair_malformed.log"));

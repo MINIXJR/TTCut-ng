@@ -17,6 +17,7 @@
 
 class TTAVItem;
 class TTAVData;
+class TTAudioRepairItem;
 class TTVideoStream;
 class TTStreamPointModel;
 
@@ -76,7 +77,7 @@ class TTCutProjectData
     // <Audio> and <Subtitle> carry the same fields (Order, Name, optional
     // Language and Delay); tag picks the element name.
     QDomElement writeTrackSection(QDomElement& parent, const QString& tag, const QString& filePath, int order, const QString& language, int delayMs = 0);
-    QDomElement writeRepairSection(QDomElement& parent, qint64 frameFrom, qint64 frameTo, quint8 channelMask, const QString& method);
+    QDomElement writeRepairSection(QDomElement& parent, const TTAudioRepairItem& repair);
     QDomElement writeCutSection(QDomElement& parent, int cutIn, int cutOut, int order);
     //! Order and validated path from a section header. <Video>, <Audio> and
     //! <Subtitle> all start with the same two nodes (Order, Name); 'section'

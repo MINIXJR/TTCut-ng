@@ -14,6 +14,7 @@
 
 #include "ttcutprojectdata.h"
 #include "ttavdata.h"
+#include "../extern/ttaudiorepair.h"
 #include "../extern/ttaudiorepairitem.h"
 #include "ttsubtitlelist.h"
 #include "ttstreampoint.h"
@@ -151,7 +152,7 @@ void TTCutProjectData::serializeAVDataItem(const TTAVItem* vItem)
     // not nested under the audio list itself - filter by it here.
     for (const TTAudioRepairItem& repair : vItem->audioRepairList()) {
       if (repair.trackIndex() != i) continue;
-      writeRepairSection(audio, repair.frameFrom(), repair.frameTo(), repair.channelMask(), repair.method());
+      writeRepairSection(audio, repair);
     }
   }
 
@@ -306,7 +307,10 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
       qint64  frameFrom = 0;
       qint64  frameTo = 0;
       quint8  channelMask = 0;
-      QString method = QStringLiteral("silence-fade");
+      QString method = QString::fromLatin1(TTAudioRepairItem::kMethodSilenceFade);
+      qint64  fadeEnd = 0;
+      int     fadeLength = 0;
+      int     silence = 0;
       for (int r = 0; r < repairNodes.size(); r++) {
         QDomElement relem = repairNodes.at(r).toElement();
         if (relem.isNull()) continue;
@@ -314,12 +318,17 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
         else if (relem.tagName() == "FrameTo")   frameTo = relem.text().toLongLong();
         else if (relem.tagName() == "Channels")  channelMask = static_cast<quint8>(relem.text().toUInt());
         else if (relem.tagName() == "Method")    method = relem.text();
+        else if (relem.tagName() == "FadeEnd")    fadeEnd = relem.text().toLongLong();
+        else if (relem.tagName() == "FadeLength") fadeLength = relem.text().toInt();
+        else if (relem.tagName() == "Silence")    silence = relem.text().toInt();
       }
       // trackIndex = order: the visible <Order> position this Audio section
       // was saved at, which is exactly the position sortByProjectOrder()
       // restores the track to once loading finishes (see the comment in
       // TTAVData::onOpenAudioFinished).
-      repairs.append(TTAudioRepairItem(order, frameFrom, frameTo, channelMask, method));
+      TTAudioRepairItem repair(order, frameFrom, frameTo, channelMask, method);
+      if (repair.isFadeOut()) repair.setFadeOut(fadeEnd, fadeLength, silence);
+      repairs.append(repair);
     }
   }
 
@@ -351,7 +360,29 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
           QString("TTCutProjectData::parseAudioSection -> ") + reason);
     };
     for (TTAudioRepairItem& repair : repairs) {
-      // Structural sanity first (final review M5): a hand-edited or
+      // The method is evaluated: a repair this build does not know, or a
+      // fade-out whose three values are missing or do not fit its frame
+      // range, is never applied as something else.
+      if (!repair.isFadeOut() && repair.method() != QLatin1String(TTAudioRepairItem::kMethodSilenceFade)) {
+        disableRepair(repair, QString("repair %1-%2 on '%3' has the unknown method '%4' - disabling this "
+                                      "repair entry instead of applying it as something else")
+                                  .arg(repair.frameFrom()).arg(repair.frameTo()).arg(name, repair.method()));
+        continue;
+      }
+      if (repair.isFadeOut()) {
+        // 48 kHz: the only rate the scan, and with it every marker, knows;
+        // buildRepairTable checks again with the file's own rate.
+        const TTAudioRepairItem want = TTAudioRepair::makeFadeOutItem(repair.trackIndex(), repair.channelMask(),
+            repair.fadeEnd(), repair.fadeLength(), repair.silenceLength(), 48000);
+        if (repair.fadeLength() <= 0 || repair.silenceLength() <= 0
+            || want.frameFrom() != repair.frameFrom() || want.frameTo() != repair.frameTo()) {
+          disableRepair(repair, QString("fade-out repair %1-%2 on '%3' has missing values or values that do not "
+                                        "fit its frame range - disabling this repair entry")
+                                    .arg(repair.frameFrom()).arg(repair.frameTo()).arg(name));
+          continue;
+        }
+      }
+      // Structural sanity (final review M5): a hand-edited or
       // truncated project file can carry a negative or reversed range. Those
       // never reach the file-size check meaningfully - a negative frameFrom
       // would make buildRepairTable read from the start of the file, a
@@ -502,20 +533,27 @@ QDomElement TTCutProjectData::writeTrackSection(QDomElement& parent, const QStri
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-QDomElement TTCutProjectData::writeRepairSection(QDomElement& parent, qint64 frameFrom, qint64 frameTo, quint8 channelMask, const QString& method)
+QDomElement TTCutProjectData::writeRepairSection(QDomElement& parent, const TTAudioRepairItem& repair)
 {
-  QDomElement repair = xmlDocument->createElement("Repair");
-  parent.appendChild(repair);
+  QDomElement repairElem = xmlDocument->createElement("Repair");
+  parent.appendChild(repairElem);
 
-  addTextElement(repair, "FrameFrom", QString::number(frameFrom));
+  addTextElement(repairElem, "FrameFrom", QString::number(repair.frameFrom()));
 
-  addTextElement(repair, "FrameTo", QString::number(frameTo));
+  addTextElement(repairElem, "FrameTo", QString::number(repair.frameTo()));
 
-  addTextElement(repair, "Channels", QString::number(channelMask));
+  addTextElement(repairElem, "Channels", QString::number(repair.channelMask()));
 
-  addTextElement(repair, "Method", method);
+  addTextElement(repairElem, "Method", repair.method());
 
-  return repair;
+  // A fade-out repair: its three values, in samples of the track.
+  if (repair.isFadeOut()) {
+    addTextElement(repairElem, "FadeEnd", QString::number(repair.fadeEnd()));
+    addTextElement(repairElem, "FadeLength", QString::number(repair.fadeLength()));
+    addTextElement(repairElem, "Silence", QString::number(repair.silenceLength()));
+  }
+
+  return repairElem;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

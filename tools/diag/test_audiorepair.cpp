@@ -25,6 +25,12 @@
 //     everything else stream-copied verbatim -- for the real-material seam
 //     measurement (Task 4 brief Step 6).
 //
+//   test_audiorepair --fade <ac3> <frameFrom> <frameTo> <lengthMs> <outPrefix>
+//     The fade-out repair on a stop marker's frames: prints where the stop
+//     search places it (STOP), the repaired frame range (RANGE) and the
+//     largest sample step at the stop before and after (STEP), and writes
+//     <outPrefix>-original.ac3 / <outPrefix>-repariert.ac3 (+/-94 frames).
+//
 // Build via `cmake --build build --target test_audiorepair`.
 #include <algorithm>
 #include <cmath>
@@ -44,6 +50,7 @@
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavutil/opt.h>
 }
 
 #include "../../extern/ttaudiorepair.h"
@@ -96,10 +103,12 @@ struct DecodedPCM {
     QVector<QVector<float>> ch; // ch[c] = concatenated samples across all decoded frames
 };
 
-static bool decodeAc3Sequence(const QVector<QByteArray>& frames, DecodedPCM& out, QString& err)
+// noDrc: decode without dynamic range compression, as TTAc3Reencoder does.
+static bool decodeAc3Sequence(const QVector<QByteArray>& frames, DecodedPCM& out, QString& err, bool noDrc = false)
 {
     const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AC3);
     AVCodecContext* ctx = dec ? avcodec_alloc_context3(dec) : nullptr;
+    if (ctx && noDrc) av_opt_set_double(ctx->priv_data, "drc_scale", 0.0, 0);
     if (!ctx || avcodec_open2(ctx, dec, nullptr) < 0) {
         err = QStringLiteral("could not open AC3 decoder");
         if (ctx) avcodec_free_context(&ctx);
@@ -520,6 +529,169 @@ static void testMixedBitRate()
     }
 }
 
+static const QString kStopSampleFile =
+    QStringLiteral("/usr/local/src/CLAUDE_TMP/TTCut-ng/stop_sample_5.1.ac3");
+static const QString kStopStereoFile =
+    QStringLiteral("/usr/local/src/CLAUDE_TMP/TTCut-ng/stop_sample_stereo.ac3");
+static const QString kStopMakeScript =
+    QStringLiteral("/usr/local/src/TTCut-ng/tools/diag/make_stop_sample.sh");
+
+static bool ensureStopSample(const QString& file, const QString& mode)
+{
+    if (QFileInfo::exists(file)) return true;
+    QProcess proc;
+    proc.start(kStopMakeScript, {file, mode});
+    return proc.waitForStarted(5000) && proc.waitForFinished(180000) && proc.exitCode() == 0;
+}
+
+// The gain curve of the fade-out repair, as a function of the track sample.
+static void testFadeOutGain()
+{
+    using TTAudioRepair::fadeOutGain;
+    const qint64 E = 10000; const int L = 960, S = 48, I = 240;
+    check(fadeOutGain(E - L - 1, E, L, S, I) == 1.0 && fadeOutGain(E - L, E, L, S, I) == 1.0, "gain: 1 up to the start of the fade");
+    check(std::fabs(fadeOutGain(E - L / 2, E, L, S, I) - 0.5) < 1e-9, "gain: 0.5 in the middle of the fade");
+    check(fadeOutGain(E - 1, E, L, S, I) < 1e-5, "gain: next to 0 at the last sample of the fade");
+    check(fadeOutGain(E, E, L, S, I) == 0.0 && fadeOutGain(E + S - 1, E, L, S, I) == 0.0, "gain: 0 through the silence");
+    check(fadeOutGain(E + S, E, L, S, I) == 0.0, "gain: the fade-in starts at 0");
+    check(std::fabs(fadeOutGain(E + S + I / 2, E, L, S, I) - 0.5) < 1e-9, "gain: 0.5 in the middle of the fade-in");
+    check(fadeOutGain(E + S + I, E, L, S, I) == 1.0, "gain: 1 again behind the fade-in");
+    bool mono = true;
+    for (qint64 p = E - L; p < E; ++p)         mono = mono && fadeOutGain(p + 1, E, L, S, I) <= fadeOutGain(p, E, L, S, I);
+    for (qint64 p = E + S; p < E + S + I; ++p) mono = mono && fadeOutGain(p + 1, E, L, S, I) >= fadeOutGain(p, E, L, S, I);
+    check(mono, "gain: monotonic in both fades");
+
+    // the frame range of an item: every frame the curve touches
+    const TTAudioRepairItem a = TTAudioRepair::makeFadeOutItem(2, 0x3F, 46536704, 960, 522, 48000);
+    check(a.isFadeOut() && a.trackIndex() == 2 && a.channelMask() == 0x3F && a.fadeEnd() == 46536704
+              && a.fadeLength() == 960 && a.silenceLength() == 522,
+          "makeFadeOutItem: method and values");
+    check(a.frameFrom() == 30296 && a.frameTo() == 30297,
+          QString("makeFadeOutItem: frames 30296-30297 (got %1-%2)").arg(a.frameFrom()).arg(a.frameTo()));
+    check(TTAudioRepair::makeFadeOutItem(0, 0x3F, 500, 960, 48, 48000).frameFrom() < 0,
+          "makeFadeOutItem: a fade before the start of the track gives no valid range");
+}
+
+// The stop search on plain sample data (no codec): two planes, sin and cos,
+// so that the magnitude never passes through zero.
+static QVector<QVector<float>> tone(int n, double hz, double amp = 0.3)
+{
+    QVector<QVector<float>> p(2, QVector<float>(n));
+    for (int i = 0; i < n; ++i) {
+        p[0][i] = float(amp * std::sin(2 * M_PI * hz * i / 48000.0));
+        p[1][i] = float(amp * std::cos(2 * M_PI * hz * i / 48000.0));
+    }
+    return p;
+}
+static void testLocateStop()
+{
+    using TTAudioRepair::locateStop;
+    const qint64 first = 100000; const int n = 1536 * 6;
+    const qint64 from = first + 1536, to = first + 1536 * 4;
+    {   // L1: hard cut at local sample 4000
+        auto p = tone(n, 100.0);
+        for (int c = 0; c < 2; ++c) for (int i = 4000; i < n; ++i) p[c][i] = 0.0f;
+        const auto r = locateStop(p, first, from, to, 48000);
+        check(r.found && r.soundEnd == first + 4000 && r.fadeEnd == first + 4000 && r.silence == 48,
+              QString("L1 hard cut: found to the sample (found %1, soundEnd %2, fadeEnd %3, silence %4)")
+                  .arg(r.found).arg(r.soundEnd - first).arg(r.fadeEnd - first).arg(r.silence));
+    }
+    {   // L2: a dropout of ten samples 400 samples before the cut: its first jump ends the fade-out
+        auto p = tone(n, 100.0);
+        for (int c = 0; c < 2; ++c) {
+            for (int i = 3600; i < 3610; ++i) p[c][i] = 0.0f;
+            for (int i = 4000; i < n; ++i) p[c][i] = 0.0f;
+        }
+        const auto r = locateStop(p, first, from, to, 48000);
+        check(r.found && r.soundEnd == first + 4000 && r.fadeEnd == first + 3600 && r.silence == 448,
+              QString("L2 jump before the cut: fadeEnd at the jump (soundEnd %1, fadeEnd %2, silence %3)")
+                  .arg(r.soundEnd - first).arg(r.fadeEnd - first).arg(r.silence));
+    }
+    {   // L3: a steady tone
+        check(!locateStop(tone(n, 100.0), first, from, to, 48000).found, "L3 steady tone: nothing found");
+    }
+    {   // L4: natural decay, 60 dB over 100 ms
+        auto p = tone(n, 100.0);
+        for (int c = 0; c < 2; ++c) for (int i = 3000; i < n; ++i)
+            p[c][i] *= float(std::pow(10.0, -3.0 * qMin(1.0, (i - 3000) / 4800.0)));
+        check(!locateStop(p, first, from, to, 48000).found, "L4 natural decay: nothing found");
+    }
+    {   // L5: nothing to look at
+        check(!locateStop(QVector<QVector<float>>(), first, from, to, 48000).found, "L5 no planes: nothing found");
+        check(!locateStop(tone(600, 100.0), first, first, first + 600, 48000).found, "L5 too short: nothing found");
+    }
+}
+
+// Stop search and fade-out build on the decoded fixtures.
+static void testFadeOutBuild()
+{
+    for (const QString& mode : {QStringLiteral("5.1"), QStringLiteral("stereo")}) {
+        const QString file = mode == "5.1" ? kStopSampleFile : kStopStereoFile;
+        const int nCh = mode == "5.1" ? 6 : 2;
+        check(ensureStopSample(file, mode), "fixture stop_sample " + mode + " available");
+        if (!QFileInfo::exists(file)) continue;
+
+        QString err;
+        const TTAudioRepair::StopPlacement sp = TTAudioRepair::findStop(file, 312, 314, &err);
+        check(err.isEmpty() && sp.found, QString("%1: stop found in frames 312-314 (%2)").arg(mode, err));
+        // Hard cut at sample 480144; the AC3 codec smears it over one block
+        // (measured with ffmpeg: the decoded sound ends at 480401), no jump.
+        check(sp.soundEnd >= 480144 && sp.soundEnd <= 480144 + 320,
+              QString("%1: sound ends within 320 samples behind the cut (got %2)").arg(mode).arg(sp.soundEnd));
+        check(sp.fadeEnd == sp.soundEnd && sp.silence == 48,
+              QString("%1: no jump - the fade-out ends where the sound ends, silence 1 ms (fadeEnd %2, silence %3)")
+                  .arg(mode).arg(sp.fadeEnd).arg(sp.silence));
+        check(!TTAudioRepair::findStop(file, 937, 939, &err).found, mode + ": natural decay (frames 937-939): nothing found");
+        // Review focus 1: the last frames of the track (silent, nothing behind them)
+        QVector<QByteArray> src;
+        check(readAllFrames(file, src, err), mode + ": source frames read");
+        const qint64 lastFrame = src.size() - 1;
+        check(!TTAudioRepair::findStop(file, lastFrame - 2, lastFrame, &err).found,
+              mode + ": last three frames of the track: nothing found, no failure");
+        if (!sp.found || src.isEmpty()) continue;
+
+        const int len = 960;
+        const TTAudioRepairItem item = TTAudioRepair::makeFadeOutItem(0, quint8((1u << nCh) - 1), sp.fadeEnd, len, sp.silence, 48000);
+        const TTAudioRepair::FrameTable table = TTAudioRepair::buildRepairTable(file, item, -1, &err);
+        check(err.isEmpty() && table.size() == item.frameTo() - item.frameFrom() + 1,
+              QString("%1: fade-out table built for frames %2-%3 (%4)").arg(mode).arg(item.frameFrom()).arg(item.frameTo()).arg(err));
+        if (!err.isEmpty()) continue;
+
+        const qint64 w0 = item.frameFrom() - 4, w1 = item.frameTo() + 2;
+        QVector<QByteArray> a, b;
+        for (qint64 f = w0; f <= w1; ++f) { a << src[f]; b << (table.contains(f) ? table.value(f) : src[f]); }
+        DecodedPCM pa, pb;
+        check(decodeAc3Sequence(a, pa, err) && decodeAc3Sequence(b, pb, err), mode + ": source and repaired decoded");
+        auto idx = [&](qint64 pos) { return pos - w0 * 1536; };
+        double maxBefore = 0.0, maxSilence = 0.0, rmsA = 0.0, rmsB = 0.0;
+        for (int c = 0; c < pa.channels && c < pb.channels; ++c) {
+            for (qint64 p = sp.fadeEnd - len - 600; p < sp.fadeEnd - len; ++p)
+                maxBefore = qMax(maxBefore, double(std::fabs(pa.ch[c][idx(p)] - pb.ch[c][idx(p)])));
+            for (qint64 p = sp.fadeEnd; p < sp.fadeEnd + sp.silence; ++p)
+                maxSilence = qMax(maxSilence, double(std::fabs(pb.ch[c][idx(p)])));
+            for (qint64 p = sp.fadeEnd - len / 2 - 48; p < sp.fadeEnd - len / 2 + 48; ++p) {
+                rmsA += double(pa.ch[c][idx(p)]) * pa.ch[c][idx(p)];
+                rmsB += double(pb.ch[c][idx(p)]) * pb.ch[c][idx(p)];
+            }
+        }
+        check(maxBefore < 0.02, QString("%1: unchanged before the fade (largest difference %2)").arg(mode).arg(maxBefore));
+        check(maxSilence < 0.01, QString("%1: silent from the end of the fade-out (largest sample %2)").arg(mode).arg(maxSilence));
+        const double ratio = rmsA > 0 ? std::sqrt(rmsB / rmsA) : -1.0;
+        check(ratio > 0.35 && ratio < 0.65, QString("%1: half level in the middle of the fade (ratio %2)").arg(mode).arg(ratio));
+    }
+
+    if (!QFileInfo::exists(kStopSampleFile)) return;
+    QString err;
+    TTAudioRepair::buildRepairTable(kStopSampleFile, TTAudioRepair::makeFadeOutItem(0, 0x3F, 500, 960, 48, 48000), -1, &err);
+    check(err.contains("before the beginning"), "fade before the start of the track is refused: " + err);
+    TTAudioRepairItem wrong(0, 312, 313, 0x3F);
+    wrong.setFadeOut(480401, 960, 48);                       // needs 312-312
+    TTAudioRepair::buildRepairTable(kStopSampleFile, wrong, -1, &err);
+    check(err.contains("do not fit"), "fade values that do not fit the frame range are refused: " + err);
+    TTAudioRepair::buildRepairTable(kStopSampleFile, TTAudioRepairItem(0, 312, 312, 0x3F, QStringLiteral("nonsense")), -1, &err);
+    check(err.contains("unknown repair method"), "an unknown method is refused: " + err);
+}
+
 static int argMode(int argc, char** argv)
 {
     const QString ac3Path = QString::fromUtf8(argv[1]);
@@ -593,12 +765,71 @@ static int argMode(int argc, char** argv)
     return 0;
 }
 
+// test_audiorepair --fade <ac3> <frameFrom> <frameTo> <lengthMs> <outPrefix>
+// The fade-out repair on a stop marker's frames of a real recording: where the
+// search places it, the largest step at the stop before and after, and both
+// versions as AC3 (+/-94 frames) to listen to.
+static int fadeMode(char** argv)
+{
+    const QString ac3 = QString::fromUtf8(argv[2]);
+    const qint64 from = QString::fromUtf8(argv[3]).toLongLong(), to = QString::fromUtf8(argv[4]).toLongLong();
+    const int lenMs = QString::fromUtf8(argv[5]).toInt();
+    const QString prefix = QString::fromUtf8(argv[6]);
+    QString err;
+    const TTAudioRepair::StopPlacement sp = TTAudioRepair::findStop(ac3, from, to, &err);
+    printf("STOP found=%d fadeEnd=%lld soundEnd=%lld silence=%d %s\n", int(sp.found),
+           (long long)sp.fadeEnd, (long long)sp.soundEnd, sp.silence, qPrintable(err));
+    if (!sp.found) return 1;
+    const TTAudioRepairItem item = TTAudioRepair::makeFadeOutItem(0, 0x3F, sp.fadeEnd, lenMs * 48, sp.silence, 48000);
+    const TTAudioRepair::FrameTable table = TTAudioRepair::buildRepairTable(ac3, item, -1, &err);
+    if (!err.isEmpty()) { printf("FAIL: %s\n", qPrintable(err)); return 1; }
+    printf("RANGE %lld %lld\n", (long long)item.frameFrom(), (long long)item.frameTo());
+
+    QVector<QByteArray> all;
+    if (!readAllFrames(ac3, all, err)) { printf("FAIL: %s\n", qPrintable(err)); return 1; }
+    const qint64 w0 = qMax<qint64>(0, item.frameFrom() - 94), w1 = qMin<qint64>(all.size() - 1, item.frameTo() + 94);
+    QVector<QByteArray> a, b;
+    for (qint64 f = w0; f <= w1; ++f) { a << all[f]; b << (table.contains(f) ? table.value(f) : all[f]); }
+    auto write = [](const QString& name, const QVector<QByteArray>& frames) {
+        QFile o(name);
+        if (!o.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+        for (const QByteArray& x : frames) o.write(x);
+        return true;
+    };
+    if (!write(prefix + "-original.ac3", a) || !write(prefix + "-repariert.ac3", b)) {
+        printf("FAIL: could not write %s-*.ac3\n", qPrintable(prefix));
+        return 1;
+    }
+    DecodedPCM pa, pb;
+    if (!decodeAc3Sequence(a, pa, err, true) || !decodeAc3Sequence(b, pb, err, true)) {
+        printf("FAIL: %s\n", qPrintable(err));
+        return 1;
+    }
+    auto maxStep = [&](const DecodedPCM& p) {
+        float m = 0.0f;
+        for (int c = 0; c < p.channels; ++c) {
+            if (p.channels == 6 && c == 3) continue;
+            for (qint64 pos = sp.fadeEnd - 48; pos <= sp.soundEnd + 48; ++pos) {
+                const qint64 i = pos - w0 * 1536;
+                m = qMax(m, std::fabs(p.ch[c][i] - p.ch[c][i - 1]));
+            }
+        }
+        return m;
+    };
+    printf("STEP original=%s repaired=%s\n", qPrintable(QString::number(maxStep(pa), 'f', 4)),
+           qPrintable(QString::number(maxStep(pb), 'f', 4)));
+    return 0;
+}
+
 int main(int argc, char** argv)
 {
     if (argc == 1) {
         selfTest();
         testAcmodChangeRejected();
         testMixedBitRate();
+        testFadeOutGain();
+        testLocateStop();
+        testFadeOutBuild();
         if (gFailures > 0) {
             printf("\nFAILED (%d failures, %d skipped)\n", gFailures, gSkipped);
             return 1;
@@ -614,9 +845,11 @@ int main(int argc, char** argv)
         printf("\nALL PASS (0 failures)\n");
         return 0;
     }
+    if (argc == 7 && QString::fromUtf8(argv[1]) == "--fade") return fadeMode(argv);
     if (argc == 5 || argc == 6) {
         return argMode(argc, argv);
     }
-    fprintf(stderr, "usage: %s [<ac3> <from> <to> <mask> [out.ac3]]\n", argv[0]);
+    fprintf(stderr, "usage: %s [<ac3> <from> <to> <mask> [out.ac3]]\n"
+                    "       %s --fade <ac3> <frameFrom> <frameTo> <lengthMs> <outPrefix>\n", argv[0], argv[0]);
     return 2;
 }
