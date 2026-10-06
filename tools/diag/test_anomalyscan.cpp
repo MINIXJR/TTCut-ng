@@ -15,8 +15,8 @@
 //     Real-file gate: runs the full scan (calibrated default settings) on
 //     the given AC3 file and prints every finding (AC3 frame range, video
 //     frame, LFE peak, confidence, description), plus one "LFE <from> <to>"
-//     and one "STOP <seconds> <drop dB> <mask>" line per finding of the two
-//     searches for gate_anomaly_real.sh. Each further argument is a time
+//     and one "STOP <seconds> <drop dB> <mask> <stop|hole>" line per finding
+//     of the two searches for gate_anomaly_real.sh. Each further argument is a time
 //     in seconds (decimal point) around which the block levels the stop
 //     search works on are printed. Exit 0.
 //
@@ -260,8 +260,8 @@ static void testEvaluateStops()
         if (f.size() == 1) {
             check(f[0].frameFrom == 499 && f[0].frameTo == 501,
                   QString("S1 range 499-501 (got %1-%2)").arg(f[0].frameFrom).arg(f[0].frameTo));
-            check(f[0].kind == Kind::AbruptStop && qAbs(f[0].dropDb - 50.0f) < 0.5f && f[0].channelMask == 0x3F,
-                  QString("S1 kind stop, drop 50 dB, mask 0x3F (got drop %1, mask %2)").arg(f[0].dropDb).arg(f[0].channelMask));
+            check(f[0].kind == Kind::LastingStop && qAbs(f[0].dropDb - 50.0f) < 0.5f && f[0].channelMask == 0x3F,
+                  QString("S1 kind lasting stop, drop 50 dB, mask 0x3F (got drop %1, mask %2)").arg(f[0].dropDb).arg(f[0].channelMask));
         }
     }
     {   // S2: decay of 5 dB per block (60 dB in 64 ms) is not a stop
@@ -320,8 +320,8 @@ static void testEvaluateStops()
         auto st = stopStats(1000, -20.0);
         setBlocks(st, 3000, 3002, -72.0);
         const auto f = TTAudioAnomalyScanTask::evaluateStops(st);
-        check(f.size() == 1 && qAbs(f[0].dropDb - 52.0f) < 0.5f,
-              QString("S10 hole of 2 blocks, 52 dB -> 1 finding (got %1)").arg(f.size()));
+        check(f.size() == 1 && qAbs(f[0].dropDb - 52.0f) < 0.5f && f[0].kind == Kind::Hole,
+              QString("S10 hole of 2 blocks, 52 dB -> 1 finding, a hole (got %1)").arg(f.size()));
     }
     {   // S11: the same hole 33 dB deep (3617, 59024: not heard)
         auto st = stopStats(1000, -20.0);
@@ -336,16 +336,31 @@ static void testEvaluateStops()
     {   // S13: lasting stop of 32 dB (24238: click)
         auto st = stopStats(1000, -20.0);
         setBlocks(st, 3000, 3020, -52.0);
-        check(TTAudioAnomalyScanTask::evaluateStops(st).size() == 1, "S13 lasting stop of 32 dB -> 1 finding");
+        const auto f = TTAudioAnomalyScanTask::evaluateStops(st);
+        check(f.size() == 1 && f[0].kind == Kind::LastingStop, "S13 lasting stop of 32 dB -> 1 finding, a lasting stop");
     }
     {   // S14: 40 dB down, then back only to 12 dB below the level before:
         // the sound is not "back", so this is a lasting stop, not a hole
         auto st = stopStats(1000, -20.0);
         setBlocks(st, 3000, 3002, -60.0);
         setBlocks(st, 3002, 3600, -32.0);
-        check(TTAudioAnomalyScanTask::evaluateStops(st).size() == 1,
+        const auto f = TTAudioAnomalyScanTask::evaluateStops(st);
+        check(f.size() == 1 && f[0].kind == Kind::LastingStop,
               "S14 40 dB down, back to 12 dB below only -> lasting stop, 1 finding");
     }
+    {   // S15: a hole and a lasting stop within 100 ms are one finding; its kind is that of the larger drop
+        auto st = stopStats(1000, -20.0);
+        setBlocks(st, 3000, 3002, -72.0);
+        setBlocks(st, 3012, 3040, -52.0);
+        const auto f = TTAudioAnomalyScanTask::evaluateStops(st);
+        check(f.size() == 1 && f[0].kind == Kind::Hole && qAbs(f[0].dropDb - 52.0f) < 0.5f,
+              QString("S15 hole and stop 64 ms apart -> 1 finding, a hole of 52 dB (got %1)").arg(f.size()));
+    }
+    check(TTStreamPoint::anomalyKindToString(AudioAnomalyKind::LastingStop) == "LastingStop"
+              && TTStreamPoint::stringToAnomalyKind("LastingStop") == AudioAnomalyKind::LastingStop
+              && TTStreamPoint::anomalyKindToString(AudioAnomalyKind::Hole) == "Hole"
+              && TTStreamPoint::stringToAnomalyKind("Hole") == AudioAnomalyKind::Hole,
+          "project texts of the kinds LastingStop and Hole");
 }
 
 static void testVideoFrameForTime()
@@ -540,11 +555,13 @@ static void testStopIntegration()
             check(points[0].hasAudioFrameRange() && points[0].audioFrameTo() - points[0].audioFrameFrom() == 2,
                   "stop marker covers three AC3 frames");
             check(points[0].audioChannelMask() == wantMask, QString("stop marker carries mask %1").arg(wantMask));
-            // Muting does not help at an abrupt stop (heard and measured
-            // 2026-10-05): the marker says what it is, and no new repair is
-            // offered for it.
-            check(points[0].audioAnomalyKind() == AudioAnomalyKind::AbruptStop, "stop marker carries its kind");
-            check(!points[0].offersNewAudioRepair(), "no new repair is offered for a stop marker");
+            // A lasting stop is repaired by a fade-out; nothing fills a hole yet.
+            check(points[0].audioAnomalyKind() == AudioAnomalyKind::LastingStop, "stop marker carries its kind");
+            check(points[0].offersNewAudioRepair(), "a repair is offered for a lasting stop");
+            check(points[1].audioAnomalyKind() == AudioAnomalyKind::Hole, "hole marker carries its kind");
+            check(points[1].description().startsWith("Audio anomaly: hole in the sound (track 1, depth "),
+                  "hole marker text: " + points[1].description());
+            check(!points[1].offersNewAudioRepair(), "no repair is offered for a hole marker");
             check(points[0].frameIndex() < points[1].frameIndex(), "markers ordered by position");
             check(qAbs(points[0].frameIndex() - 249) <= 2, QString("first stop marker near video frame 249 (got %1)").arg(points[0].frameIndex()));
         }
@@ -667,8 +684,9 @@ static int runRealFileGate(const QString& file, int trackIndex, double frameRate
         const qint64 mid = f.frameTo - f.frameFrom == 2 ? f.frameFrom + 1 : f.frameFrom;
         // QString::number, not printf: the harness runs under the user's
         // locale and "%.3f" prints a decimal comma there.
-        printf("STOP %s %s %d\n", qPrintable(QString::number(mid * (1536.0 / 48000.0), 'f', 3)),
-               qPrintable(QString::number(f.dropDb, 'f', 1)), int(f.channelMask));
+        printf("STOP %s %s %d %s\n", qPrintable(QString::number(mid * (1536.0 / 48000.0), 'f', 3)),
+               qPrintable(QString::number(f.dropDb, 'f', 1)), int(f.channelMask),
+               f.kind == TTAudioAnomalyScanTask::FindingKind::Hole ? "hole" : "stop");
     }
 
     // Levels around given times (arguments 4..): what evaluateStops() sees at

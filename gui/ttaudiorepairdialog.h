@@ -15,6 +15,7 @@
 #include <QtGlobal>
 
 #include "../data/ttstreampoint.h"
+#include "../extern/ttaudiorepairitem.h"
 
 class QCheckBox;
 class QSpinBox;
@@ -31,6 +32,12 @@ class TTMpvWrapper;
 // write (or update) exactly one TTAudioRepairItem on the given TTAVItem.
 // The widget that opens it jumps the main window to the marker's frame
 // first (TTStreamPointWidget::handleContextAction).
+//
+// Two views, by repair method: the stored method when a repair is edited,
+// else the marker's kind. "silence-fade": channel boxes and start/end of the
+// range. "fade-out" (a lasting stop): where the fade-out ends - found by
+// TTAudioRepair::findStop, adjustable inside the marker's frames - and how
+// long it is; it applies to every channel.
 //
 // Code-based (no .ui file) - deliberately sidesteps this project's AUTOUIC-
 // stash-race pitfall (docs/code-map note reference_autouic_stash_race.md).
@@ -99,6 +106,11 @@ public:
   QSpinBox* startSpinBoxForTest() const  { return mSpinFrom; }
   QSpinBox* endSpinBoxForTest() const    { return mSpinTo; }
   QCheckBox* channelCheckBoxForTest(int channel) const { return mChkChannel[channel]; }
+  // The fade-out view's fields; null in the silence view, as the three
+  // accessors above are null in the fade-out view.
+  QSpinBox* fadeEndSpinBoxForTest() const    { return mSpinFadeEnd; }
+  QSpinBox* fadeLengthSpinBoxForTest() const { return mSpinFadeLen; }
+  QLabel*   hintLabelForTest() const         { return mLblHint; }
   // Review fix 2 (round 2): drives playFile() directly, bypassing
   // writePreviewWindow()'s own file-existence pre-check, so a harness can
   // provoke a genuine mpv-level load failure (nonexistent/unreadable path)
@@ -146,6 +158,9 @@ private:
   qint64 currentFrameFrom() const;
   qint64 currentFrameTo() const;
   quint8 currentChannelMask() const;
+  // What the dialog would store now: the one item audition, the probe build
+  // and "Plan repair" all use.
+  TTAudioRepairItem currentItem() const;
   // Writes a +/-3s window copy of the source AC3 around the current
   // [from,to] range to TTSettings::tempDirPath(), optionally substituting
   // buildRepairTable()'s replacement bytes for frames inside that range.
@@ -185,10 +200,22 @@ private:
   QString       mPreviewPathBefore;
   QString       mPreviewPathAfter;
 
+  // Fade-out view. The end of the fade-out is kept in samples: the spin box
+  // shows whole ms, a step moves the sample position by one ms.
+  bool          mFadeOut = false;
+  qint64        mFadeEndSample = 0;
+  int           mSilenceSamples = 0;
+  int           mSamplesPerMs = 48;
+  int           mShownFadeEndMs = 0;
+  quint8        mFadeMask = 0;
+
   QLabel*      mLblHeader      = nullptr;
   QCheckBox*   mChkChannel[6]  = {};       // order: FL FR C LFE SL SR
   QSpinBox*    mSpinFrom       = nullptr;
   QSpinBox*    mSpinTo         = nullptr;
+  QSpinBox*    mSpinFadeEnd    = nullptr;
+  QSpinBox*    mSpinFadeLen    = nullptr;
+  QLabel*      mLblHint        = nullptr;
   QPushButton* mBtnPlayOriginal = nullptr;
   QPushButton* mBtnPlayRepaired = nullptr;
   QVBoxLayout* mMainLayout      = nullptr;

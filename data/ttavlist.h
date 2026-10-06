@@ -130,7 +130,7 @@ class TTAVItem : public QObject
     void checkAudioCompat(const TTAVItem* avItem) const;
 
     //! Repairs are tagged with the track index of the file they belong to.
-    //! Rebuild every repair with newTrack(oldTrack) - or drop it when that
+    //! Give every repair the track newTrack(oldTrack) - or drop it when that
     //! returns -1 - after the audio list was shortened or reordered.
     void remapAudioRepairTracks(const std::function<int(int)>& newTrack);
 

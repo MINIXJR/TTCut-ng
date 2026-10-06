@@ -11,10 +11,10 @@
 //   3. a hand-placed marker is deleted without a question
 //   4. Delete all with a repair behind one marker, Yes: all markers and the
 //      repair go
-//   5. the context menu offers a new repair for an LFE marker and for a
-//      marker without a kind, not for an abrupt stop - muting does not help
-//      there (heard and measured 2026-10-05); a repair that already exists
-//      behind a stop marker stays editable and removable
+//   5. the context menu offers a new repair for an LFE marker, for a marker
+//      without a kind and for a lasting stop (fade-out), not for a hole and
+//      not for a stop whose form was not recorded; a repair that already
+//      exists behind a stop marker stays editable and removable
 //   6. a context menu closed without a choice does nothing - it used to
 //      open the repair dialog (user report 2026-10-05), on any marker
 //   7. "Repair..." jumps the main window to the marker and opens the dialog;
@@ -189,6 +189,8 @@ int main(int argc, char** argv)
     marker(200, 250, "AbruptStop");   // stop marker without
     marker(300, 375, "LfeBurst");
     marker(400, 500, QString());      // older project file: no kind
+    marker(700, 875, "LastingStop");
+    marker(800, 1000, "Hole");
     o << " <StreamPoint><Frame>600</Frame><Type>ManualMarker</Type><Description>hand marker</Description>"
          "<Confidence>1.00</Confidence><Duration>0.00</Duration></StreamPoint>\n";
     o << "</TTCut-Projectfile>\n";
@@ -196,7 +198,7 @@ int main(int argc, char** argv)
 
     window.openProjectFile(project5);
     pump(5000);
-    check(model->rowCount() == 5, QString("5: five markers loaded (got %1)").arg(model->rowCount()));
+    check(model->rowCount() == 7, QString("5: seven markers loaded (got %1)").arg(model->rowCount()));
     auto rowAt = [&](int frame) {
       for (int i = 0; i < model->rowCount(); i++) if (model->pointAt(i).frameIndex() == frame) return i;
       return -1;
@@ -210,6 +212,8 @@ int main(int argc, char** argv)
           "5: stop marker without a repair: no repair action at all");
     check(offers(300, "Repair..."), "5: LFE marker: a new repair is offered");
     check(offers(400, "Repair..."), "5: anomaly marker without a kind: a new repair is offered");
+    check(offers(700, "Repair..."), "5: lasting stop: a new repair is offered");
+    check(!offers(800, "Repair..."), "5: hole: no repair is offered");
 
     // 6. open the context menu on a marker and close it without choosing
     auto* list = widget->findChild<QListView*>();

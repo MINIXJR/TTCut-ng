@@ -26,6 +26,7 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFileInfo>
+#include <QLabel>
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QPushButton>
@@ -40,6 +41,7 @@
 #include "data/ttavlist.h"
 #include "data/ttaudioanomalyscantask.h"
 #include "data/ttstreampoint.h"
+#include "extern/ttaudiorepair.h"
 #include "extern/ttaudiorepairitem.h"
 #include "avstream/ttavstream.h"
 #include "gui/ttaudiorepairdialog.h"
@@ -467,6 +469,110 @@ int main(int argc, char** argv)
             if (stereoItem->audioRepairList().size() == 1)
                 check(stereoItem->audioRepairList().first().channelMask() == 0x03,
                       "the stored repair carries L+R");
+        }
+    }
+
+    // --- Case 8: the fade-out view (spec 2026-10-05). Fixture: sound stops in
+    // mid-wave at 10.003 s (AC3 frame 312), steady tone before.
+    {
+        const QString stopFile = QStringLiteral("/usr/local/src/CLAUDE_TMP/TTCut-ng/stop_sample_5.1.ac3");
+        if (!QFileInfo::exists(stopFile))
+            QProcess::execute(QStringLiteral("/usr/local/src/TTCut-ng/tools/diag/make_stop_sample.sh"),
+                              {stopFile, QStringLiteral("5.1")});
+        TTAudioType    stopType(stopFile);
+        TTAudioStream* stopStream = stopType.createAudioStream();
+        check(stopStream != nullptr, "fade view: stop fixture opened");
+        if (stopStream) {
+            stopStream->createHeaderList();
+            TTAVItem* stopItem = new TTAVItem(nullptr);
+            stopItem->appendAudioEntry(stopStream);
+            QString err;
+            const TTAudioRepair::StopPlacement sp = TTAudioRepair::findStop(stopFile, 312, 314, &err);
+            check(sp.found, "fade view: the fixture's stop is found (" + err + ")");
+
+            TTStreamPoint stop(250, StreamPointType::AudioAnomaly, "x", 0.0f, 0.096f);
+            stop.setAudioFrameRange(312, 314);
+            stop.setAudioChannelMask(0x3F);
+            stop.setAudioAnomalyKind(AudioAnomalyKind::LastingStop);
+            check(stop.offersNewAudioRepair(), "a repair is offered for a lasting stop");
+            {
+                TTAudioRepairDialog d(stopItem, stop, 0, QList<int>(), nullptr);
+                QSpinBox* end = d.fadeEndSpinBoxForTest();
+                QSpinBox* len = d.fadeLengthSpinBoxForTest();
+                check(end && len && d.hintLabelForTest(), "fade view: its fields exist");
+                check(!d.startSpinBoxForTest() && !d.endSpinBoxForTest() && !d.channelCheckBoxForTest(0),
+                      "fade view: no start/end fields, no channel boxes");
+                if (end && len) {
+                    check(end->value() == qRound(sp.fadeEnd / 48.0) && len->value() == 20,
+                          QString("fade view: prefilled from the search, length 20 (got %1 ms, %2)").arg(end->value()).arg(len->value()));
+                    check(end->minimum() == 312 * 32 && end->maximum() == 315 * 32 && end->singleStep() == 1,
+                          "fade view: the end moves in 1 ms steps inside the marker's frames");
+                    check(len->minimum() == 10 && len->maximum() == 100, "fade view: length 10 to 100 ms");
+                    check(d.hintLabelForTest()->isHidden(), "fade view: no hint when the stop was found");
+                    d.accept();
+                    const QList<TTAudioRepairItem> r = stopItem->audioRepairList();
+                    check(r.size() == 1 && r.first().isFadeOut() && r.first().fadeEnd() == sp.fadeEnd
+                              && r.first().fadeLength() == 960 && r.first().silenceLength() == sp.silence
+                              && r.first().channelMask() == 0x3F,
+                          "fade view: \"Plan repair\" stores the found position sample-exact, 20 ms, the silence, all channels");
+                }
+            }
+            {   // editing: the stored values, moved by 2 ms and 50 ms long
+                TTAudioRepairDialog d(stopItem, stop, 0, QList<int>(), nullptr);
+                QSpinBox* end = d.fadeEndSpinBoxForTest();
+                QSpinBox* len = d.fadeLengthSpinBoxForTest();
+                check(end && len && end->value() == qRound(sp.fadeEnd / 48.0) && len->value() == 20,
+                      "fade view: editing shows the stored values");
+                if (end && len) {
+                    end->setValue(end->value() + 2);
+                    len->setValue(50);
+                    d.accept();
+                    const QList<TTAudioRepairItem> r = stopItem->audioRepairList();
+                    check(r.size() == 1 && r.first().fadeEnd() == sp.fadeEnd + 96 && r.first().fadeLength() == 2400
+                              && r.first().silenceLength() == sp.silence,
+                          "fade view: an edit replaces the repair; a step moves the end by 48 samples");
+                    const TTAudioRepairItem want = TTAudioRepair::makeFadeOutItem(0, 0x3F, sp.fadeEnd + 96, 2400, sp.silence, 48000);
+                    check(r.size() == 1 && r.first().frameFrom() == want.frameFrom() && r.first().frameTo() == want.frameTo(),
+                          "fade view: the frame range follows the values");
+                }
+            }
+            stopItem->clearAudioRepairs();
+            {   // nothing to find: steady tone in frames 100-102
+                TTStreamPoint steady = stop;
+                steady.setAudioFrameRange(100, 102);
+                TTAudioRepairDialog d(stopItem, steady, 0, QList<int>(), nullptr);
+                check(d.fadeEndSpinBoxForTest() && d.fadeEndSpinBoxForTest()->value() == 101 * 32
+                          && !d.hintLabelForTest()->isHidden(),
+                      "fade view: nothing found - the field stands on the start of the middle frame, the hint shows");
+                d.accept();
+                const QList<TTAudioRepairItem> r = stopItem->audioRepairList();
+                check(r.size() == 1 && r.first().fadeEnd() == 101 * 1536 && r.first().silenceLength() == 48,
+                      "fade view: nothing found - silence of 1 ms");
+            }
+            stopItem->clearAudioRepairs();
+            {   // Review focus 2: the fade would start before the track
+                TTStreamPoint early = stop;
+                early.setAudioFrameRange(0, 2);
+                TTAudioRepairDialog d(stopItem, early, 0, QList<int>(), nullptr);
+                if (d.fadeEndSpinBoxForTest()) d.fadeEndSpinBoxForTest()->setValue(d.fadeEndSpinBoxForTest()->minimum());
+                boxes.clear();
+                d.accept();
+                check(stopItem->audioRepairList().isEmpty() && boxes.size() == 1 && boxes.first().contains("before the beginning"),
+                      "fade view: a fade before the start of the track is refused: " + boxes.join(" | "));
+            }
+            {   // Review focus 4: a silence repair behind a legacy stop marker opens in the old view
+                TTStreamPoint legacy = stop;
+                legacy.setAudioAnomalyKind(AudioAnomalyKind::AbruptStop);
+                check(!legacy.offersNewAudioRepair(), "no repair is offered for a legacy stop marker");
+                stopItem->appendAudioRepair(TTAudioRepairItem(0, 312, 314, 0x3F));
+                TTAudioRepairDialog d(stopItem, legacy, 0, QList<int>(), nullptr);
+                check(d.startSpinBoxForTest() && !d.fadeEndSpinBoxForTest(),
+                      "an existing silence repair is edited in the silence view, whatever the marker's kind");
+                stopItem->clearAudioRepairs();
+            }
+            TTStreamPoint hole = stop;
+            hole.setAudioAnomalyKind(AudioAnomalyKind::Hole);
+            check(!hole.offersNewAudioRepair(), "no repair is offered for a hole marker");
         }
     }
 

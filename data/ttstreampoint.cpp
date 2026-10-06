@@ -85,6 +85,8 @@ QString TTStreamPoint::anomalyKindToString(AudioAnomalyKind kind)
   switch (kind) {
     case AudioAnomalyKind::LfeBurst:   return "LfeBurst";
     case AudioAnomalyKind::AbruptStop: return "AbruptStop";
+    case AudioAnomalyKind::LastingStop: return "LastingStop";
+    case AudioAnomalyKind::Hole:       return "Hole";
     case AudioAnomalyKind::Unknown:    break;
   }
   return QString();
@@ -94,6 +96,8 @@ AudioAnomalyKind TTStreamPoint::stringToAnomalyKind(const QString& str)
 {
   if (str == "LfeBurst")   return AudioAnomalyKind::LfeBurst;
   if (str == "AbruptStop") return AudioAnomalyKind::AbruptStop;
+  if (str == "LastingStop") return AudioAnomalyKind::LastingStop;
+  if (str == "Hole")       return AudioAnomalyKind::Hole;
   return AudioAnomalyKind::Unknown;
 }
 

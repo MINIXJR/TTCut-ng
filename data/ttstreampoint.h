@@ -33,7 +33,9 @@ enum class StreamPointType {
 enum class AudioAnomalyKind {
   Unknown = 0,
   LfeBurst,     // short burst in centre and LFE
-  AbruptStop    // the sound of all channels stops abruptly
+  AbruptStop,   // a stop whose form was not recorded (projects of 2026-10-04/05)
+  LastingStop,  // the sound of all channels stops and stays away
+  Hole          // the sound is back within 32 ms
 };
 
 class TTStreamPoint
@@ -76,13 +78,15 @@ public:
   // known: every other marker type, and markers from older project files.
   quint8           audioChannelMask() const { return mAudioChannelMask; }
   AudioAnomalyKind audioAnomalyKind() const { return mAudioAnomalyKind; }
-  // Whether a new repair is offered for this marker. Not for an abrupt
-  // stop: the repair mutes channels with a short fade, which ends as hard as
-  // the stop itself (heard and measured 2026-10-05, TODO.md). A repair that
-  // already exists behind such a marker stays editable and removable.
+  // Whether a new repair is offered for this marker: muting for an LFE
+  // finding (and for a marker without a kind, which was one), a fade-out for
+  // a lasting stop. Not for a hole (nothing built yet fills one) and not for
+  // a stop whose form was not recorded. A repair that already exists behind
+  // any marker stays editable and removable.
   bool             offersNewAudioRepair() const
                      { return mType == StreamPointType::AudioAnomaly
-                           && mAudioAnomalyKind != AudioAnomalyKind::AbruptStop; }
+                           && mAudioAnomalyKind != AudioAnomalyKind::AbruptStop
+                           && mAudioAnomalyKind != AudioAnomalyKind::Hole; }
 
   void setFrameIndex(int index)              { mFrameIndex = index; }
   void setDescription(const QString& desc)   { mDescription = desc; }

@@ -781,6 +781,10 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <translation>Tonanomalie: Ton bricht ab (Spur %1, Abfall %2 dB)</translation>
     </message>
     <message>
+        <source>Audio anomaly: hole in the sound (track %1, depth %2 dB)</source>
+        <translation>Tonanomalie: Loch im Ton (Spur %1, Tiefe %2 dB)</translation>
+    </message>
+    <message>
         <location filename="../data/ttaudioanomalyscantask.cpp" line="482"/>
         <source> (overlaps gap repair)</source>
         <translation> (überschneidet sich mit Lücken-Reparatur)</translation>
@@ -940,6 +944,22 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
     <message>
         <source>Plan repair</source>
         <translation>Vormerken</translation>
+    </message>
+    <message>
+        <source>Repair: fade-out before the stop</source>
+        <translation>Reparatur: Ausblenden vor dem Abbruch</translation>
+    </message>
+    <message>
+        <source>Fade-out ends at (ms)</source>
+        <translation>Ausblenden endet bei (ms)</translation>
+    </message>
+    <message>
+        <source>Length (ms)</source>
+        <translation>Länge (ms)</translation>
+    </message>
+    <message>
+        <source>No stop found. Please set the end of the fade-out by ear.</source>
+        <translation>Kein Abbruch gefunden. Bitte das Ende der Ausblendung nach Gehör einstellen.</translation>
     </message>
     <message>
         <location filename="../gui/ttaudiorepairdialog.cpp" line="300"/>

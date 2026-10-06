@@ -358,6 +358,55 @@ static void testMixedTargetSpan()
               .arg(reasons.join(" | ")));
 }
 
+// A fade-out repair in the cut: applied, named in the note, and every frame
+// outside its range byte-identical to a cut without it.
+static void testFadeOutCut()
+{
+    const QString stopFile = QStringLiteral("/usr/local/src/CLAUDE_TMP/TTCut-ng/stop_sample_5.1.ac3");
+    if (!QFileInfo::exists(stopFile))
+        QProcess::execute(QStringLiteral("/usr/local/src/TTCut-ng/tools/diag/make_stop_sample.sh"),
+                          {stopFile, QStringLiteral("5.1")});
+    QString err;
+    const TTAudioRepair::StopPlacement sp = TTAudioRepair::findStop(stopFile, 312, 314, &err);
+    check(sp.found, "fade-out cut: stop found in the fixture (" + err + ")");
+    if (!sp.found) return;
+    const TTAudioRepairItem repair = TTAudioRepair::makeFadeOutItem(0, 0x3F, sp.fadeEnd, 960, sp.silence, 48000);
+
+    const QString dir = QFileInfo(stopFile).absolutePath();
+    auto cut = [&](bool withRepair, const QString& outFile, QStringList* notes) {
+        TTAudioType    aType(stopFile);
+        TTAudioStream* aStream = aType.createAudioStream();
+        if (!aStream) return false;
+        aStream->createHeaderList();
+        TTAVItem* avItem = new TTAVItem(nullptr);
+        avItem->appendAudioEntry(aStream);
+        if (withRepair) avItem->appendAudioRepair(repair);
+        QFile::remove(outFile);
+        TTAVData avData;
+        bool ok = false;
+        avData.cutAudioTracks(avItem, {0}, {qMakePair(5.0, 15.0)}, false,
+            [&](int, const QString&) { return outFile; },
+            [&](int, const QString&, const QString&, bool cutOk) { ok = cutOk; });
+        if (notes) *notes = avData.audioRepairNotes();
+        return ok;
+    };
+    const QString plain = QDir(dir).absoluteFilePath("test_fadeout_cut_plain.ac3");
+    const QString faded = QDir(dir).absoluteFilePath("test_fadeout_cut_faded.ac3");
+    QStringList notes;
+    check(cut(false, plain, nullptr) && cut(true, faded, &notes), "fade-out cut: both cuts succeeded");
+    const int frames = int(repair.frameTo() - repair.frameFrom() + 1);
+    check(notes == QStringList{QString("Audio track 1: repairs applied: 1 (frames replaced: %1)").arg(frames)},
+          "fade-out cut: the note names the repair: " + notes.join(" | "));
+    QVector<QByteArray> a, b;
+    check(readAllFrames(plain, a, err) && readAllFrames(faded, b, err) && a.size() == b.size(),
+          "fade-out cut: both outputs read, same frame count");
+    int differing = 0;
+    for (int i = 0; i < a.size() && i < b.size(); ++i) if (a[i] != b[i]) ++differing;
+    check(differing == frames, QString("fade-out cut: exactly the repaired frame(s) differ (%1 of %2)").arg(differing).arg(frames));
+    QFile::remove(plain);
+    QFile::remove(faded);
+}
+
 int main(int argc, char** argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -518,6 +567,7 @@ int main(int argc, char** argv)
     // --- Step 5: segment-boundary span, same and mixed targets --------------
     testSegmentBoundarySpan();
     testRepairNotes();
+    testFadeOutCut();
     testMixedTargetSpan();
 
     printf("\n%s (%d failures)\n", gFailures == 0 ? "ALL PASS" : "FAILED", gFailures);

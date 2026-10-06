@@ -100,18 +100,13 @@ void TTAVItem::onRemoveAudioItem(int index)
 
 void TTAVItem::remapAudioRepairTracks(const std::function<int(int)>& newTrack)
 {
-  // TTAudioRepairItem tags itself with a track index and has no setter for
-  // it (extern/ttaudiorepairitem.h) - rebuild via the full constructor
-  // (isEnabled() carried over explicitly, the constructor defaults it to
-  // true).
   QList<TTAudioRepairItem> updatedRepairs;
   for (const TTAudioRepairItem& repair : mAudioRepairs) {
     const int track = newTrack(repair.trackIndex());
     if (track < 0) continue;
-    TTAudioRepairItem rebuilt(track, repair.frameFrom(), repair.frameTo(),
-                               repair.channelMask(), repair.method());
-    rebuilt.setEnabled(repair.isEnabled());
-    updatedRepairs.append(rebuilt);
+    TTAudioRepairItem moved = repair;     // keeps method, fade values and the enabled flag
+    moved.setTrackIndex(track);
+    updatedRepairs.append(moved);
   }
   mAudioRepairs = updatedRepairs;
 }
