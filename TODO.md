@@ -433,6 +433,18 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     Tonende bei Pegel davor −12 dB, Sprung ab dem 20-fachen des üblichen
     Schritts in den 15 ms davor. Findet sie nichts, sagt der Dialog das und
     der Anwender stellt das Ende nach Gehör ein.
+  - **Ausblend-Reparatur: drei Kleinigkeiten aus der Abschluss-Prüfung**
+    (2026-10-06, alle am Code gelesen, keine ausprobiert oder gemessen):
+    - Eine beim Laden deaktivierte Ausblend-Reparatur, der die drei Werte
+      fehlen (beschädigte Projektdatei), öffnet in der Ausblend-Ansicht mit
+      Stille 0; „Vormerken" lehnt dann immer mit „invalid fade-out values"
+      ab, was der Anwender auch einstellt. Ausweg heute: „Reparatur
+      entfernen", dann „Reparieren..." (neue Suche).
+    - `TTAudioRepair::findStop` dekodiert über `walkRange` und kodiert dabei
+      die fünf Frames neu, die es nur liest.
+    - `locateStop` nimmt als „üblichen Schritt" den Median der 20 ms vor
+      einem Sample. Nach digitaler Stille ist der 0, und der erste Tonwert
+      zählt als Sprung.
   - **Idee: Vergleich mit der zweiten Tonspur.** Gemessen auf 02x06: alle
     fünf Löcher gibt es nur in der AC3-Spur, die MP2-Spur spielt durch; die
     Spuren liegen an allen sieben geprüften Stellen 8,6 ms versetzt
