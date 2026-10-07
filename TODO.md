@@ -52,17 +52,19 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
        durchgehend, 05x06 −4…0, Tatort −12…+8, 05x08 unverändert 0 Edits;
        Remington (MPEG-2 interlaced) ±14 und PTS-Umlauf +5 nur gerechnet.
        05x06 damit durch den echten Schnitt: −12/−8 ms (heute +252/+328).**
-       Hörproben: `CLAUDE_TMP/TTCut-ng/demux-shift/chain/hoeren/`.
+       Hörproben wurden gebaut und gehört (2026-10-07), Dateien gelöscht;
+       Befehle im Projekt-Memory.
   - **Rest nach 1 und 2:** −12 bis −36 ms (Ton zu früh): Rest unterhalb einer
     Framelänge am ES-Anfang plus Rundung am Schnitt-Anfang, beide in dieselbe
     Richtung. `audio_N_first_pts` und `audio_N_trimmed_ms` liest `TTESInfo`,
     verwendet sie aber niemand; `av_offset_ms` gilt für alle Spuren und kommt
     von Spur 0 (Whitney: Spuren untereinander bis 84 ms auseinander).
-  - Messwerkzeuge (ungesichert): `CLAUDE_TMP/TTCut-ng/demux-shift/chain/`
-    (`prep.sh`, `mid.sh`, `chain.py` = Kette bis zur MKV; `zoneaudit.py` =
-    ganze Aufnahme ohne Schnitt; `zonesim.py` + `applyrule.py` = Regel
-    rechnen und ES bauen; `probe_packets.py`; Ergebnisse `chain-result.txt`,
-    `nas-result.txt`), Skriptkopien `variants/k4`/`k5` (Bezugsbild).
+  - Messwerkzeuge: `tools/diag/scratch/av-sync-2026-10-07/` (README dort;
+    `chain.py` = Kette bis zur MKV; `zoneaudit.py` = ganze Aufnahme ohne
+    Schnitt; `zonesim.py` + `applyrule.py` = Regel rechnen und ES bauen;
+    Ergebnisse `chain-result.txt`, `nas-result.txt`). Paketlisten
+    (`pk/*.pickle`, regenerierbar) und Skriptkopien `variants/` nur unter
+    `CLAUDE_TMP/TTCut-ng/demux-shift/`.
 - **ttcut-demux: Ton 120–136 ms zu spät im ES** (gefunden 2026-10-07,
   noch nicht behoben)
   - **Gemessen:** „Babylon Berlin 05x08": alle drei MP2-Spuren +136 ms gegen
@@ -102,10 +104,9 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     an den Zeitstempeln des `.m2ts`, nicht an einer MKV, nicht gehört): MP2
     60 ms, AC3 156 ms später zum Bild als im Original.
   - Vorhandene ES-Dateien behalten ihren Versatz; nach dem Fix neu demuxen.
-  - Messwerkzeuge (ungesichert): `CLAUDE_TMP/TTCut-ng/demux-shift/`
-    (`survey.py` bildet Remux-Pakete per MD5 auf die Originalpakete ab,
-    `survey-all.txt`, `order.py`) und `CLAUDE_TMP/TTCut-ng/donor-guard/`
-    (`where0.py`: welcher Original-Frame ist Frame 0 eines ES).
+  - Messwerkzeuge: `tools/diag/scratch/av-sync-2026-10-07/` (`survey.py`
+    bildet Remux-Pakete per MD5 auf die Originalpakete ab, `survey-all.txt`,
+    `order.py`, `es_start.py`).
 
 ## Medium Priority
 

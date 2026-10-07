@@ -1,0 +1,120 @@
+== Serien/Babylon_Berlin/05x05_-_Folge_5_(TV)/2026-09-25.22.05.1-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 21 (erste: [h264 @ 0x5595d2548440] mmco: unref short failure)
+   Bild Spur 0 h264: erstes Paket PTS 11646.372956, kleinstes PTS in 2 s 11646.232956 (Abstand 140 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 355, Spur 2 mp2: 355, Spur 3 mp2: 355, Spur 4 ac3: 264
+   remuxt Spur 0 h264 (Original-Spur 0): 552 Pakete, 44 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 11644.100956 (1 Pakete); ab Paket 1: 11644.080945 (1 Pakete); ab Paket 2: 11644.040934 (1 Pakete); ab Paket 3: 11643.960956 (505 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 492 Pakete, 66 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 11643.960956 (426 Pakete)
+   remuxt Spur 2 mp2 (Original-Spur 2): 492 Pakete, 66 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 11643.960956 (426 Pakete)
+   remuxt Spur 3 mp2 (Original-Spur 3): 490 Pakete, 64 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 11643.960956 (426 Pakete)
+   remuxt Spur 4 ac3 (Original-Spur 4): 370 Pakete, 53 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 11643.960956 (317 Pakete)
+   -> Spur 0: ABWEICHUNG +140.0 ms bei Paket 0 (1 Pakete), +120.0 ms bei Paket 1 (1 Pakete), +80.0 ms bei Paket 2 (1 Pakete)
+   -> Spur 1: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+   -> Spur 2: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+   -> Spur 3: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+   -> Spur 4: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+== Serien/Babylon_Berlin/05x06_-_Folge_6_(TV)/2026-09-25.22.45.1-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 43 (erste: [h264 @ 0x5609184d5440] mmco: unref short failure)
+   Bild Spur 0 h264: erstes Paket PTS 14045.572956, kleinstes PTS in 2 s 14045.432956 (Abstand 140 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 395, Spur 2 mp2: 395, Spur 3 mp2: 395, Spur 4 ac3: 294
+   remuxt Spur 0 h264 (Original-Spur 0): 557 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 14043.336956 (1 Pakete); ab Paket 1: 14043.316945 (1 Pakete); ab Paket 2: 14043.276934 (1 Pakete); ab Paket 3: 14043.196956 (554 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 492 Pakete, 18 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 14043.336956 (6 Pakete); ab Paket 6: 14043.196956 (468 Pakete)
+   remuxt Spur 2 mp2 (Original-Spur 2): 492 Pakete, 18 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 14043.336956 (6 Pakete); ab Paket 6: 14043.196956 (468 Pakete)
+   remuxt Spur 3 mp2 (Original-Spur 3): 490 Pakete, 16 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 14043.336956 (10 Pakete); ab Paket 10: 14043.196956 (464 Pakete)
+   remuxt Spur 4 ac3 (Original-Spur 4): 366 Pakete, 13 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 14043.196956 (353 Pakete)
+   -> Spur 0: ABWEICHUNG +140.0 ms bei Paket 0 (1 Pakete), +120.0 ms bei Paket 1 (1 Pakete), +80.0 ms bei Paket 2 (1 Pakete)
+   -> Spur 1: ABWEICHUNG +140.0 ms bei Paket 0 (6 Pakete), Hauptabstand gegen Bild +0.0 ms
+   -> Spur 2: ABWEICHUNG +140.0 ms bei Paket 0 (6 Pakete), Hauptabstand gegen Bild +0.0 ms
+   -> Spur 3: ABWEICHUNG +140.0 ms bei Paket 0 (10 Pakete), Hauptabstand gegen Bild +0.0 ms
+   -> Spur 4: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+== Serien/Babylon_Berlin/05x07_-_Folge_7_(TV)/2026-09-25.23.25.1-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 27 (erste: [h264 @ 0x5583067c0440] mmco: unref short failure)
+   Bild Spur 0 h264: erstes Paket PTS 16445.572956, kleinstes PTS in 2 s 16445.432956 (Abstand 140 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 430, Spur 2 mp2: 430, Spur 3 mp2: 435, Spur 4 ac3: 324
+   remuxt Spur 0 h264 (Original-Spur 0): 550 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 16443.240956 (1 Pakete); ab Paket 1: 16443.220945 (1 Pakete); ab Paket 2: 16443.180934 (1 Pakete); ab Paket 3: 16443.100956 (547 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 489 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 16443.100956 (489 Pakete)
+   remuxt Spur 2 mp2 (Original-Spur 2): 489 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 16443.100956 (489 Pakete)
+   remuxt Spur 3 mp2 (Original-Spur 3): 490 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 16443.240956 (10 Pakete); ab Paket 10: 16443.100956 (480 Pakete)
+   remuxt Spur 4 ac3 (Original-Spur 4): 368 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 16443.100956 (368 Pakete)
+   -> Spur 0: ABWEICHUNG +140.0 ms bei Paket 0 (1 Pakete), +120.0 ms bei Paket 1 (1 Pakete), +80.0 ms bei Paket 2 (1 Pakete)
+   -> Spur 1: fester Abstand, Hauptabstand gegen Bild -0.0 ms
+   -> Spur 2: fester Abstand, Hauptabstand gegen Bild -0.0 ms
+   -> Spur 3: ABWEICHUNG +140.0 ms bei Paket 0 (10 Pakete), Hauptabstand gegen Bild +0.0 ms
+   -> Spur 4: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+== Serien/MPEG2_SD576p25_16-9_audio-anomaly-LFE-center-burst-frame51120_MP2-2.0-deu-AC3-5.1-deu_ProSieben-Inside-the-Simpsons-02x06/2024-03-26.02.18.12-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 12 (erste: [in#0/mpegts @ 0x55cd58e19c40] PES packet size mismatch)
+   Bild Spur 0 mpeg2video: erstes Paket PTS 37049.233222, kleinstes PTS in 2 s 37049.153222 (Abstand 80 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 410, Spur 2 ac3: 295
+   remuxt Spur 0 mpeg2video (Original-Spur 0): 291 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 37047.393222 (291 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 495 Pakete, 3 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 37047.393222 (492 Pakete)
+   remuxt Spur 2 ac3 (Original-Spur 2): 375 Pakete, 6 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 37047.393222 (369 Pakete)
+   -> Spur 0: fester Abstand
+   -> Spur 1: fester Abstand, Hauptabstand gegen Bild -0.0 ms
+   -> Spur 2: fester Abstand, Hauptabstand gegen Bild -0.0 ms
+== Serien/Navy_CIS/23x14_-_Fleet_Week/2026-09-22.19.59.3-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 12 (erste: [in#0/mpegts @ 0x55e0acd72c40] PES packet size mismatch)
+   Bild Spur 0 mpeg2video: erstes Paket PTS 75516.221878, kleinstes PTS in 2 s 75516.141878 (Abstand 80 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 425, Spur 2 ac3: 307
+   remuxt Spur 0 mpeg2video (Original-Spur 0): 288 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 75514.261878 (288 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 495 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 75514.261878 (495 Pakete)
+   remuxt Spur 2 ac3 (Original-Spur 2): 375 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 75514.261878 (375 Pakete)
+   -> Spur 0: fester Abstand
+   -> Spur 1: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+   -> Spur 2: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+== Serien/Navy_CIS/23x15_-_Schnickschnack/2026-09-29.19.59.3-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 12 (erste: [in#0/mpegts @ 0x563a9a7f8c40] PES packet size mismatch)
+   Bild Spur 0 mpeg2video: erstes Paket PTS 12212.638056, kleinstes PTS in 2 s 12212.558056 (Abstand 80 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 435, Spur 2 ac3: 311
+   remuxt Spur 0 mpeg2video (Original-Spur 0): 282 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 12210.478056 (282 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 495 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 12210.478056 (495 Pakete)
+   remuxt Spur 2 ac3 (Original-Spur 2): 373 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 12210.478056 (373 Pakete)
+   -> Spur 0: fester Abstand
+   -> Spur 1: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+   -> Spur 2: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+== Serien/Tatort/2011x01_-_Odenthal_-_52_-_Tödliche_Ermittlungen_(TV)/2026-09-30.21.45.55-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 40 (erste: [h264 @ 0x55d3eb90a440] mmco: unref short failure)
+   Bild Spur 0 h264: erstes Paket PTS 55711.781044, kleinstes PTS in 2 s 55711.641044 (Abstand 140 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 390, Spur 2 mp2: 390, Spur 3 mp2: 390, Spur 4 ac3: 294
+   remuxt Spur 0 h264 (Original-Spur 0): 548 Pakete, 1 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 55709.481044 (1 Pakete); ab Paket 1: 55709.461033 (1 Pakete); ab Paket 2: 55709.421022 (1 Pakete); ab Paket 3: 55709.341044 (544 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 480 Pakete, 26 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 55709.481044 (9 Pakete); ab Paket 10: 55709.341044 (445 Pakete)
+   remuxt Spur 2 mp2 (Original-Spur 2): 480 Pakete, 26 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 55709.481044 (9 Pakete); ab Paket 10: 55709.341044 (445 Pakete)
+   remuxt Spur 3 mp2 (Original-Spur 3): 480 Pakete, 12 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 55709.481044 (10 Pakete); ab Paket 10: 55709.341044 (458 Pakete)
+   remuxt Spur 4 ac3 (Original-Spur 4): 364 Pakete, 11 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 55709.481044 (5 Pakete); ab Paket 5: 55709.341044 (348 Pakete)
+   -> Spur 0: ABWEICHUNG +140.0 ms bei Paket 0 (1 Pakete), +120.0 ms bei Paket 1 (1 Pakete), +80.0 ms bei Paket 2 (1 Pakete)
+   -> Spur 1: ABWEICHUNG +140.0 ms bei Paket 0 (9 Pakete), Hauptabstand gegen Bild +0.0 ms
+   -> Spur 2: ABWEICHUNG +140.0 ms bei Paket 0 (9 Pakete), Hauptabstand gegen Bild +0.0 ms
+   -> Spur 3: ABWEICHUNG +140.0 ms bei Paket 0 (10 Pakete), Hauptabstand gegen Bild +0.0 ms
+   -> Spur 4: ABWEICHUNG +140.0 ms bei Paket 0 (5 Pakete), Hauptabstand gegen Bild +0.0 ms
+== Serien/Ted/02x07_-_Susan_Is_the_New_Black/2026-09-21.21.49.12-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 10 (erste: [in#0/mpegts @ 0x558530fdfc40] PES packet size mismatch)
+   Bild Spur 0 mpeg2video: erstes Paket PTS 91129.321489, kleinstes PTS in 2 s 91129.241489 (Abstand 80 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 415, Spur 2 ac3: 299
+   remuxt Spur 0 mpeg2video (Original-Spur 0): 285 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 91127.321489 (285 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 490 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 91127.321489 (490 Pakete)
+   remuxt Spur 2 ac3 (Original-Spur 2): 372 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 91127.321489 (372 Pakete)
+   -> Spur 0: fester Abstand
+   -> Spur 1: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+   -> Spur 2: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+== Serien/Ted/02x08_-_Der_große_Nachrichtenschwindel/2026-09-28.21.48.12-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 12 (erste: [in#0/mpegts @ 0x559911eb5c40] PES packet size mismatch)
+   Bild Spur 0 mpeg2video: erstes Paket PTS 27762.937667, kleinstes PTS in 2 s 27762.857667 (Abstand 80 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 415, Spur 2 ac3: 299
+   remuxt Spur 0 mpeg2video (Original-Spur 0): 279 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 27760.657667 (279 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 495 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 27760.657667 (495 Pakete)
+   remuxt Spur 2 ac3 (Original-Spur 2): 373 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 27760.657667 (373 Pakete)
+   -> Spur 0: fester Abstand
+   -> Spur 1: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+   -> Spur 2: fester Abstand, Hauptabstand gegen Bild +0.0 ms
+== TestExtractSub/Whitney_Houston#3A_I_Wanna_Dance_with_Somebody_(2022)/2025-08-19.22.42.2-0.rec/00001.ts
+   fflags +genpts+igndts; Remux-Meldungen: 25 (erste: [h264 @ 0x55f1d57c3440] Increasing reorder buffer to 2)
+   Bild Spur 0 h264: erstes Paket PTS 42818.124767, kleinstes PTS in 2 s 42818.124767 (Abstand 0 ms)
+   Pakete in der Datei vor dem ersten Bildpaket: Spur 1 mp2: 372, Spur 2 mp2: 372, Spur 3 mp2: 376, Spur 4 ac3: 279
+   remuxt Spur 0 h264 (Original-Spur 0): 598 Pakete, 0 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 42816.684767 (598 Pakete)
+   remuxt Spur 1 mp2 (Original-Spur 1): 492 Pakete, 27 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 42816.684766 (465 Pakete)
+   remuxt Spur 2 mp2 (Original-Spur 2): 490 Pakete, 25 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 42816.684766 (465 Pakete)
+   remuxt Spur 3 mp2 (Original-Spur 3): 495 Pakete, 25 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 42816.684766 (470 Pakete)
+   remuxt Spur 4 ac3 (Original-Spur 4): 371 Pakete, 22 ohne eindeutigen Treffer; Original minus remuxt: ab Paket 0: 42816.684766 (349 Pakete)
+   -> Spur 0: fester Abstand
+   -> Spur 1: fester Abstand, Hauptabstand gegen Bild -0.0 ms
+   -> Spur 2: fester Abstand, Hauptabstand gegen Bild -0.0 ms
+   -> Spur 3: fester Abstand, Hauptabstand gegen Bild -0.0 ms
+   -> Spur 4: fester Abstand, Hauptabstand gegen Bild -0.0 ms
