@@ -1,0 +1,66 @@
+== Serien/Babylon_Berlin/05x05_-_Folge_5_(TV)/2026-09-25.22.05.1-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 -16.0/-16.0  mis.mp2 -16.0/-16.0  qks.mp2 -16.0/-16.0  deu.ac3 -24.0/-24.0
+  k1 (Exit 0):    deu.mp2 -16.0/-16.0  mis.mp2 -16.0/-16.0  qks.mp2 -16.0/-16.0  deu.ac3 -24.0/-24.0
+  k3 (Exit 0):    deu.mp2 -16.0/-16.0  mis.mp2 -16.0/-16.0  qks.mp2 -16.0/-16.0  deu.ac3 -24.0/-24.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 3227392/3227392  deu.mp2 1843968/1843968  mis.mp2 1843968/1843968  qks.mp2 1382976/1382976  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 3227392/3227392  deu.mp2 1843968/1843968  mis.mp2 1843968/1843968  qks.mp2 1382976/1382976  
+== Serien/Babylon_Berlin/05x06_-_Folge_6_(TV)/2026-09-25.22.45.1-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 +120.0/+120.0  mis.mp2 +120.0/+120.0  qks.mp2 +120.0/+120.0  deu.ac3 -24.0/-24.0
+  k1 (Exit 0):    deu.mp2 -0.0/-0.0  mis.mp2 -0.0/-0.0  qks.mp2 -0.0/-0.0  deu.ac3 -24.0/-24.0
+  k3 (Exit 0):    deu.mp2 -0.0/-0.0  mis.mp2 -0.0/-0.0  qks.mp2 -0.0/-0.0  deu.ac3 -24.0/-24.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 2782976/2782976  deu.mp2 1589760/1589760  mis.mp2 1589760/1589760  qks.mp2 1192320/1192320  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 2782976/2782976  deu.mp2 1589760/1589760  mis.mp2 1589760/1589760  qks.mp2 1192320/1192320  
+== Serien/Babylon_Berlin/05x07_-_Folge_7_(TV)/2026-09-25.23.25.1-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 -0.0/-0.0  mis.mp2 -0.0/-0.0  qks.mp2 +120.0/+120.0  deu.ac3 -24.0/-24.0
+  k1 (Exit 0):    deu.mp2 -0.0/-0.0  mis.mp2 -0.0/-0.0  qks.mp2 -0.0/-0.0  deu.ac3 -24.0/-24.0
+  k3 (Exit 0):    deu.mp2 -0.0/-0.0  mis.mp2 -0.0/-0.0  qks.mp2 -0.0/-0.0  deu.ac3 -24.0/-24.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 2494464/2494464  deu.mp2 1425408/1425408  mis.mp2 1425408/1425408  qks.mp2 1069056/1069056  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 2494464/2494464  deu.mp2 1425408/1425408  mis.mp2 1425408/1425408  qks.mp2 1069056/1069056  
+== Serien/Babylon_Berlin/05x08_-_Folge_8_(TV)/2026-09-26.00.10.1-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 +136.0/+136.0  mis.mp2 +136.0/+136.0  qks.mp2 +136.0/+136.0  deu.ac3 -0.0/-0.0
+  k1 (Exit 0):    deu.mp2 -8.0/-8.0  mis.mp2 -8.0/-8.0  qks.mp2 -8.0/-8.0  deu.ac3 -0.0/-0.0
+  k3 (Exit 0):    deu.mp2 -8.0/-8.0  mis.mp2 -8.0/-8.0  qks.mp2 -8.0/-8.0  deu.ac3 -0.0/-0.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 2940672/2940672  deu.mp2 1680384/1680384  mis.mp2 1680384/1680384  qks.mp2 1260288/1260288  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 2940672/2940672  deu.mp2 1680384/1680384  mis.mp2 1680384/1680384  qks.mp2 1260288/1260288  
+== Serien/MPEG2_SD576p25_16-9_audio-anomaly-LFE-center-burst-frame51120_MP2-2.0-deu-AC3-5.1-deu_ProSieben-Inside-the-Simpsons-02x06/2024-03-26.02.18.12-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 -8.0/-8.0  deu.ac3 -8.0/-8.0
+  k1 (Exit 0):    deu.mp2 -8.0/-8.0  deu.ac3 -8.0/-8.0
+  k3 (Exit 0):    deu.mp2 -8.0/-8.0  deu.ac3 -8.0/-8.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 9656832/9656832  deu.mp2 4828032/4828032  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 9656832/9656832  deu.mp2 4828032/4828032  
+== Serien/Navy_CIS/23x14_-_Fleet_Week/2026-09-22.19.59.3-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 +0.0/+0.0  deu.ac3 -16.0/-16.0
+  k1 (Exit 0):    deu.mp2 +0.0/+0.0  deu.ac3 -16.0/-16.0
+  k3 (Exit 0):    deu.mp2 +0.0/+0.0  deu.ac3 -16.0/-16.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 7590912/7590912  deu.mp2 3795264/3795264  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 7590912/7590912  deu.mp2 3795264/3795264  
+== Serien/Navy_CIS/23x15_-_Schnickschnack/2026-09-29.19.59.3-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 -8.0/-8.0  deu.ac3 -8.0/-8.0
+  k1 (Exit 0):    deu.mp2 -8.0/-8.0  deu.ac3 -8.0/-8.0
+  k3 (Exit 0):    deu.mp2 -8.0/-8.0  deu.ac3 -8.0/-8.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 9575424/9575424  deu.mp2 4787712/4787712  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 9575424/9575424  deu.mp2 4787712/4787712  
+== Serien/Tatort/2011x01_-_Odenthal_-_52_-_Tödliche_Ermittlungen_(TV)/2026-09-30.21.45.55-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 +136.0/+136.0  mis.mp2 +136.0/+136.0  qks.mp2 +136.0/+136.0  deu.ac3 +120.0/+120.0
+  k1 (Exit 0):    deu.mp2 -8.0/-8.0  mis.mp2 -8.0/-8.0  qks.mp2 -8.0/-8.0  deu.ac3 -8.0/-8.0
+  k3 (Exit 0):    deu.mp2 -8.0/-8.0  mis.mp2 -8.0/-8.0  qks.mp2 -8.0/-8.0  deu.ac3 -8.0/-8.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 3539200/3539200  deu.mp2 1516608/1516608  mis.mp2 1516608/1516608  qks.mp2 1516608/1516608  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 3539200/3539200  deu.mp2 1516608/1516608  mis.mp2 1516608/1516608  qks.mp2 1516608/1516608  
+== Serien/Ted/02x07_-_Susan_Is_the_New_Black/2026-09-21.21.49.12-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 +0.0/+0.0  deu.ac3 -8.0/-8.0
+  k1 (Exit 0):    deu.mp2 +0.0/+0.0  deu.ac3 -8.0/-8.0
+  k3 (Exit 0):    deu.mp2 +0.0/+0.0  deu.ac3 -8.0/-8.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 9460224/9460224  deu.mp2 4730112/4730112  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 9460224/9460224  deu.mp2 4730112/4730112  
+== Serien/Ted/02x08_-_Der_große_Nachrichtenschwindel/2026-09-28.21.48.12-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 +0.0/-0.0  deu.ac3 -16.0/-16.0
+  k1 (Exit 0):    deu.mp2 +0.0/-0.0  deu.ac3 -16.0/-16.0
+  k3 (Exit 0):    deu.mp2 +0.0/-0.0  deu.ac3 -16.0/-16.0
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 11324928/11324928  deu.mp2 5662080/5662080  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 11324928/11324928  deu.mp2 5662080/5662080  
+== TestExtractSub/Whitney_Houston#3A_I_Wanna_Dance_with_Somebody_(2022)/2025-08-19.22.42.2-0.rec/00001.ts
+  cur (Exit 0):    deu.mp2 -93.8/-93.8  mis.mp2 -113.8/-113.8  mul.mp2 -29.8/-29.8  deu.ac3 -40.9/-40.9
+  k1 (Exit 0):    deu.mp2 -93.8/-93.8  mis.mp2 -113.8/-113.8  mul.mp2 -29.8/-29.8  deu.ac3 -40.9/-40.9
+  k3 (Exit 0):    deu.mp2 -93.8/-93.8  mis.mp2 -113.8/-113.8  mul.mp2 -29.8/-29.8  deu.ac3 -40.9/-40.9
+  Video-ES k1 gegen cur: 1 von 1 gleich; Tonlängen cur/k1: deu.ac3 2363648/2363648  deu.mp2 1350912/1350912  mis.mp2 1013184/1013184  mul.mp2 1013184/1013184  
+  Video-ES k3 gegen cur: 1 von 1 gleich; Tonlängen cur/k3: deu.ac3 2363648/2363648  deu.mp2 1350912/1350912  mis.mp2 1013184/1013184  mul.mp2 1013184/1013184  

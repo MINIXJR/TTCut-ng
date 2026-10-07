@@ -1,0 +1,96 @@
+== tatort, ttcut-demux-Variante cur
+  Bild: 1474 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-55724281.0: 1320, -55721781.0: 150, -55721761.0: 2}
+  Ton mp2,deu : +268.0 ms (MKV 0.0-3.4 s, 142 Pakete); +464.0 ms (MKV 3.7-30.0 s, 1096 Pakete)
+  Ton mp2,mis : +268.0 ms (MKV 0.0-3.4 s, 142 Pakete); +464.0 ms (MKV 3.7-30.0 s, 1096 Pakete)
+  Ton mp2,qks : +268.0 ms (MKV 0.0-3.4 s, 142 Pakete); +464.0 ms (MKV 3.7-30.0 s, 1096 Pakete)
+  Ton ac3,deu : +244.0 ms (MKV 0.0-3.4 s, 107 Pakete); +440.0 ms (MKV 3.7-30.0 s, 821 Pakete)
+== tatort, ttcut-demux-Variante k3
+  Bild: 1474 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-55724281.0: 1320, -55721781.0: 150, -55721761.0: 2}
+  Ton mp2,deu : +124.0 ms (MKV 0.0-3.4 s, 141 Pakete); +320.0 ms (MKV 3.6-30.0 s, 1100 Pakete)
+  Ton mp2,mis : +124.0 ms (MKV 0.0-3.4 s, 141 Pakete); +320.0 ms (MKV 3.6-30.0 s, 1100 Pakete)
+  Ton mp2,qks : +124.0 ms (MKV 0.0-3.4 s, 141 Pakete); +320.0 ms (MKV 3.6-30.0 s, 1100 Pakete)
+  Ton ac3,deu : +116.0 ms (MKV 0.0-3.4 s, 107 Pakete); +312.0 ms (MKV 3.6-30.0 s, 825 Pakete)
+== b0508, ttcut-demux-Variante cur
+  Bild: 1483 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-19155373.0: 1483}
+  Ton mp2,deu : +268.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,mis : +268.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,qks : +268.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton ac3,deu : +124.0 ms (MKV 0.0-30.0 s, 938 Pakete)
+== b0508, ttcut-demux-Variante k3
+  Bild: 1483 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-19155373.0: 1483}
+  Ton mp2,deu : +124.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,mis : +124.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,qks : +124.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton ac3,deu : +124.0 ms (MKV 0.0-30.0 s, 938 Pakete)
+== b0508, ttcut-demux-Variante k4
+  Bild: 1483 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-19155373.0: 1483}
+  Ton mp2,deu : -20.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,mis : -20.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,qks : -20.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton ac3,deu : -36.0 ms (MKV 0.0-30.0 s, 938 Pakete)
+== b0505, ttcut-demux-Variante cur
+  Bild: 1487 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-11656373.0: 1487}
+  Ton mp2,deu : +116.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,mis : +116.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,qks : +116.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton ac3,deu : +100.0 ms (MKV 0.0-30.0 s, 938 Pakete)
+== b0505, ttcut-demux-Variante k4
+  Bild: 1487 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-11656373.0: 1487}
+  Ton mp2,deu : -28.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,mis : -28.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton mp2,qks : -28.0 ms (MKV 0.0-30.0 s, 1251 Pakete)
+  Ton ac3,deu : -28.0 ms (MKV 0.0-30.0 s, 938 Pakete)
+== whitney, ttcut-demux-Variante cur
+  Bild: 1058 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-42828124.8: 1058}
+  Ton mp2,deu : -7.8 ms (MKV 0.1-30.1 s, 1251 Pakete)
+  Ton mp2,mis : -27.8 ms (MKV 0.1-30.1 s, 1251 Pakete)
+  Ton mp2,mul : +56.2 ms (MKV 0.1-30.1 s, 1251 Pakete)
+  Ton ac3,deu : +37.1 ms (MKV 0.1-30.1 s, 928 Pakete)
+== ncis14, ttcut-demux-Variante cur
+  Bild: 1495 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-75536141.9: 1495}
+  Ton mp2,deu : -72.0 ms (MKV 0.0-60.0 s, 2502 Pakete)
+  Ton ac3,deu : -96.0 ms (MKV 0.0-60.0 s, 1876 Pakete)
+== ted07, ttcut-demux-Variante cur
+  Bild: 1495 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-91149241.5: 1495}
+  Ton mp2,deu : -72.0 ms (MKV 0.0-60.0 s, 2502 Pakete)
+  Ton ac3,deu : -88.0 ms (MKV 0.0-60.0 s, 1876 Pakete)
+== simps, ttcut-demux-Variante cur
+  Bild: 1495 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-37069153.2: 1495}
+  Ton mp2,deu : -80.0 ms (MKV 0.0-60.0 s, 2502 Pakete)
+  Ton ac3,deu : -88.0 ms (MKV 0.0-60.0 s, 1876 Pakete)
+== b0506, ttcut-demux-Variante cur
+  Bild: 1437 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-14056033.0: 1246, -14055573.0: 191}
+  Ton mp2,deu : +252.0 ms (MKV 0.0-3.9 s, 165 Pakete); +324.0 ms (MKV 4.0-4.1 s, 5 Pakete); +328.0 ms (MKV 4.3-30.0 s, 1072 Pakete)
+  Ton mp2,mis : +252.0 ms (MKV 0.0-3.9 s, 164 Pakete); +348.0 ms (MKV 4.0-4.2 s, 6 Pakete); +328.0 ms (MKV 4.3-30.0 s, 1072 Pakete)
+  Ton mp2,qks : +252.0 ms (MKV 0.0-4.0 s, 168 Pakete); +352.0 ms (MKV 4.3-30.0 s, 1071 Pakete)
+  Ton ac3,deu : +100.0 ms (MKV 0.0-3.9 s, 123 Pakete); -252.0 ms (MKV 4.1-4.3 s, 5 Pakete); +208.0 ms (MKV 4.3-30.0 s, 804 Pakete)
+== b0506, ttcut-demux-Variante k3
+  Bild: 1437 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-14056033.0: 1246, -14055573.0: 191}
+  Ton mp2,deu : +132.0 ms (MKV 0.0-3.9 s, 165 Pakete); -228.0 ms (MKV 4.1-4.2 s, 5 Pakete); +208.0 ms (MKV 4.3-30.0 s, 1073 Pakete)
+  Ton mp2,mis : +132.0 ms (MKV 0.0-3.9 s, 164 Pakete); +208.0 ms (MKV 4.3-30.0 s, 1073 Pakete)
+  Ton mp2,qks : +132.0 ms (MKV 0.0-4.0 s, 167 Pakete); +232.0 ms (MKV 4.3-30.0 s, 1073 Pakete)
+  Ton ac3,deu : +100.0 ms (MKV 0.0-3.9 s, 123 Pakete); -252.0 ms (MKV 4.1-4.3 s, 5 Pakete); +208.0 ms (MKV 4.3-30.0 s, 804 Pakete)
+== b0506, ttcut-demux-Variante k4
+  Bild: 1437 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-14056033.0: 1246, -14055573.0: 191}
+  Ton mp2,deu : -12.0 ms (MKV 0.0-3.8 s, 159 Pakete); -372.0 ms (MKV 3.9-4.0 s, 5 Pakete); -396.0 ms (MKV 4.0-4.2 s, 10 Pakete); +64.0 ms (MKV 4.3-30.0 s, 1073 Pakete)
+  Ton mp2,mis : -12.0 ms (MKV 0.0-3.8 s, 159 Pakete); -396.0 ms (MKV 4.0-4.2 s, 10 Pakete); +64.0 ms (MKV 4.3-30.0 s, 1073 Pakete)
+  Ton mp2,qks : -12.0 ms (MKV 0.0-3.9 s, 162 Pakete); -372.0 ms (MKV 4.1-4.2 s, 9 Pakete); +88.0 ms (MKV 4.3-30.0 s, 1073 Pakete)
+  Ton ac3,deu : -28.0 ms (MKV 0.0-3.8 s, 119 Pakete); -380.0 ms (MKV 4.0-4.3 s, 9 Pakete); +80.0 ms (MKV 4.3-30.0 s, 804 Pakete)
+== ncis14, Variante k5
+[INFO] Audio track 1 (mp2 [deu]) starts 352ms before video - will trim
+[INFO] Audio track 2 (ac3 [deu]) starts 480ms before video - will trim
+  Bild: 1495 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-75536141.9: 1495}
+  Ton mp2,deu : +0.0 ms (MKV 0.0-60.0 s, 2502 Pakete)
+  Ton ac3,deu : +0.0 ms (MKV 0.0-60.0 s, 1876 Pakete)
+== ted07, Variante k5
+[INFO] Audio track 1 (mp2 [deu]) starts 376ms before video - will trim
+[INFO] Audio track 2 (ac3 [deu]) starts 520ms before video - will trim
+  Bild: 1495 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-91149241.5: 1495}
+  Ton mp2,deu : +0.0 ms (MKV 0.0-60.0 s, 2502 Pakete)
+  Ton ac3,deu : -24.0 ms (MKV 0.0-60.0 s, 1876 Pakete)
+== simps, Variante k5
+[INFO] Audio track 1 (mp2 [deu]) starts 296ms before video - will trim
+[INFO] Audio track 2 (ac3 [deu]) starts 360ms before video - will trim
+  Bild: 1495 von 1501 Bildern der MKV im Original gefunden; Verschiebung {-37069153.2: 1495}
+  Ton mp2,deu : -8.0 ms (MKV 0.0-60.0 s, 2502 Pakete)
+  Ton ac3,deu : -24.0 ms (MKV 0.0-60.0 s, 1876 Pakete)

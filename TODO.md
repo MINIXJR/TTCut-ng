@@ -9,6 +9,62 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
   - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
 
+- **Ton gegen Bild in der fertigen MKV: +100 bis +464 ms (H.264 „Das Erste
+  HD") und −72 bis −96 ms (MPEG-2 SD) gegen das Original** (gemessen
+  2026-10-07, nicht behoben)
+  - **Messung:** Original-TS → `ttcut-demux` → Schnitt mit `--auto-cut`
+    (Bilder 500–2000) → MKV; Bilder über die MD5 des dekodierten Bildes,
+    Tonpakete über die MD5 der Nutzdaten im Original wiedergefunden, je Spur
+    „Verschiebung Ton minus Verschiebung Bild". Positiv = Ton später zum Bild
+    als im Original. Kontrolle (reiner `ffmpeg -c copy`-Umpack, H.264 und
+    MPEG-2): 0,0 ms.
+  - **Heutiges Skript** (MP2 / AC3): 05x05 +116 / +100; 05x08 +268 / +124
+    (ganze Aufnahme, Bild 100000: +284 / +140); 05x06 ganze Aufnahme, Bild
+    100000: +344, +344, +368 / +224; Tatort 2011x01 (Kopf, hinter der Lücke):
+    +464 / +440; Whitney Houston (H.264 ohne vorgezogene Bilder): −8, −28,
+    +56 / +37; MPEG-2 (Navy CIS 23x14, Ted 02x07, Simpsons 02x06):
+    −72 bis −80 / −88 bis −96.
+  - **Drei Anteile, je einzeln gemessen:**
+    1. der `+igndts`-Versatz des nächsten Eintrags (+120 bis +136 ms auf den
+       betroffenen Spuren); mit „Ton aus dem Original-TS" fällt 05x08 von
+       +268 / +124 auf +124 / +124.
+    2. +140 ms auf allen Das-Erste-HD-Aufnahmen: `ttcut-demux` kürzt den Ton
+       auf den kleinsten Bild-Zeitstempel (7 vorgezogene B-Bilder), Bild 0 in
+       TTCut-ng ist aber das erste zeigbare Bild, 7 Bilder später
+       (`TTDisplayOrderMap::markH264ColdStartLeadingPics`). Probe: Trim auf
+       `start_time` des Videostroms statt auf den kleinsten Zeitstempel →
+       05x08 −20 / −36, 05x05 −28 / −28, 05x06 vor der Lücke −12 / −28.
+       MPEG-2 liegt umgekehrt (Ton zu früh); dort ist keine Probe gelaufen,
+       `docs/code-map/ttcut-demux.md` („PTS0 (video) semantics") nennt
+       denselben Aufbau mit umgekehrtem Vorzeichen.
+    3. hinter einer Störzone liegt der Ton zusätzlich daneben, und zwar bis
+       zum Ende der Aufnahme: 05x06 +76 bis +108 ms, Tatort +196 ms (je eine
+       Lücke); **„The Rookie 07x12" (Korpus, 5 Dateien, 328 Löcher = 500 s):
+       −0,3 s ab 11 min, −11 s (deu, mul) bis −19 s (mis, ac3) ab 48 min** —
+       vom Skript selbst belegt (`residual drift=11696ms`, hinten mit Stille
+       aufgefüllt, Enddrift −16 ms). Ursache gemessen: die Zonenbilanz setzt
+       den Bildverlust als PTS-Differenz der Pakete um den DTS-Sprung an
+       (05x06 380, Tatort 2340 ms); tatsächlich fehlen 460 bzw. 2500 ms an
+       Bildern. **Regel „jeder Ton-Frame an seinen eigenen Zeitstempel"
+       (Bildachse = TTCut-Bildindex; Frame im Loch → weg, Platz leer →
+       Stille) an den Paketlisten durchgerechnet, die ES danach gebaut und
+       über die ganze Aufnahme gemessen (2026-10-07): Rookie −18…+19 ms
+       durchgehend, 05x06 −4…0, Tatort −12…+8, 05x08 unverändert 0 Edits;
+       Remington (MPEG-2 interlaced) ±14 und PTS-Umlauf +5 nur gerechnet.
+       05x06 damit durch den echten Schnitt: −12/−8 ms (heute +252/+328).**
+       Hörproben wurden gebaut und gehört (2026-10-07), Dateien gelöscht;
+       Befehle im Projekt-Memory.
+  - **Rest nach 1 und 2:** −12 bis −36 ms (Ton zu früh): Rest unterhalb einer
+    Framelänge am ES-Anfang plus Rundung am Schnitt-Anfang, beide in dieselbe
+    Richtung. `audio_N_first_pts` und `audio_N_trimmed_ms` liest `TTESInfo`,
+    verwendet sie aber niemand; `av_offset_ms` gilt für alle Spuren und kommt
+    von Spur 0 (Whitney: Spuren untereinander bis 84 ms auseinander).
+  - Messwerkzeuge: `tools/diag/scratch/av-sync-2026-10-07/` (README dort;
+    `chain.py` = Kette bis zur MKV; `zoneaudit.py` = ganze Aufnahme ohne
+    Schnitt; `zonesim.py` + `applyrule.py` = Regel rechnen und ES bauen;
+    Ergebnisse `chain-result.txt`, `nas-result.txt`). Paketlisten
+    (`pk/*.pickle`, regenerierbar) und Skriptkopien `variants/` nur unter
+    `CLAUDE_TMP/TTCut-ng/demux-shift/`.
 - **ttcut-demux: Ton 120–136 ms zu spät im ES** (gefunden 2026-10-07,
   noch nicht behoben)
   - **Gemessen:** „Babylon Berlin 05x08": alle drei MP2-Spuren +136 ms gegen
@@ -35,9 +91,8 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - **Nicht gemessen:** warum ffmpeg das tut und welche Pakete es trifft
     (die Zahl der Tonpakete, die der Demuxer vor dem ersten Bildpaket
     ausgibt, erklärt es nicht: 05x08 hat dort 0/0/6, verschoben sind
-    6/6/10); ob Bild 0 des Video-ES wirklich bei `first_video_pts` liegt
-    (Ton ist nur gegen den eigenen Zeitstempel gemessen, nicht gegen das
-    Bild); Aufnahmen aus mehreren Dateien. Bei den fünf Das-Erste-Aufnahmen
+    6/6/10); Aufnahmen aus mehreren Dateien. Ton gegen das Bild: siehe den
+    Eintrag darüber. Bei den fünf Das-Erste-Aufnahmen
     stempelt der Remux auch die ersten drei Bildpakete um
     (+140/+120/+80 ms), auch bei der sauberen 05x05.
   - **Vor dem Fix prüfen** (User 2026-10-07): wie
@@ -45,12 +100,13 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     seit Jahren richtig. Gelesen: Es schreibt die Zeitstempel nie um.
     tsMuxeR liest den Original-TS, das Skript übergibt dessen „Stream delay"
     je Spur als `timeshift=` und schneidet mit `--cut-start` um den größten
-    negativen Wert. Ob das Ergebnis auf 05x08 stimmt, ist nicht gemessen.
+    negativen Wert. Gemessen (05x08, erste 80 MB, Parameter des Skripts, nur
+    an den Zeitstempeln des `.m2ts`, nicht an einer MKV, nicht gehört): MP2
+    60 ms, AC3 156 ms später zum Bild als im Original.
   - Vorhandene ES-Dateien behalten ihren Versatz; nach dem Fix neu demuxen.
-  - Messwerkzeuge (ungesichert): `CLAUDE_TMP/TTCut-ng/demux-shift/`
-    (`survey.py` bildet Remux-Pakete per MD5 auf die Originalpakete ab,
-    `survey-all.txt`, `order.py`) und `CLAUDE_TMP/TTCut-ng/donor-guard/`
-    (`where0.py`: welcher Original-Frame ist Frame 0 eines ES).
+  - Messwerkzeuge: `tools/diag/scratch/av-sync-2026-10-07/` (`survey.py`
+    bildet Remux-Pakete per MD5 auf die Originalpakete ab, `survey-all.txt`,
+    `order.py`, `es_start.py`).
 
 ## Medium Priority
 
