@@ -9,6 +9,49 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
   - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
 
+- **ttcut-demux: Ton 120–136 ms zu spät im ES** (gefunden 2026-10-07,
+  noch nicht behoben)
+  - **Gemessen:** „Babylon Berlin 05x08": alle drei MP2-Spuren +136 ms gegen
+    ihren Original-Zeitstempel, AC3 0,0 ms. „Tatort 2011x01" (erste 80 MB
+    durch `ttcut-demux`): MP2 ×3 +136 ms, **AC3 +120 ms**. Im Original-TS
+    liegt MP2 gegen AC3 auf 05x05 und 05x08 gleich (−19,5 ms); der Versatz
+    entsteht erst beim Demuxen.
+  - **Mechanismus:** Der Reparatur-Remux (`-fflags +genpts+igndts`,
+    `tools/ttcut-demux/ttcut-demux`, „Repair timestamps") gibt den ersten 5
+    bis 10 Paketen einer Tonspur einen um 140 ms kleineren Zeitstempel als
+    allen folgenden. Die Extraktion (`-ss TRIM` nach `-i`) zählt ab dem
+    ersten Paket der Spur und schneidet deshalb 140 ms zu wenig weg. Die
+    Trim-Werte selbst stimmen (592/544 ms auf 05x08, dieselben Zahlen meldet
+    tsMuxeR als „Stream delay").
+  - **Auslöser:** `+igndts` — je Lauf eine Option geändert: Sprung mit
+    `+igndts` (allein oder mit `+genpts`), nicht ohne `-fflags`, nicht mit
+    `+genpts` allein; `-avoid_negative_ts` unbeteiligt (ffmpeg 9.0.2).
+  - **Umfang** (11 Aufnahmen, je erste 80 MB): betroffen 4 von 5 Aufnahmen
+    „Das Erste HD" (H.264 720p50) — 05x06 (MP2 ×3), 05x07 (nur `qks`),
+    05x08 (MP2 ×3), Tatort (alle vier Spuren); 05x05 sauber. Sauber auch
+    alle 5 MPEG-2-SD-Aufnahmen und eine H.264-Aufnahme ohne vorgezogene
+    B-Bilder. Hinter dem Sprung stehen Ton und Bild im Remux überall richtig
+    zueinander (0,0 ms).
+  - **Nicht gemessen:** warum ffmpeg das tut und welche Pakete es trifft
+    (die Zahl der Tonpakete, die der Demuxer vor dem ersten Bildpaket
+    ausgibt, erklärt es nicht: 05x08 hat dort 0/0/6, verschoben sind
+    6/6/10); ob Bild 0 des Video-ES wirklich bei `first_video_pts` liegt
+    (Ton ist nur gegen den eigenen Zeitstempel gemessen, nicht gegen das
+    Bild); Aufnahmen aus mehreren Dateien. Bei den fünf Das-Erste-Aufnahmen
+    stempelt der Remux auch die ersten drei Bildpakete um
+    (+140/+120/+80 ms), auch bei der sauberen 05x05.
+  - **Vor dem Fix prüfen** (User 2026-10-07): wie
+    `/home/fpwild/Skripte/Ts2MKV.sh` es macht — läuft nach Wissen des Users
+    seit Jahren richtig. Gelesen: Es schreibt die Zeitstempel nie um.
+    tsMuxeR liest den Original-TS, das Skript übergibt dessen „Stream delay"
+    je Spur als `timeshift=` und schneidet mit `--cut-start` um den größten
+    negativen Wert. Ob das Ergebnis auf 05x08 stimmt, ist nicht gemessen.
+  - Vorhandene ES-Dateien behalten ihren Versatz; nach dem Fix neu demuxen.
+  - Messwerkzeuge (ungesichert): `CLAUDE_TMP/TTCut-ng/demux-shift/`
+    (`survey.py` bildet Remux-Pakete per MD5 auf die Originalpakete ab,
+    `survey-all.txt`, `order.py`) und `CLAUDE_TMP/TTCut-ng/donor-guard/`
+    (`where0.py`: welcher Original-Frame ist Frame 0 eines ES).
+
 ## Medium Priority
 
 - **Zwei überlagerte Widgets in „Aktueller Frame" — sind sie nötig?**
