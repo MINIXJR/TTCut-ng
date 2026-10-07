@@ -37,17 +37,32 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
        MPEG-2 liegt umgekehrt (Ton zu früh); dort ist keine Probe gelaufen,
        `docs/code-map/ttcut-demux.md` („PTS0 (video) semantics") nennt
        denselben Aufbau mit umgekehrtem Vorzeichen.
-    3. hinter einer Störzone am Aufnahmeanfang liegt der Ton zusätzlich
-       später: 05x06 +76 bis +108 ms, Tatort +196 ms (je eine Lücke, nicht
-       untersucht).
+    3. hinter einer Störzone liegt der Ton zusätzlich daneben, und zwar bis
+       zum Ende der Aufnahme: 05x06 +76 bis +108 ms, Tatort +196 ms (je eine
+       Lücke); **„The Rookie 07x12" (Korpus, 5 Dateien, 328 Löcher = 500 s):
+       −0,3 s ab 11 min, −11 s (deu, mul) bis −19 s (mis, ac3) ab 48 min** —
+       vom Skript selbst belegt (`residual drift=11696ms`, hinten mit Stille
+       aufgefüllt, Enddrift −16 ms). Ursache gemessen: die Zonenbilanz setzt
+       den Bildverlust als PTS-Differenz der Pakete um den DTS-Sprung an
+       (05x06 380, Tatort 2340 ms); tatsächlich fehlen 460 bzw. 2500 ms an
+       Bildern. **Regel „jeder Ton-Frame an seinen eigenen Zeitstempel"
+       (Bildachse = TTCut-Bildindex; Frame im Loch → weg, Platz leer →
+       Stille) an den Paketlisten durchgerechnet, die ES danach gebaut und
+       über die ganze Aufnahme gemessen (2026-10-07): Rookie −18…+19 ms
+       durchgehend, 05x06 −4…0, Tatort −12…+8, 05x08 unverändert 0 Edits;
+       Remington (MPEG-2 interlaced) ±14 und PTS-Umlauf +5 nur gerechnet.
+       05x06 damit durch den echten Schnitt: −12/−8 ms (heute +252/+328).**
+       Hörproben: `CLAUDE_TMP/TTCut-ng/demux-shift/chain/hoeren/`.
   - **Rest nach 1 und 2:** −12 bis −36 ms (Ton zu früh): Rest unterhalb einer
     Framelänge am ES-Anfang plus Rundung am Schnitt-Anfang, beide in dieselbe
     Richtung. `audio_N_first_pts` und `audio_N_trimmed_ms` liest `TTESInfo`,
     verwendet sie aber niemand; `av_offset_ms` gilt für alle Spuren und kommt
     von Spur 0 (Whitney: Spuren untereinander bis 84 ms auseinander).
   - Messwerkzeuge (ungesichert): `CLAUDE_TMP/TTCut-ng/demux-shift/chain/`
-    (`prep.sh`, `mid.sh`, `chain.py`, Ergebnis `chain-result.txt`),
-    Skriptkopie `variants/k4` (Trim auf das erste zeigbare Bild).
+    (`prep.sh`, `mid.sh`, `chain.py` = Kette bis zur MKV; `zoneaudit.py` =
+    ganze Aufnahme ohne Schnitt; `zonesim.py` + `applyrule.py` = Regel
+    rechnen und ES bauen; `probe_packets.py`; Ergebnisse `chain-result.txt`,
+    `nas-result.txt`), Skriptkopien `variants/k4`/`k5` (Bezugsbild).
 - **ttcut-demux: Ton 120–136 ms zu spät im ES** (gefunden 2026-10-07,
   noch nicht behoben)
   - **Gemessen:** „Babylon Berlin 05x08": alle drei MP2-Spuren +136 ms gegen
