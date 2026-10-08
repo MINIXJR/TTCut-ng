@@ -14,6 +14,9 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 W=${1:?usage: $0 <workdir>}
 mkdir -p "$W/bin"
 ln -sf "$ROOT/tools/ttcut-demux/ttcut-demux" "$W/bin/ttcut-demux"
+# ttcut-demux stops without the ttcut-audiofix that belongs to it (-p mode),
+# so the source-tree one goes on the PATH too.
+ln -sf "$ROOT/tools/ttcut-audiofix/ttcut-audiofix" "$W/bin/ttcut-audiofix"
 cat > "$W/bin/kdialog" <<'STUB'
 #!/bin/bash
 # --checklist TEXT tag label state ... : print every tag; --yesno: no.

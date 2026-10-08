@@ -17,6 +17,7 @@
 #ifndef TTESINFO_H
 #define TTESINFO_H
 
+#include <QHash>
 #include <QString>
 #include <QFileInfo>
 #include <QStringList>
@@ -42,6 +43,13 @@ struct TTAudioTrackInfo {
     int     trimmedMs  = 0;    // Milliseconds trimmed from start (from .info audio_N_trimmed_ms)
     int     silenceMs  = 0;    // Milliseconds of silence inserted for gap-fill repair (audio_N_silence_ms)
     int     removedMs  = 0;    // Milliseconds removed to correct A/V drift (audio_N_removed_ms)
+    // audio_N_start_offset_ms: what the track's first frame sits off its place
+    // on the picture timeline, in ms - the remainder below one audio frame
+    // that ttcut-demux cannot cut (slot rule, 2026-10-07). Positive = the
+    // track belongs later than its ES plays it. TTCut-ng adds it to the
+    // track delay. hasStartOffset is false when the key is absent or invalid.
+    int     startOffsetMs  = 0;
+    bool    hasStartOffset = false;
     QList<TTESRange> corruptRanges; // structural damage the sanitizer found
                                     // (audio_N_corrupt_ranges); ms always -1
 };
@@ -84,7 +92,12 @@ struct TTESInfoTiming
 {
     bool   found      = false;  // an .info file exists and loaded
     double frameRate  = -1.0;   // > 0 when the .info carries a frame rate
-    int    avOffsetMs = 0;      // 0 unless the .info has a non-zero A/V offset
+    int    avOffsetMs = 0;      // 0 unless the .info has a non-zero A/V offset;
+                                // always 0 when it carries per-track start offsets
+    // audio_N_start_offset_ms by audio file name (no path); only tracks that
+    // carry the key are listed.
+    QHash<QString, int> trackStartOffsetMs;
+    bool   hasTrackStartOffsets = false;
 };
 
 class TTESInfo
@@ -104,6 +117,14 @@ public:
     // Frame rate and A/V offset of the .info next to videoFilePath (see
     // TTESInfoTiming); every field stays at its default when there is none.
     static TTESInfoTiming timingForVideo(const QString& videoFilePath);
+
+    // Delay to cut an audio track with: the user's delay plus the start
+    // offset the .info next to the video carries for that audio file (0 when
+    // there is no .info or the file is not listed). Same sign as the delay:
+    // positive = the track plays later. The spin box and the project file
+    // keep the user's value alone.
+    static int effectiveAudioDelayMs(int userDelayMs, const QString& videoFilePath,
+                                     const QString& audioFilePath);
 
     // Video info
     QString videoFile() const { return mVideoFile; }
@@ -127,6 +148,11 @@ public:
     // Audio tracks
     int audioTrackCount() const { return mAudioTracks.size(); }
     TTAudioTrackInfo audioTrack(int index) const;
+    // Per-track start offsets (audio_N_start_offset_ms): whether any track
+    // has one, and the value for an audio file, matched by file name
+    // (0 when that file is not listed or carries no offset).
+    bool hasTrackStartOffsets() const;
+    int  startOffsetMsForAudioFile(const QString& audioFilePath) const;
 
     // Source file
     QString sourceFile() const { return mSourceFile; }
@@ -139,7 +165,9 @@ public:
     // Timing info (A/V sync offset)
     double firstVideoPts() const { return mFirstVideoPts; }
     double firstAudioPts() const { return mFirstAudioPts; }
-    int avOffsetMs() const { return mAvOffsetMs; }
+    // av_offset_ms of the file; 0 when any track carries a start offset (the
+    // per-track values replace the single global one).
+    int avOffsetMs() const;
     bool hasTimingInfo() const { return mHasTimingInfo; }
 
     // Warnings (decode errors from demux)

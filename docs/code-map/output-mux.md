@@ -1,6 +1,6 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-27
+base_commit: a344b304337852286cbf2ceaeadcb6ccefe648a0
+last_verified: 2026-10-08
 sources:
   - extern/ttmkvmergeprovider.h
   - extern/ttmkvmergeprovider.cpp
@@ -100,10 +100,10 @@ flowchart TD
 
 | From → To | What crosses (data / order / invariant) |
 |---|---|
-| `TTESInfo` → `TTH26xCutTask` | `TTESInfo::timingForVideo(sourceFile).avOffsetMs`, read in `TTAVData::doH264Cut` and put into `TTH26xCutParams::mux` through `TTMkvMergeProvider::videoOptionsFor()`. Non-zero only when the `.info` has timing info **and** a non-zero `av_offset_ms`. |
+| `TTESInfo` → `TTH26xCutTask` | `TTESInfo::timingForVideo(sourceFile).avOffsetMs`, read in `TTAVData::doH264Cut` and put into `TTH26xCutParams::mux` through `TTMkvMergeProvider::videoOptionsFor()`. Non-zero only when the `.info` has timing info **and** a non-zero `av_offset_ms` **and no track carries `audio_N_start_offset_ms`**: `TTESInfo::avOffsetMs()` returns 0 as soon as one does (every `.info` written by `ttcut-demux` since the slot rule, 2026-10-08) — the per-track offsets go into the cut through the effective delay (audio-cut-timing.md), not into the mux. |
 | `TTESInfo` → `TTAVData::onCutFinished` | Same value, read by hand in `TTAVData::onDoCut` (`findInfoFile` + `TTESInfo`, same two conditions) into the member `mAvSyncOffsetMs`; that branch keeps the `TTESInfo` object because `loadExtraFrameIndices` needs it too. |
 | `TTESInfo` → `ttConfigurePreviewMux` | `ttResolvePreviewSource` fills `TTPreviewSource::avOffsetMs` from `timingForVideo`. |
-| `TTESInfo` → `TTPlaybackMuxTask` | `TTCurrentFrame::buildPlaybackMuxParams` builds `TTPlaybackMuxParams::video` from `timingForVideo`; audio is the first track's **source** ES (uncut), so no per-track delay is in it (see playback.md). |
+| `TTESInfo` → `TTPlaybackMuxTask` | `TTCurrentFrame::buildPlaybackMuxParams` builds `TTPlaybackMuxParams::video` from `timingForVideo`; audio is the first track's **source** ES (uncut), so no per-track delay is in it (see playback.md). The offset handed to the muxer is that track's start offset (`trackStartOffsetMs` by file name) when the `.info` has per-track offsets, else `avOffsetMs`. |
 | `TTAVItem` → `TTH26xCutTask` | Audio languages: `audioListItemAt(i).getLanguage()` for **every** track `0..audioCount()-1`, collected after the track-count check guaranteed all tracks were cut, so index `i` lines up with the file list. Subtitle files and languages come from the `cutSubtitleTracks` callback, appended only for `ok` tracks — the two lists stay aligned with each other. |
 | `TTAVItem` → `TTMuxListDataItem` | MPEG-2 synchronous phase in `onDoCut`: `appendAudioFile(path, lang)` / `appendSubtitleFile(path, lang)` per `ok` callback; `lang` is the same `getLanguage()` of the track list. Must complete before the pool starts (see the ordering comment above the `connect` in `onDoCut`). |
 | `TTAVItem` → `TTAudioOnlyCutTask` | `trackFiles`/`trackLanguages` from the `cutAudioTracks` callback, `ok` tracks only. A track short of the requested count ends the run **before** the MKA mux, like the video cuts. |
@@ -138,8 +138,10 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
 ## Assumptions, contracts & pitfalls
 
 - **Two offsets, two stages, never both on one track.** The per-track user
-  delay is baked into the cut audio file through the keep list
-  (audio-cut-timing.md); the `.info` `av_offset_ms` is added at the mux, to
+  delay — plus, since 2026-10-08, the track's `.info` start offset — is baked
+  into the cut audio file through the keep list (audio-cut-timing.md); the
+  `.info` `av_offset_ms` is added at the mux, and reads 0 whenever the
+  `.info` carries per-track start offsets, so the two never add up. It goes to
   **audio packets only** (`addMediaInputs` sets `syncMs` for audio, 0 for
   subtitles and video). Both `TTH26xCutTask` and `onCutFinished` carry a
   comment against applying the delay a second time. Positive offset = audio

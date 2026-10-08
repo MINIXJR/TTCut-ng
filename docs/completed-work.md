@@ -689,6 +689,140 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **Ton nach Zeitstempeln platzieren (Slot-Regel)** → **DONE** (2026-10-08,
+  Zweig `feature/av-sync-timestamp-rule`: `d2345751` ttcut-audiofix `-p`,
+  `9b32909d` ttcut-demux + Gates + Messwerkzeuge, `a344b304` TTCut-ng)
+  - **Befund (2026-10-07):** In der fertigen MKV lag der Ton gegen das Bild
+    anders als im Original. Gemessen über die ganze Kette (Original-TS →
+    `ttcut-demux` → `--auto-cut`, Bilder 500–2000 → MKV; Bilder über die MD5
+    des dekodierten Bildes, Tonpakete über die MD5 der Nutzdaten im Original
+    wiedergefunden; positiv = Ton später zum Bild als im Original; Kontrolle
+    reiner `ffmpeg -c copy`-Umpack: 0 ms).
+  - **Drei Ursachen, jede einzeln gemessen:**
+    1. Der Ton wurde aus dem umgestempelten TS geholt. Der Reparatur-Remux
+       (`-fflags +genpts+igndts`) gibt den ersten 5–10 Paketen einer Tonspur
+       einen um 140 ms kleineren Zeitstempel, `-ss TRIM` zählte ab dem
+       ersten Paket der Spur: +120 bis +136 ms auf 4 von 5 Aufnahmen
+       „Das Erste HD". Auslöser `+igndts` (je Lauf eine Option geändert);
+       warum ffmpeg 9.0.2 das tut, ist ungeklärt.
+    2. Der Trim zielte auf ein Bild, das TTCut-ng nicht als Bild 0 zeigt.
+       H.264/H.265: kleinster Bild-PTS (7 vorgezogene B-Bilder = 140 ms auf
+       „Das Erste HD"), Bild 0 ist aber das erste Paket
+       (`TTDisplayOrderMap::markH264ColdStartLeadingPics`). MPEG-2
+       umgekehrt: erstes Paket (das I-Bild), TTCut-ng zählt die vorgezogenen
+       B-Bilder als Bild 0 und 1.
+    3. Störzonen. Die Zonenbilanz nahm als Bildverlust die PTS-Differenz der
+       Pakete um den DTS-Sprung (05x06 380 ms, Tatort 2340 ms); tatsächlich
+       fehlten 460 und 2500 ms. Auf „The Rookie 07x12" (5 Dateien, 500 s
+       Verlust) lagen die Spuren bis 19 s daneben und untereinander bis 7 s
+       auseinander.
+    Dazu: `-ss` taugt nicht als Trim (Einzeldatei: zählt ab dem ersten Paket
+    der Spur; concat-Eingabe: ab dem frühesten Strom), und den Rest unter
+    einem Tonrahmen trug niemand (`audio_N_first_pts`/`audio_N_trimmed_ms`
+    las `TTESInfo`, benutzte sie aber nicht).
+  - **Geprüft und verworfen:** `Ts2MKV.sh`/tsMuxeR als Vorbild (schreibt die
+    Zeitstempel nie um, lag auf 05x08 aber selbst 60 ms (MP2) und 156 ms
+    (AC3) daneben — nur an den Zeitstempeln des `.m2ts` gemessen); die
+    DTS-Länge als Gaplänge (2026-08-24: auf MPEG-2 besser, auf H.264
+    schlechter); „nur `+igndts` weglassen" und „Ton aus dem Original mit
+    `-ss`" (beheben Ursache 1, nicht 2 und 3).
+  - **Regel:** Jeder Tonrahmen kommt an den Bildplatz, den sein eigener
+    Zeitstempel nennt. Bildachse = TTCut-ngs Bildindex (Bilder in
+    Anzeigereihenfolge, Bild *i* bei *i*/fps). Rahmen ohne Bild fällt weg,
+    Platz ohne Rahmen bekommt Stille, beschädigter Rahmen behält seinen
+    Platz als Stille. Ersetzt Kopf-Trim, Störzonen-Bilanz und End-Padding.
+    Aufbau: `docs/code-map/ttcut-demux.md`. Auf Paketlisten durchgerechnet
+    und als ES gebaut wurde sie schon am 2026-10-07 (Wegwerf-Skripte unter
+    `tools/diag/scratch/av-sync-2026-10-07/`).
+  - **Ergebnis** (`tools/diag/gate_av_sync_real.sh`, 2026-10-08, vierter
+    Lauf nach allen Korrekturen, 15 Aufnahmen: 14 bestanden, bei „The
+    Rookie" nur die ES-Prüfung; „Prüfung ES" = `av_track_audit.py`, jeder Tonrahmen gegen das
+    Bild an seinem PTS über den geprüften Teil, als Bereich; „MKV" =
+    `av_chain_check.py` am Schnitt 500–2000; MP2-Spuren / AC3; ms):
+
+    | Aufnahme | vorher (MKV) | Prüfung ES | MKV |
+    |---|---|---|---|
+    | Babylon Berlin 05x05 (Das Erste HD) | +116 / +100 | +4 / −12 | −4 / +4 |
+    | 05x06, Störzone bei 14 s | +252…+328 / +100…+208 | −4…0 / −12…0 | −12; −8 / +4; +16 |
+    | 05x08 | +268 / +124 | −12 / +12 | +4 / −4 |
+    | Tatort 2011x01, Lücke 2,5 s | +464 / +440 | −12…−8 / +4…+8 | +4; +8 / −12; −8 |
+    | Navy CIS 23x14 (MPEG-2 SD) | −72…−80 / −88…−96 | −8 / 0 | 0 / 0 |
+    | Ted 02x07 (MPEG-2 SD) | wie oben | −8 / +8 | 0 / +8 |
+    | Simpsons 02x06 (MPEG-2 SD) | wie oben | +8 / +8 | −8 / +8 |
+    | Whitney Houston (H.264, 3 MP2 + AC3) | −8, −28, +56 / +37 | +2, +6, −6 / −9 | −5,8, −1,8, +10,2 / +7,1 |
+    | DF1 Moon Crash (H.264 PAFF) | +128 | +8 | −8 |
+    | TELE5 (MPEG-2 SD) | −72 | −8 | 0 |
+    | ServusTV HD (H.264 MBAFF) | nicht gemessen | −6, −6 / +2 | +1,5, +1,5 / +2,2 |
+    | Designermode (H.265 2160p50) | +268 | −12 | +4 |
+    | Remington Steele 03x15 (MPEG-2, 2 Dateien, 135,7 s Verlust), ganz | ~150 an der Naht | −6…+2 | +2,4; +10,4 |
+    | Comedy Central (MPEG-2, 2 Dateien, PTS-Umlauf), ganz | Lücke unsichtbar | +5 | −11 |
+    | The Rookie 07x12 (5 Dateien, 500,8 s Verlust), ganz | −10 ms … −19 s | −18…+10 (alle drei) / −21…+19 | nicht schneidbar |
+
+    „Prüfung ES" ist die rohe Lage im ES; der in der `.info` gemeldete
+    Startversatz ist ihr Gegenwert am Anfang und geht in den Schnitt ein.
+    Ganze 05x08 (7,8 GB), altes gegen neues Skript: Video-ES bytegleich, Ton
+    nur am Kopf und am Ende verschieden, keine Bearbeitung dazwischen;
+    67 s gegen 97 s (unter Fremdlast gemessen, kein sauberer Zeitvergleich).
+  - **Funde beim Bauen, jeder gemessen:**
+    - H.264 PAFF kommt als zwei Pakete je Bild, das zweite Feld 20 ms hinter
+      dem ersten (DF1 HD). Ohne Zusammenfassen zählt die Bildachse doppelt.
+      Das alte Skript zählte dort Felder als Bilder („20939 frames =
+      837560ms" für 418,8 s) und hängte 419,7 s Stille an.
+    - Jede Aufnahme endet mitten in einer Bildgruppe; die noch nicht
+      gesendeten Bilder sind Löcher unter den letzten 16 Plätzen. Sie werden
+      nicht als Videoverlust gemeldet.
+    - **libav überspringt den ersten MP2-Rahmen einer Datei, wenn der zweite
+      einen anderen Kopf hat** (Modus, Copyright, Original, Emphasis).
+      ffmpegs Stille-Rahmen trägt das Original-Bit, der Sender nicht: EIN
+      Stille-Rahmen am Anfang verschob alle Zeitstempel, die TTCut-ng liest,
+      um einen Rahmen — Simpsons MP2 −32 ms, Comedy Central −35 ms bei
+      richtiger ES. Probe am Dateikopf: Bit im ersten Rahmen löschen, im
+      zweiten setzen oder zwei Stille-Rahmen → erstes Paket wieder bei
+      Byte 0. `ttcut-audiofix -p` baut MP2-Stille seither selbst (Kopf des
+      Nachbarrahmens, nichts zugeteilt, CRC falls die Spur eine führt).
+      Die erste Vermutung (Rundung am Rahmenrand im Tonschnitt) hat der
+      Code widerlegt (1 ms Toleranz).
+    - Beginnt eine Spur nach dem Bild, ist ihr erstes Paket der
+      angeschnittene Rahmen des Aufnahmeanfangs; er wird durch Stille
+      ersetzt. Der Nachweis des Startversatzes läuft deshalb über den ersten
+      **kopierten** Rahmen (ServusTV HD).
+    - Das alte Skript fügte an der Naht der Zwei-Datei-Tux-Aufnahme 96 ms
+      Stille ein; die Paket-PTS laufen dort durch (65,336 → 65,360).
+    - Mit einem älteren `ttcut-audiofix` im Pfad blieben alle Spuren
+      unplatziert; `ttcut-demux` bricht jetzt am Anfang ab.
+    - Messwerkzeug: Matroska speichert ganze Millisekunden (Kontrolle liest
+      bis +0,4 ms); an einer Naht des Originals brechen Ton und Bild nicht
+      am selben Paket (Kontrolle las für 20 Pakete −109 s) — das Werkzeug
+      nimmt dort das Bild auf der Seite des Pakets.
+  - **TTCut-ng:** `TTESInfo` liest `audio_N_start_offset_ms`;
+    `effectiveAudioDelayMs` = Benutzer-Delay + Startversatz geht in
+    `cutAudioTracks` und die Drift-Spalte; die H.26x-Wiedergabe-MKV bekommt
+    den Versatz der ersten Spur. 05x08: ohne den Versatz −20 / −4, mit
+    +4 / −4.
+  - **Durchsicht des ganzen Zweigs durch einen frischen Prüfer** (kein
+    kritischer Befund, vier wichtige, alle zuerst per Gate nachgestellt):
+    ein einzelner Ausreißer-PTS im Bild (ein kaputtes Paket) wurde nach
+    seinem Wert einsortiert — Loch an seinem Platz, Extra-Platz woanders,
+    ein zu kleiner Wert wurde Bild 0 mit falschem „Material loss"; jetzt
+    kehrt das Bild an den freien Platz bei seinen Nachbarn zurück.
+    Rahmendauern liefen auf sechs Stellen gerundet in die Regel: bei
+    29,97 fps oder 44,1 kHz Drift um einen Tonrahmen in 23 min und ein
+    eingefügter Stille-Rahmen; jetzt als Brüche. Unter `mawk` und de_DE
+    brach das Skript mit einem awk-Syntaxfehler ab (Komma als
+    Dezimaltrenner, bestand schon vorher); das Skript setzt `LC_NUMERIC=C`.
+    Changelog-Formulierung („ganze Aufnahme") berichtigt.
+  - **Entschieden (Anwender, 2026-10-08): Ton vor Bild 0 bleibt weg.** AC3
+    beginnt deshalb oft mit einem Stille-Rahmen (32 ms): der Rahmen, dessen
+    PTS vor Bild 0 liegt, fällt auch dann, wenn sein größerer Teil hinter
+    Bild 0 spielt, der nächste landet auf Platz 1 (gemessen auf „Das Erste
+    HD", 05x08). Ihn zu behalten wäre eine Änderung der Regel gewesen.
+  - **Gates:** `audiofix_assemble` (10), `demux_slotplan` (39 je awk, unter
+    gawk und mawk), `demux_slot_e2e` (17; gegen das alte Skript 9 von 13
+    FAIL), `esinfo`; `gate_av_sync_real.sh` mit Aufnahmen. Entfallen:
+    `demux_zonesync`, `demux_gapsync`.
+  - Offen geblieben: `TODO.md`, „Nach der Zeitstempel-Regel in
+    `ttcut-demux` offen".
+
 - **„Tonstörungen"-Marker auf praktisch jeder Aufnahme** → **GEFIXT**
   (2026-08-30, Branch `fix/audiofix-edge-junk`)
   - Meldung des Nutzers: „die Audiospuren haben meistens am Ende einen

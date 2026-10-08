@@ -7,7 +7,7 @@
 # Supported audio codecs: MP2, AC3, EAC3 (DD+), AAC, MP3
 #
 # Multi-core optimization: Video and audio streams are extracted in parallel,
-# audio padding also runs in parallel for all tracks.
+# the audio tracks are placed on the picture timeline in parallel too.
 #
 # Usage: ttcut-demux [-e] [-A] [--subs|--no-subs] [-n name] <input.ts> [output_dir]
 #
@@ -17,6 +17,19 @@
 #
 
 set -e
+
+# Numbers with a decimal point, whatever the user's locale: the script
+# passes computed values (frame rates, timestamps, durations) from one awk,
+# sort or printf to the next, and mawk - Debian's default awk - prints and
+# reads them with the locale's decimal separator. Under de_DE that turned
+# 25.000000 into 25,000000 and the next awk call into a syntax error.
+# LC_ALL overrides LC_NUMERIC, so a set LC_ALL moves into LANG first - every
+# other category keeps the user's locale.
+if [ -n "${LC_ALL:-}" ]; then
+    export LANG="$LC_ALL"
+    unset LC_ALL
+fi
+export LC_NUMERIC=C
 
 # Track all temp files/dirs we create so a failure (set -e abort, SIGINT,
 # disk-full, ...) doesn't leave multi-GB junk in $OUTDIR. Files are removed;
@@ -42,7 +55,7 @@ trap _cleanup_temps EXIT
 # exits NORMALLY (trailer written, rc 255) - without an explicit abort exit
 # here, a Ctrl-C would only skip the current ffmpeg invocation and the
 # script would march on to the next step. Kill background jobs (parallel
-# extraction / padding subshells), then exit 130; the EXIT trap above does
+# extraction / placement subshells), then exit 130; the EXIT trap above does
 # the temp cleanup exactly once.
 _abort_demux() {
     echo "" >&2
@@ -148,19 +161,22 @@ video_frame_rate() {
     echo "$rn/$rd"
 }
 
-# First video packet PTS of $1, codec-aware (reads $VIDEO_CODEC, so call
+# PTS of TTCut-ng's frame 0 in $1, codec-aware (reads $VIDEO_CODEC, so call
 # only after stream discovery):
-# H.264/H.265: minimum PTS over the first 2s = first DISPLAY frame (leading
-# B-frames have a lower PTS than the I-frame that precedes them in decode
-# order). MPEG-2: first packet PTS (the I-frame).
+# H.264/H.265: the first packet in stream order. The pictures behind it with
+# a smaller PTS (open-GOP leading B / RASL) are shown by no decoder on a cold
+# start, and TTCut-ng drops them from its frame index
+# (TTDisplayOrderMap::markH264ColdStartLeadingPics).
+# MPEG-2: the smallest PTS of the first 2 s. TTCut-ng numbers the leading B
+# pictures behind the first I as frames 0 and 1.
 probe_first_video_pts() {
     local src=$1
     if [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ] || [ "$VIDEO_CODEC" = "h264" ]; then
+        _probe_first_packet_pts v:0 "$src"
+    else
         ffprobe -v error -select_streams v:0 -read_intervals "%+2" \
             -show_entries packet=pts_time -of csv=p=0 "$src" 2>/dev/null | \
-            tr -d ',' | sort -n | head -1
-    else
-        _probe_first_packet_pts v:0 "$src"
+            tr -d ',' | grep -E '^[0-9]' | LC_ALL=C sort -g | head -1
     fi
 }
 
@@ -168,9 +184,7 @@ probe_first_video_pts() {
 # Values failing numeric validation become empty; the bitrate gets the
 # codec-dependent default (mp2 192k, ac3 384k, aac 192k). sample_rate,
 # channels, and channel_layout are left empty on probe failure — each call
-# site applies its own fallback exactly as before. Shared by the mid-stream
-# silence repair and the end-padding block; the two MECHANISMS stay separate
-# by design (re-encode insert vs. bit-preserving concat padding).
+# site applies its own fallback. Used for the silence frame of the slot rule.
 #
 # Known unfixable limitation: ffprobe cannot distinguish AC3 dual-mono
 # (acmod 0, two independent mono programs) from stereo (acmod 2) — both
@@ -213,7 +227,7 @@ readonly FFMPEG_WARN_PATTERN='error|warning|invalid|corrupt|failed|suppress|too 
 _extract_subs_ts() {
     local idx=$1 out=$2 log=$3
     shift 3
-    ffmpeg -y -v warning "${SUBS_INPUT_ARGS[@]}" \
+    ffmpeg -y -v warning "${ORIG_INPUT_ARGS[@]}" \
         -copyts -output_ts_offset "-${ORIG_VIDEO_PTS:-0}" \
         -muxdelay 0 -avoid_negative_ts disabled \
         -map "0:$idx" "$@" -f mpegts "$out" > "$log" 2>&1 || true
@@ -285,80 +299,6 @@ ffmpeg_audio_corruption_is_edge_only() {
         END { exit (inside ? 1 : 0) }'
 }
 
-# Detect audio packet gaps in source TS via ffprobe.
-# Output format (one gap per line):
-#   <gap_start_pts_source> <gap_end_pts_source> <gap_size_ms>
-# All values are SOURCE PTS (relative to TS PCR, NOT first_video_pts).
-# Conversion to frame indices happens later when first_video_pts is known.
-#
-# Threshold: caller-supplied (frame-scale, see Rev-2 block); anything smaller
-# falls into the existing end-padding bucket, which handles sub-threshold
-# drift cumulatively.
-detect_audio_gaps() {
-    local source_ts=$1 stream_index=$2 out_file=$3 threshold_s=$4
-    : > "$out_file"
-    ffprobe -v error -select_streams "$stream_index" -show_packets \
-        -show_entries packet=pts_time "$source_ts" 2>/dev/null | \
-    awk -F= -v threshold="$threshold_s" '
-        /^pts_time=/ {
-            curr = $2
-            # Skip N/A or empty timestamps without updating prev (transparent to gap detection)
-            if (curr == "N/A" || curr == "") next
-            if (prev != "" && curr - prev > threshold) {
-                gap_size_ms = (curr - prev) * 1000
-                printf "%.6f %.6f %.0f\n", prev, curr, gap_size_ms
-            }
-            prev = curr
-        }
-    ' >> "$out_file"
-}
-
-# Detect video packet gaps in source TS via ffprobe.
-# Outputs to $out_file: one line per gap, "prev_pts curr_pts gap_ms"
-# (all PTS values are source-PTS, NOT relative).
-#
-# Used by classify_audio_gap() to decide whether an audio gap is part of
-# a combined A+V transport-stream loss (in which case audio repair is skipped).
-#
-# Detection uses DTS (decode order), not PTS: ffprobe -show_packets emits
-# packets in transport/decode order, and with B-frames present consecutive
-# packet PTS values are NOT monotonic (B-frame display reordering swings
-# them by 1-2 frame durations even with zero data loss). At the coarse
-# Rev-1 threshold (1.0s) that reorder noise was harmless; at the frame-scale
-# threshold below it would fire on every packet. DTS is monotonic in a
-# healthy stream, so a DTS jump is the correct signal for an actual
-# transport-stream discontinuity. The reported gap boundaries stay in the
-# PTS domain (prev/curr packet's PTS) so callers doing overlap math against
-# audio PTS gaps keep comparing like with like.
-#
-# Args:
-#   $1 = source TS file path
-#   $2 = output file path (will be truncated to empty if no gaps)
-#   $3 = threshold in seconds (frame-scale, see Rev-2 block)
-#
-# NOTE: gap sizes are measured on decode-order boundaries; B-frame reorder lag
-# can overestimate a gap by a few frame durations (bias is always upward).
-detect_video_gaps() {
-    local source_ts=$1 out_file=$2 threshold_s=$3
-    : > "$out_file"
-    ffprobe -v error -select_streams v:0 -show_packets \
-        -show_entries packet=pts_time,dts_time "$source_ts" 2>/dev/null | \
-    awk -F= -v threshold="$threshold_s" '
-        /^pts_time=/ { curr_pts = $2 }
-        /^dts_time=/ {
-            curr_dts = $2
-            # Skip N/A or empty timestamps without updating prev_* (transparent to gap detection)
-            if (curr_dts == "N/A" || curr_dts == "" || curr_pts == "N/A" || curr_pts == "") next
-            if (prev_dts != "" && curr_dts - prev_dts > threshold) {
-                gap_size_ms = (curr_pts - prev_pts) * 1000
-                printf "%.6f %.6f %.0f\n", prev_pts, curr_pts, gap_size_ms
-            }
-            prev_dts = curr_dts
-            prev_pts = curr_pts
-        }
-    ' >> "$out_file"
-}
-
 # Poll a background ffmpeg's -progress file every two seconds until the
 # process exits, handing each new out_time_us value (output timeline in
 # microseconds) to the named reporter function.
@@ -372,219 +312,226 @@ _poll_ffmpeg_progress() {
     done
 }
 
-# ffprobe stream field probe shared by the multi-file gap detectors and the
-# span/start-time probes below. Prints the first stream row's value with the
-# trailing comma stripped:
-#   ffprobe's csv writer appends an empty trailing field to the stream row
-#   for SOME streams, and the numeric tests in the callers reject the
-#   "1000.845000," that results. Measured on a VDR .ts: the video row comes
-#   back "program,stream,1000.845000," while the audio row of the same file
-#   is clean "program,stream,1000.000000"; a raw .m2v carries the comma too,
-#   a raw .264 does not. Stripping is a no-op where no comma appears, so it
-#   is applied to every probe. ffprobe also emits the stream= row twice for
-#   a raw .ts segment (global stream list + per-program stream list both
-#   match "v:0"); take the first line only.
-_probe_stream_field() {
-    local v
-    v=$(_ffprobe "$1" -show_entries "stream=$2" -of csv=p=0 "$3" | head -1)
-    printf '%s' "${v%,}"
-}
-
-# start_time and duration of one stream of FILE into two variables (both
-# empty when the probe fails). Args: SELECTOR FILE START_VAR DUR_VAR
-_probe_segment_timing() {
-    local -n _start=$3
-    local -n _dur=$4
-    _start=$(_probe_stream_field "$1" start_time "$2")
-    _dur=$(_probe_stream_field "$1" duration "$2")
-}
-
-# One segment of the splice-gap chain: emits a gap row when this segment
-# starts more than threshold_s after the previous one ended, then advances
-# _SPLICE_PREV_END. Callers reset _SPLICE_PREV_END to "" at loop start and
-# whenever a segment could not be probed (breaking the chain on purpose).
-# %f formatting via awk (not bash's printf builtin, which is locale-sensitive
-# - a comma-decimal locale turns "3663.6" into "3663,000000" here and
-# corrupts every downstream PTS compare).
-_SPLICE_PREV_END=""
-_splice_gap_step() {
-    local seg_start=$1 seg_dur=$2 threshold_s=$3 out_file=$4
-    if [ -n "$_SPLICE_PREV_END" ]; then
-        awk -v ps="$_SPLICE_PREV_END" -v ss="$seg_start" -v th="$threshold_s" \
-            'BEGIN { if ((ss - ps) > th) printf "%.6f %.6f %.0f\n", ps, ss, (ss - ps) * 1000 }' >> "$out_file"
-    fi
-    _SPLICE_PREV_END=$(awk -v s="$seg_start" -v d="$seg_dur" 'BEGIN {printf "%.6f", s + d}')
-}
-
-# Splice-gap step for one probed segment, or the deliberate chain break when
-# the probe came back non-numeric: warns with the caller's context and resets
-# _SPLICE_PREV_END. Args: seg_start seg_dur threshold_s out_file context
-_splice_gap_step_or_warn() {
-    local seg_start=$1 seg_dur=$2 threshold_s=$3 out_file=$4 context=$5
-    if [[ "$seg_start" =~ ^[0-9]+\.?[0-9]*$ && "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-        _splice_gap_step "$seg_start" "$seg_dur" "$threshold_s" "$out_file"
-    else
-        echo "$context - splice gap around it not measured" >&2
-        _SPLICE_PREV_END=""
-    fi
-}
-
-# VDR multi-file variant of detect_video_gaps(): scans every segment (not
-# just the first) and additionally reports the splice gap BETWEEN segments.
+# The three slot-rule functions run awk and sort under LC_ALL=C: mawk reads
+# and prints numbers with the locale's decimal point (a comma under de_DE).
 #
-# Why this is needed: for a single-file recording, detect_video_gaps("$INPUT")
-# sees the whole thing. For VDR multi-file, "$ORIGINAL_INPUT" was always just
-# argv[1] (00001.ts) - segments 2..N were never scanned, so any real content
-# loss inside them (corrupt GOPs, dropped packets) never reached
-# es_missing_ranges=. Measured on a real 5-segment signal-loss recording:
-# segment 3 alone had ~25s of within-segment holes invisible to the old scan.
-#
-# The 4 VDR_SEGMENTS files share ONE continuous PCR/PTS clock (this is a
-# normal, size-triggered VDR split, not a new tuner session), so each
-# segment's own start_time/duration are directly comparable absolute PTS -
-# no coordinate translation needed, and this stays in the same domain as
-# FIRST_VIDEO_PTS (which is also probed from raw, un-repaired input).
-#
-# The splice gap (end of segment i vs start of segment i+1) matters because
-# the concat DEMUXER used later for extraction (see FFMPEG_INPUT_ARGS)
-# stitches segments seamlessly - it re-bases segment i+1 to start right where
-# segment i ended, silently discarding whatever real broadcast time separated
-# them. From the merged output ES's point of view this is exactly like a
-# within-segment hole (frame N is immediately followed by frame N+1 with no
-# gap in the file, even though real content in between was never captured),
-# so it is reported the same way.
-#
-# This function finds actual packet-level content loss at exact positions.
-# An earlier, separate function additionally compared each segment's
-# container-level PTS SPAN (last-first) between audio and video to catch
-# small, systematic audio-trim-carry drift across boundaries; it was removed
-# with the disturbance-zone model (build_disturbance_zones/build_zone_edits),
-# which balances each zone once instead of accumulating per-row offsets.
-detect_video_gaps_multifile() {
-    local out_file=$1 threshold_s=$2
-    : > "$out_file"
-    local n=${#VDR_SEGMENTS[@]}
-    local i seg_gaps
-    _SPLICE_PREV_END=""
-    for ((i = 0; i < n; i++)); do
-        seg_gaps="${out_file}.seg${i}"
-        _CLEANUP_FILES+=("$seg_gaps")
-        detect_video_gaps "${VDR_SEGMENTS[$i]}" "$seg_gaps" "$threshold_s"
-        cat "$seg_gaps" >> "$out_file"
-        rm -f "$seg_gaps"
-
-        local seg_start seg_dur
-        _probe_segment_timing v:0 "${VDR_SEGMENTS[$i]}" seg_start seg_dur
-        _splice_gap_step_or_warn "$seg_start" "$seg_dur" "$threshold_s" "$out_file" \
-            "detect_video_gaps_multifile: ffprobe failed on segment $i (${VDR_SEGMENTS[$i]})"
-    done
-    sort -n -o "$out_file" "$out_file"
-}
-
-# VDR multi-file variant of detect_audio_gaps() - same rationale as
-# detect_video_gaps_multifile() above, per audio track.
-detect_audio_gaps_multifile() {
-    local stream_idx=$1 out_file=$2 threshold_s=$3
-    : > "$out_file"
-    local n=${#VDR_SEGMENTS[@]}
-    local i seg_gaps
-    _SPLICE_PREV_END=""
-    for ((i = 0; i < n; i++)); do
-        seg_gaps="${out_file}.seg${i}"
-        _CLEANUP_FILES+=("$seg_gaps")
-        detect_audio_gaps "${VDR_SEGMENTS[$i]}" "$stream_idx" "$seg_gaps" "$threshold_s"
-        cat "$seg_gaps" >> "$out_file"
-        rm -f "$seg_gaps"
-
-        local seg_start seg_dur
-        _probe_segment_timing "$stream_idx" "${VDR_SEGMENTS[$i]}" seg_start seg_dur
-        # A badly damaged segment can leave this track's own duration
-        # unprobeable ("N/A" - ffprobe's fast container-index duration probe
-        # returning N/A: observed on the real 5-segment fixture for the
-        # AC3/mis tracks in the heaviest-corrupted segment). Falling back to
-        # "" here would break the prev_end chain and silently drop the splice
-        # gaps on BOTH sides of this segment. Fall back to the segment's own
-        # video timing as the least-wrong estimate (assumes this track's
-        # start/end roughly tracks video in that segment, which is the same
-        # assumption the "no additional drift" fallback below makes).
-        if [[ ! "$seg_start" =~ ^[0-9]+\.?[0-9]*$ || ! "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-            echo "detect_audio_gaps_multifile: track $stream_idx duration unavailable on segment $i (${VDR_SEGMENTS[$i]}) - falling back to video timing for splice-gap purposes" >&2
-            _probe_segment_timing v:0 "${VDR_SEGMENTS[$i]}" seg_start seg_dur
-        fi
-        _splice_gap_step_or_warn "$seg_start" "$seg_dur" "$threshold_s" "$out_file" \
-            "detect_audio_gaps_multifile: ffprobe failed on segment $i track $stream_idx (${VDR_SEGMENTS[$i]})"
-    done
-    sort -n -o "$out_file" "$out_file"
-}
-
-# Verschmilzt Video- und Audio-Gap-Fenster zu Stoerzonen.
-#
-# Eine Stoerzone ist ein Fenster auf der Quell-PTS-Achse, in dem mindestens
-# einer der Stroeme Material verloren hat. Ein realer Sendeausfall trifft
-# beide Stroeme zur selben Realzeit, aber der PES-Muxer-Vorlauf des Videos
-# (0.5-1 s) verschiebt die Fenster gegeneinander - derselbe Ausfall erscheint
-# als zwei Fenster. Frueher erzeugte das zwei Zeilen, die BEIDE den
-# Positions-Offset erhoehten: ein Ausfall zaehlte doppelt (gemessen 2026-08-24
-# auf "03x15": 26.328 + 26.480 statt ~26.4 s, jede spaetere Reparatur landete
-# 26.4 s zu frueh, Ton lief 808 ms hinter dem Bild).
-#
-# Verschmelzen ist die sichere Richtung: die Bilanz einer Zone ist die Summe
-# der Verluste je Strom, und Summen bleiben korrekt, egal wie grob gruppiert
-# wird. Zu fein gruppieren erzeugt den Defekt; zu grob kostet hoechstens einen
-# kleinen Versatz ueber die wenigen Sekunden zwischen zwei Zonen.
-#
-# Args: $1=Video-Gaps  $2=Audio-Gaps (eine Spur)  $3=Toleranz s  $4=Ausgabe
-# Ausgabe je Zone: "zone_start zone_end video_lost_s audio_lost_s"
-build_disturbance_zones() {
-    local v_gaps=$1 a_gaps=$2 tol=$3 out=$4
-    : > "$out"
-    { [ -s "$v_gaps" ] && awk '{printf "%.6f %.6f v\n", $1, $2}' "$v_gaps"
-      [ -s "$a_gaps" ] && awk '{printf "%.6f %.6f a\n", $1, $2}' "$a_gaps"
-      true; } \
-    | sort -g -k1,1 \
-    | awk -v tol="$tol" '
-        NR==1 { zs=$1; ze=$2 }
-        NR>1 && $1 - ze > tol {
-            printf "%.6f %.6f %.6f %.6f\n", zs, ze, vl, al
-            zs=$1; ze=$2; vl=0; al=0
+# Run index per PTS line of FILE -> OUT as "run pts". A new run starts where
+# the PTS stays more than 0.5 s below the recent level for 10 packets; the
+# level is the 3rd-highest PTS of the previous 12 packets, so one stray
+# PTS (a corrupt packet) is no jump. N/A lines keep the current run.
+pts_runs() {
+    LC_ALL=C awk '
+        function third_highest(   i, j, t, v, w) {
+            for (i = 0; i < 12; i++) v[i] = last[(lp + i) % 12]
+            for (i = 0; i < 12; i++) for (j = i + 1; j < 12; j++) if (v[j] > v[i]) { t = v[i]; v[i] = v[j]; v[j] = t }
+            return v[2]
         }
-        { if ($2 > ze) ze=$2
-          if ($3=="v") vl += $2-$1; else al += $2-$1 }
-        END { if (NR>0) printf "%.6f %.6f %.6f %.6f\n", zs, ze, vl, al }
-      ' > "$out"
+        { pts[NR] = $1 }
+        END {
+            run = 0; n = 0; lp = 0
+            for (k = 1; k <= NR; k++) {
+                p = pts[k]
+                if (p == "N/A") { print run, p; continue }
+                if (n >= 12) {
+                    ref = third_highest()
+                    if (p < ref - 0.5) {
+                        low = 1
+                        for (m = k; m < k + 10 && m <= NR; m++) if (pts[m] != "N/A" && pts[m] >= ref - 0.5) { low = 0; break }
+                        if (low) { run++; n = 0; lp = 0 }
+                    }
+                }
+                last[lp] = p + 0; lp = (lp + 1) % 12; if (n < 12) n++
+                print run, p
+            }
+        }' "$1" > "$2"
 }
 
-# Rechnet Stoerzonen in Reparatur-Edits um.
-#
-# balance = audio_lost - video_lost:
-#   > 0  Ton hat mehr verloren  -> Stille einfuegen
-#   < 0  Bild hat mehr verloren -> Ton kuerzen (Sync-Regel)
-#   = 0  echter A+V-Ausfall     -> nichts zu tun, der Sync traegt sich selbst
-#
-# Der Offset acc waechst AUSSCHLIESSLICH um audio_lost. pos ist eine Position
-# im getrimmten Ton-ES, und dorthin uebersetzt nur Ton-Verlust. Video-Verluste
-# koennen den Offset nicht mehr erreichen - genau daran scheiterte das alte
-# Zeilenmodell.
-#
-# Schwelle 20 ms: identisch zur bisherigen Untergrenze der frueheren,
-# zeilenweisen Video-only-Kuerzung. Darunter rundet die Frame-Quantisierung
-# der Assembly ohnehin auf 0 Frames, und eine alleinstehende Sub-Frame-
-# Insertion hat 2026-08-17 eine Tonspur zerstoert (1-Frame-Datei, die der
-# mp3-Demuxer nicht oeffnen kann).
-#
-# Args: $1=Zonendatei  $2=erster PTS des GETRIMMTEN Ton-ES
-# Ausgabe je Edit: "pos_s balance_ms"
-build_zone_edits() {
-    local zones=$1 first_pts=$2
-    [ -s "$zones" ] || return 0
-    awk -v fp="$first_pts" -v thr=20 '
-        { zs=$1; vl=$3; al=$4
-          bal_ms = (al - vl) * 1000
-          pos = zs - fp - acc
-          if (pos < 0) pos = 0
-          if (bal_ms >= thr || bal_ms <= -thr) printf "%.6f %.0f\n", pos, bal_ms
-          acc += al }
-    ' "$zones"
+# Picture slots = TTCut-ng's frame index: pictures in display order, slot i
+# shown at i*FRAME_DUR. MODE h26x: the cold start drops every picture of the
+# first run with a PTS below V0 (open-GOP leading / RASL pictures, which no
+# decoder shows); mpeg2: V0 is the smallest PTS, nothing is dropped.
+# A picture less than 0.75 frame durations behind the previous slot of its
+# run is the same frame: H.264 PAFF comes as two packets per frame (measured
+# on the raw ES: 6000 packets for 3000 frames), the second field with the
+# same PTS, half a frame later or without one.
+# OUT_HOLES gets one line per picture hole (two slots of one run more than
+# 1.5 frame durations apart), "start end lost_ms" with start = frame 0 PTS +
+# slot time + what was lost before: the source PTS of the hole inside one
+# run, and a usable position across runs too. Holes among the last 16 slots
+# are not written: a recording ends inside a GOP, and the pictures not yet
+# transmitted (they display before the last ones received; 16 = the largest
+# reorder depth of H.264/H.265) are its normal end, not damage. They stay
+# holes for the audio placement.
+# A stray PTS - one corrupt packet, more than 1 s away from the pictures
+# before AND behind it in stream order (median of up to 6 on each side; at a
+# hole or a run edge a picture agrees with one side) - is no place on the
+# timeline: sorted by its value it would open a hole where it belongs and add
+# a slot where it does not (a stray low PTS would even become frame 0). The
+# picture goes back into the hole next to its neighbours when there is one,
+# and gets no slot otherwise.
+# FRAME_DUR may be a fraction ("1001/30000"): 29.97 fps has no finite decimal,
+# and a duration rounded to 6 places drifts by an audio frame within 23 min.
+# Args: VIDEO_PTS_FILE MODE V0 FRAME_DUR OUT OUT_HOLES  ->  OUT lines "run slot pts"
+video_slots() {
+    local vpts=$1 mode=$2 v0=$3 fdur=$4 out=$5 holes=$6
+    local runs="$out.runs" strays="$out.strays" sorted="$out.sorted"
+    : > "$holes"; : > "$strays"
+    pts_runs "$vpts" "$runs"
+    # stream order: split off the strays as "run level" (level = the median
+    # of the side they are nearer to)
+    LC_ALL=C awk -v strays="$strays" '
+        function side_median(i, step,   j, n, k, t, v) {
+            n = 0
+            for (j = i + step; j >= 1 && j <= NR && n < 6 && run[j] == run[i] && (j - i) * step <= 24; j += step)
+                if (pts[j] != "N/A") v[n++] = pts[j] + 0
+            if (n < 3) return "none"
+            for (j = 0; j < n; j++) for (k = j + 1; k < n; k++) if (v[k] < v[j]) { t = v[j]; v[j] = v[k]; v[k] = t }
+            return v[int(n / 2)]
+        }
+        function dist(a, b) { return (a > b) ? a - b : b - a }
+        { run[NR] = $1; pts[NR] = $2 }
+        END {
+            for (i = 1; i <= NR; i++) {
+                if (pts[i] == "N/A") continue
+                before = side_median(i, -1); behind = side_median(i, 1)
+                far_before = (before != "none" && dist(pts[i], before) > 1.0)
+                far_behind = (behind != "none" && dist(pts[i], behind) > 1.0)
+                if ((far_before && far_behind) || (far_before && behind == "none") || (far_behind && before == "none")) {
+                    level = (before == "none") ? behind : (behind == "none") ? before \
+                          : (dist(pts[i], before) < dist(pts[i], behind)) ? before : behind
+                    printf "%d %.6f\n", run[i], level > strays
+                } else print run[i], pts[i]
+            }
+        }' "$runs" | LC_ALL=C sort -k1,1n -k2,2g -u > "$sorted"
+    # a stray takes the free picture place nearest to its level, within 1 s
+    if [ -s "$strays" ]; then
+        LC_ALL=C awk -v strays="$strays" -v fdur="$fdur" '
+            function num(s,   a) { return (split(s, a, "/") == 2) ? a[1] / a[2] : s + 0 }
+            function dist(a, b) { return (a > b) ? a - b : b - a }
+            BEGIN { fdur = num(fdur); ns = 0
+                    while ((getline line < strays) > 0) { split(line, f, " "); srun[ns] = f[1]; slev[ns] = f[2] + 0; ns++ } }
+            { r[n] = $1; p[n] = $2 + 0; n++ }
+            END {
+                for (s = 0; s < ns; s++) {
+                    best = ""; bestd = 1.0
+                    for (i = 1; i < n; i++) {
+                        if (r[i] != srun[s] || r[i - 1] != srun[s] || p[i] - p[i - 1] <= 1.5 * fdur) continue
+                        free = int((p[i] - p[i - 1]) / fdur + 0.5) - 1          # picture places in this hole
+                        for (k = 1; k <= free; k++) {
+                            c = p[i - 1] + k * fdur
+                            if (!((r[i] SUBSEP k SUBSEP i) in used) && dist(c, slev[s]) < bestd) { best = c; bestd = dist(c, slev[s]); bk = k; bi = i }
+                        }
+                    }
+                    if (best != "") { used[srun[s] SUBSEP bk SUBSEP bi] = 1; printf "%d %.6f\n", srun[s], best }
+                }
+            }' "$sorted" >> "$sorted"
+    fi
+    LC_ALL=C sort -k1,1n -k2,2g -u "$sorted" \
+    | LC_ALL=C awk -v mode="$mode" -v v0="$v0" -v fdur="$fdur" -v holes="$holes" '
+        function num(s,   a) { return (split(s, a, "/") == 2) ? a[1] / a[2] : s + 0 }
+        BEGIN { fdur = num(fdur); nh = 0; slot = 0; lost = 0 }
+        mode == "h26x" && $1 == 0 && $2 < v0 - 0.000001 { next }
+        have && $1 == lrun && $2 - lpts < 0.75 * fdur { next }
+        !have { first = $2 }
+        have && $1 == lrun && $2 - lpts > 1.5 * fdur {
+            gap = $2 - lpts - fdur
+            hslot[nh] = slot; hstart[nh] = first + slot * fdur + lost; hgap[nh] = gap; nh++
+            lost += gap
+        }
+        { print $1, slot++, $2; lrun = $1; lpts = $2; have = 1 }
+        END {
+            for (i = 0; i < nh; i++)
+                if (hslot[i] < slot - 16)
+                    printf "%.6f %.6f %.0f\n", hstart[i], hstart[i] + hgap[i], hgap[i] * 1000 > holes
+        }' > "$out"
+    rm -f "$runs" "$strays" "$sorted"
+}
+
+# The slot rule. Every audio packet gets the picture slot its PTS names:
+#   t   = slot time of the picture at p (+ offset inside it); p in a hole
+#         (no picture) or before slot 0 -> the frame is dropped ("d SIZE")
+#   k   = last+1 when |t - (last+1)*FD| <= 0.75*FD (a frame continues the
+#         run - plain rounding flaps on exact halves), else round(t/FD), an
+#         exact half going to the EARLIER slot: Das Erste HD starts its MP2
+#         tracks 30.5 frames before frame 0, and the frame 12 ms into the
+#         picture belongs on slot 0, not behind a silence frame;
+#         k <= last -> dropped; k > last+1 -> that many silence frames ("s N")
+#   after the last packet: silence up to the last slot
+# Stats count the drops by place: head_dropped (before slot 0), tail_dropped
+# (behind the last picture), dropped (in a hole or on a taken slot).
+# start_offset_ms (stats) = picture time of the first kept frame minus its
+# slot time k*FD: the remainder below one frame the ES cannot express;
+# positive = the frame belongs later than the ES plays it.
+# Audio runs are matched to video runs by order; when the counts differ, a
+# packet takes the first video run whose PTS range contains it. A packet
+# with PTS N/A continues the previous packet (prev + FD).
+# OUT_SILENCE: "slot_time_s n" per silence insert inside the recording
+# (head and tail excluded).
+# FRAME_DUR and FD (audio frame duration) may be fractions, see video_slots.
+# Args: SLOTS AUDIO_PKT FRAME_DUR FD OUT_PLAN OUT_STATS OUT_SILENCE
+plan_audio_slots() {
+    local slots=$1 apkt=$2 fdur=$3 fd=$4 plan=$5 stats=$6 sil=$7
+    local aruns="$plan.aruns"
+    : > "$plan"; : > "$sil"
+    LC_ALL=C awk '{ print $1 }' "$apkt" > "$aruns.pts"
+    pts_runs "$aruns.pts" "$aruns"
+    paste -d' ' "$aruns" <(LC_ALL=C awk '{ print $2 }' "$apkt") \
+    | LC_ALL=C awk -v fdur="$fdur" -v fd="$fd" -v plan="$plan" -v stats="$stats" -v sil="$sil" '
+        function num(s,   a) { return (split(s, a, "/") == 2) ? a[1] / a[2] : s + 0 }
+        BEGIN { fdur = num(fdur); fd = num(fd); nslots = 0; nruns = 0; naruns = 0 }
+        FNR == NR {                                   # slots: run slot pts
+            r = $1; if (!(r in rfirst)) { rfirst[r] = nslots; nruns = r + 1 }
+            rlast[r] = nslots; spts[nslots] = $3; srun[nslots] = r; nslots++
+            next
+        }
+        { na++; apr[na] = $1; app[na] = $2; aps[na] = $3; if ($1 + 1 > naruns) naruns = $1 + 1 }
+        END {
+            last = -1; kept = 0; dropped = 0; silence = 0; head = 0; taild = 0; prevp = ""
+            first_kept_pts = ""; start_off = 0; si = 0
+            ptr = 0                                    # moving slot pointer (audio is monotone inside a run)
+            for (n = 1; n <= na; n++) {
+                p = app[n]; size = aps[n]
+                if (p == "N/A") { if (prevp == "") { printf "d %d\n", size > plan; dropped++; continue } ; p = prevp + fd }
+                prevp = p
+                # video run for this packet
+                if (naruns == nruns) vr = apr[n]
+                else { vr = -1; for (r = 0; r < nruns; r++) if (p >= spts[rfirst[r]] - 1 && p <= spts[rlast[r]] + 1) { vr = r; break } ; if (vr < 0) vr = 0 }
+                if (ptr < rfirst[vr] || ptr > rlast[vr]) ptr = rfirst[vr]
+                while (ptr < rlast[vr] && spts[ptr + 1] <= p + 0.000001) ptr++
+                while (ptr > rfirst[vr] && spts[ptr] > p + 0.000001) ptr--
+                if (p < spts[ptr] - 0.000001 || p >= spts[ptr] + fdur - 0.000001) {
+                    printf "d %d\n", size > plan                  # before slot 0 of the run, or in a hole
+                    if (last < 0 && vr == 0 && p < spts[0]) head++
+                    else if (vr == nruns - 1 && p >= spts[nslots - 1] + fdur - 0.000001) taild++
+                    else dropped++
+                    continue
+                }
+                t = ptr * fdur + (p - spts[ptr])
+                if (last >= 0 && (t - (last + 1) * fd <= 0.75 * fd) && ((last + 1) * fd - t <= 0.75 * fd)) k = last + 1
+                else k = int(t / fd + 0.499999)
+                if (k <= last) { printf "d %d\n", size > plan; dropped++; continue }
+                if (k > last + 1) {
+                    printf "s %d\n", k - last - 1 > plan
+                    if (last >= 0) { printf "%.3f %d\n", (last + 1) * fd, k - last - 1 > sil; si++ }
+                    silence += k - last - 1
+                }
+                if (first_kept_pts == "") { first_kept_pts = p; start_off = (t - k * fd) * 1000 }
+                printf "k %d\n", size > plan
+                last = k; kept++
+            }
+            tail = int((nslots * fdur) / fd) - (last + 1); if (tail < 0) tail = 0
+            if (tail > 0) { printf "s %d\n", tail > plan; silence += tail }
+            close(plan); close(sil)
+            start_off = (start_off < 0) ? -int(-start_off + 0.5) : int(start_off + 0.5)   # %.0f prints "-0"
+            printf "kept=%d dropped=%d silence=%d head_dropped=%d tail_dropped=%d tail_silence=%d first_kept_pts=%s start_offset_ms=%d slots=%d\n", kept, dropped, silence, head, taild, tail, first_kept_pts, start_off, nslots > stats
+        }' "$slots" -
+    rm -f "$aruns" "$aruns.pts"
+}
+
+# Value of KEY in a one-line "key=value key=value" stats file (empty when
+# the key is missing). Args: FILE KEY
+stats_value() {
+    grep -oE "(^| )$2=[^ ]*" "$1" 2>/dev/null | head -1 | cut -d= -f2
 }
 
 # audiofix_ranges_to_video_frames JUNK_CSV CRC_CSV FPS
@@ -716,85 +663,27 @@ audio_es_duration() {
     }'
 }
 
-# Round a source time UP to the next whole codec-frame boundary.
-#
-# The two ways of cutting a span out of an elementary stream quantize in
-# OPPOSITE directions: ffmpeg's output-side "-i file -ss X -to Y" keeps the
-# packets with pts >= X and pts < Y (the frame at or AFTER the point), while
-# the concat demuxer's inpoint lands on the frame at or BEFORE it. Feeding
-# raw cut points to inpoint therefore gains roughly one extra frame per
-# segment - measured 287 extra frames over 300 segments on the MP2 gate,
-# which the duration validation in repair_audio_with_silence_inserts would
-# reject outright. Pre-rounding every cut point onto the frame grid makes the
-# one-pass concat select exactly the packet set the per-segment calls did
-# (measured byte-identical on both gates).
-quantize_up_to_frame() {
-    awk -v x="$1" -v f="$2" 'BEGIN {
-        k = int(x / f)
-        if (x / f - k > 1e-9) k = k + 1
-        printf "%.6f", k * f
-    }'
-}
-
 # ---- Overall progress for a supervising wrapper ----
 #
 # A single 0..100 for THIS recording, written to a file the wrapper polls.
 # It replaces the wrapper's own guess (bytes written into the output
 # directory over 2.2x the input size), which froze for minutes whenever the
-# work happened elsewhere - the gap repair writes into a hidden work dir -
-# and was shown twice, raw in the label and again folded into the bar.
+# work happened elsewhere and was shown twice, raw in the label and again
+# folded into the bar.
 #
-# The band widths are NOT fixed, because no fixed set fits: on a 6730-gap
-# recording the repair measured 83% of a 184s run, on a clean one it is
-# zero and the extraction is everything. So the repair band is sized once
-# the gap count is known (progress_plan below), and collapses to nothing
-# when there is nothing to repair.
-#
-# Two constants carry the modelling, both from one measured run
-# (Futurama 06x03, 1.5 GB, 6730 gaps, warm page cache) and both approximate
-# - a cold cache shifts the ratio. They only skew how fast the bar moves
-# through a phase; it stays monotone and never freezes either way.
-PROGRESS_MS_PER_GAP=23          # 6730 gaps took 153s of repair
-PROGRESS_SECS_PER_GB=10         # pad + info file took ~16s for 1.5 GB
-
-# The fixed marks below the repair band are spaced by measured duration, from
-# a gapless 10.4 GB run on an idle machine (2026-08-26, 63s total): analysis
-# 6s (no mark - several ffprobe calls with nothing to poll), remux 8s, ES
-# extraction 8s, PTS analysis 13s, A/V check 6s, per-track gap detection 5s.
-# The tail marks were spaced the same way: gap analysis 9s, padding 7s,
-# offset plus info file under a second. Before that the tail sat at 2/10,
-# 4/10 and 6/10 of the remaining band and all three fell into the last few
-# seconds, so the upper half of the scale was never walked at all.
-# Measure on an IDLE machine: a parallel transcode stretched the same run to
-# 242s and shifted the phases against each other by up to a factor of eight.
+# The marks are fixed. Up to the A/V check they were spaced by measured
+# duration, from a gapless 10.4 GB run on an idle machine (2026-08-26, 63s
+# total, before the slot rule replaced gap detection, repair and padding):
+# analysis 6s (no mark - several ffprobe calls with nothing to poll), remux
+# 8s, ES extraction 8s, PTS analysis 13s, A/V check 6s. Measure on an IDLE
+# machine: a parallel transcode stretched the same run to 242s and shifted
+# the phases against each other by up to a factor of eight.
 
 PROGRESS_FILE=""
 PROGRESS_LAST=-1
 PROGRESS_REMUX_END=8            # where the timestamp-repair remux band ends
-PROGRESS_PRE_END=40             # everything up to and including gap detection
-PROGRESS_REPAIR_BASE=40         # where the repair band starts
-PROGRESS_REPAIR_END=40          # and where it ends; equal = no repair
-
-# Size the repair band once the gap count is known.
-#
-# It cannot be sized earlier - the count only exists after gap detection -
-# so the phases before it report on a nominal 0..PROGRESS_PRE_END scale and
-# whatever has been reached becomes the base here. The REMAINDER is then
-# split between the repair and the tail by their estimated cost, which keeps
-# the whole thing monotone by construction and needs no guess about the
-# repair before anything is known about it. With no gaps the band is empty
-# and the tail simply takes over.
-progress_plan() {
-    local gaps=$1 in_bytes=$2
-    local repair_s tail_s
-    repair_s=$(awk -v g="$gaps" -v m="$PROGRESS_MS_PER_GAP" 'BEGIN {printf "%.3f", g * m / 1000.0}')
-    tail_s=$(awk -v b="$in_bytes" -v r="$PROGRESS_SECS_PER_GB" \
-        'BEGIN {s = b / 1073741824.0 * r; if (s < 3) s = 3; printf "%.3f", s}')
-    PROGRESS_REPAIR_BASE=$PROGRESS_LAST
-    [ "$PROGRESS_REPAIR_BASE" -lt 0 ] && PROGRESS_REPAIR_BASE=0
-    PROGRESS_REPAIR_END=$(awk -v base="$PROGRESS_REPAIR_BASE" -v r="$repair_s" -v t="$tail_s" \
-        'BEGIN { f = r / (r + t); if (f > 0.9) f = 0.9; printf "%d", base + (100 - base) * f }')
-}
+PROGRESS_PRE_END=40             # everything up to and including the A/V check
+PROGRESS_TAIL_BASE=40           # where the tail band starts (set once the A/V check is done)
 
 progress_set() {
     local pct=$1
@@ -807,398 +696,9 @@ progress_set() {
     printf '%s\n' "$pct" > "$PROGRESS_FILE" 2>/dev/null || true
 }
 
-# Map a 0..100 within the repair onto the overall scale.
-progress_set_repair() {
-    progress_set $(( PROGRESS_REPAIR_BASE + $1 * (PROGRESS_REPAIR_END - PROGRESS_REPAIR_BASE) / 100 ))
-}
-
-# Map a tenth (0..10) of the band after the repair onto the overall scale.
+# Map a tenth (0..10) of the band behind the A/V check onto the overall scale.
 progress_set_tail() {
-    progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * $1 / 10 ))
-}
-
-# Progress line for the gap repair, throttled to one line per five per cent.
-#
-# Covers the WHOLE repair, not just its ffmpeg call. Measured on a 3364-gap
-# track: 76s in total, of which the first 38s go into reading the classified
-# rows, coalescing them and building the concat list - all of it silent
-# before this existed, so the caller's log line (which the VDR wrapper shows
-# in its progress dialog) stood unchanged for half the phase.
-#
-# Bands, from that same measurement: intake 0-20, coalesce 20-25, assembly
-# 25-50, concat 50-100. Capped at 99 - the "applied" line reports completion.
-_REPAIR_PCT_LAST=-1
-_REPAIR_TRACK_IDX=0
-_REPAIR_TRACK_N=1
-repair_progress() {
-    local p=$1 label=$2
-    [ "$p" -gt 99 ] && p=99
-    [ "$p" -lt 0 ] && p=0
-    [ "$p" -ge $((_REPAIR_PCT_LAST + 5)) ] || return 0
-    _REPAIR_PCT_LAST=$p
-    info "    ${label}: repairing... ${p}%"
-    # Two tracks share one band, so track i contributes its own half.
-    progress_set_repair $(( (_REPAIR_TRACK_IDX * 100 + p) / _REPAIR_TRACK_N ))
-}
-
-# Repair audio file by splitting at gap positions and inserting silence.
-# Multi-gap support: N gaps -> N+1 audio segments + N silence segments.
-#
-# Args:
-#   $1 = audio file path (will be replaced with repaired version)
-#   $2 = classified gap file (one line per gap: src_start src_end gap_ms silence_ms)
-#        silence_ms is the amount of silence to insert at the gap position.
-#        For combined A+V loss: silence_ms = audio_gap_ms - matching_video_gap_ms
-#        (often a small remainder like 256ms). For audio-only loss: silence_ms ≈ gap_ms.
-#        Gaps with silence_ms=0 are skipped (no audio insertion needed).
-#   $3 = first_audio_pts (the SOURCE PTS where this audio track starts;
-#        gap positions in the audio FILE = src_pts - first_audio_pts)
-#
-# Returns 0 on success, non-zero on failure (audio file untouched on error).
-repair_audio_with_silence_inserts() {
-    local audio_file=$1 gap_file=$2 first_audio_pts=$3
-    local audio_ext="${audio_file##*.}"
-    local work_dir
-    work_dir="$(dirname "$audio_file")/.gap_repair_$$"
-    mkdir -p "$work_dir"
-
-    # Probe original audio properties for silence generation
-    probe_audio_props "$audio_file"
-    local codec="$APROBE_CODEC"
-    local sample_rate="${APROBE_SAMPLE_RATE:-48000}"
-    local channels="${APROBE_CHANNELS:-2}"
-    local channel_layout="$APROBE_CHANNEL_LAYOUT"
-    local bitrate="$APROBE_BITRATE"
-
-    # Per-entry arrays. silence_dur is signed: positive = insert silence of
-    # that many seconds at pos; negative = truncate |dur| seconds from the
-    # after-part at pos.
-    local -a gap_positions
-    local -a gap_durations  # signed seconds
-    local accumulated_collapse=0
-
-    _REPAIR_PCT_LAST=-1
-    local rp_label rp_rows rp_row=0
-    rp_label=$(basename "$audio_file")
-    rp_rows=$(grep -c . "$gap_file" 2>/dev/null || echo 0)
-    [ "$rp_rows" -gt 0 ] || rp_rows=1
-
-    while IFS=' ' read -r src_start src_end gap_ms silence_ms; do
-        rp_row=$((rp_row + 1))
-        repair_progress $((rp_row * 20 / rp_rows)) "$rp_label"
-        [ -z "$src_start" ] && continue
-        # silence_ms exactly 0 means pure A+V loss (no patching needed)
-        if [ "${silence_ms:-0}" = "0" ]; then
-            accumulated_collapse=$(awk "BEGIN {printf \"%.6f\", $accumulated_collapse + ($src_end - $src_start)}")
-            continue
-        fi
-        local pos dur source_gap
-        pos=$(awk "BEGIN {printf \"%.6f\", $src_start - $first_audio_pts - $accumulated_collapse}")
-        # silence_ms is signed; dur is signed in seconds
-        dur=$(awk "BEGIN {printf \"%.6f\", $silence_ms / 1000.0}")
-        source_gap=$(awk "BEGIN {printf \"%.6f\", $src_end - $src_start}")
-        gap_positions+=("$pos")
-        gap_durations+=("$dur")
-        accumulated_collapse=$(awk "BEGIN {printf \"%.6f\", $accumulated_collapse + $source_gap}")
-    done < "$gap_file"
-
-    # --- Coalesce overlapping/touching gap windows ---
-    # Dense micro-gap clusters (signal degrading gradually before a full
-    # outage) can produce entries whose effective windows overlap: a
-    # truncate entry (dur<0) at pos_i skips [pos_i, pos_i+|dur_i|), and if
-    # the NEXT entry's pos_j falls inside that window, the assembly loop
-    # below emits "-ss pos_i(effective) -to pos_j" with pos_j < the actual
-    # cut point -> ffmpeg aborts with "-to value smaller than -ss", the
-    # whole call fails, and the caller falls back to leaving the audio
-    # unrepaired (see TODO.md, commit 9c345ea). Fix: merge any entry whose
-    # pos lies inside the previous entry's effective window into one
-    # combined edit at the earlier pos, summing the signed durations. This
-    # only changes how the LOCAL edit operations are grouped for assembly;
-    # it must NOT touch gap_positions/gap_durations semantics that later
-    # entries were computed from - and it doesn't, because pos_j for every
-    # entry was already fixed by the intake loop above from src_start/
-    # accumulated_collapse, both of which are driven solely by each
-    # original CLASSIFIED_FILE row's OWN src_start/src_end/gap_ms/
-    # silence_ms (independent of how neighboring entries get grouped
-    # later). Merging here only changes assembly bookkeeping, not any
-    # position that has already been computed.
-    if [ ${#gap_positions[@]} -gt 1 ]; then
-        # Establish ascending pos order first. CLASSIFIED_FILE is sorted by
-        # src_start, but gap_positions[] is NOT guaranteed ascending from
-        # that alone: an audio-gap row and a video-only-truncation row can
-        # cover overlapping SOURCE windows (e.g. a truncation row's
-        # src_start falls inside the preceding audio-gap row's [src_start,
-        # src_end)). accumulated_collapse advances by the full source_gap of
-        # every processed row regardless of type, so when the next row's
-        # src_start hasn't advanced past the previous row's src_end, its pos
-        # (= src_start - accumulated_collapse) can end up EARLIER than the
-        # previous entry's pos despite src_start being non-decreasing.
-        # Measured on real Gate-1 (07x11) data: rows 2/3 in one track had
-        # pos 96975.346633 then 96975.332900 (a ~13.7ms regression). The
-        # merge sweep below only detects overlap looking forward, so it
-        # requires true ascending pos order - sort explicitly rather than
-        # relying on src_start order. This reorders only the local walk
-        # used for grouping; it does not alter any already-computed pos or
-        # dur value.
-        local -a _sorted_pos=() _sorted_dur=()
-        while IFS=' ' read -r sp sd; do
-            _sorted_pos+=("$sp")
-            _sorted_dur+=("$sd")
-        done < <(paste -d' ' <(printf '%s\n' "${gap_positions[@]}") \
-                             <(printf '%s\n' "${gap_durations[@]}") | sort -g -k1,1)
-        gap_positions=("${_sorted_pos[@]}")
-        gap_durations=("${_sorted_dur[@]}")
-
-        local -a coalesced_positions=()
-        local -a coalesced_durations=()
-        local n_raw=${#gap_positions[@]}
-        local ci=0
-        while ((ci < n_raw)); do
-            local cur_pos="${gap_positions[$ci]}"
-            local cur_dur="${gap_durations[$ci]}"
-            local window_end
-            window_end=$(awk -v p="$cur_pos" -v d="$cur_dur" \
-                'BEGIN {e = (d < 0) ? -d : 0; printf "%.6f", p + e}')
-            local cj=$((ci + 1))
-            while ((cj < n_raw)); do
-                local next_pos="${gap_positions[$cj]}"
-                # <= (not strict <): two back-to-back audio-gap rows with
-                # zero source-time between them (row A's src_end == row B's
-                # src_start) collapse to the SAME pos - a real, measured
-                # case (Gate-1 track 2: two 0.216s/0.280s inserts both at
-                # pos=3048.576000). A strict "<" leaves them unmerged, and
-                # the assembly loop then emits a zero-width "-ss X -to X"
-                # segment, which ffmpeg also rejects as "-to value smaller
-                # than -ss". Touching windows must merge just like
-                # overlapping ones.
-                if ! awk -v np="$next_pos" -v we="$window_end" 'BEGIN {exit !(np <= we)}'; then
-                    break
-                fi
-                local next_dur="${gap_durations[$cj]}"
-                cur_dur=$(awk -v a="$cur_dur" -v b="$next_dur" 'BEGIN {printf "%.6f", a + b}')
-                window_end=$(awk -v p="$cur_pos" -v d="$cur_dur" \
-                    'BEGIN {e = (d < 0) ? -d : 0; printf "%.6f", p + e}')
-                cj=$((cj + 1))
-            done
-            # A merged sum near zero means the combined edit is a no-op -
-            # drop it instead of emitting a degenerate segment.
-            if ! awk -v d="$cur_dur" 'BEGIN {a = (d < 0) ? -d : d; exit !(a < 0.001)}'; then
-                coalesced_positions+=("$cur_pos")
-                coalesced_durations+=("$cur_dur")
-            fi
-            ci=$cj
-        done
-        gap_positions=("${coalesced_positions[@]}")
-        gap_durations=("${coalesced_durations[@]}")
-    fi
-
-    if [ ${#gap_positions[@]} -eq 0 ]; then
-        rm -rf "$work_dir"
-        return 0  # nothing to do
-    fi
-
-    # --- Segment-copy assembly (no re-encode of original content) ---
-    # Silence template: encoded ONCE per parameter set, then trimmed per gap.
-    # 40s covers every realistic single silence (huge gaps are A+V-shared ->
-    # silence_ms~=0 there); a lone audio-only gap > 40s is YAGNI (would need
-    # -stream_loop on the master) so it is capped with a warning instead.
-    # Prefer the probed channel_layout (e.g. "3.0", "5.1(side)", "quad") over
-    # a bare channel count: ffmpeg's DEFAULT layout for a count does not
-    # always match the source's AC3 acmod (3ch defaults to 2.1 not 3.0/
-    # surround; 4ch defaults to 4.0 not 2/2 quad). Spliced silence with the
-    # wrong acmod is the exact defect this feature must avoid. Falls back to
-    # "${channels}c" when the layout is unknown/unprobeable.
-    local sil_layout="${channels}c"
-    [ -n "$channel_layout" ] && sil_layout="$channel_layout"
-    local sil_master="$work_dir/silence_master.${audio_ext}"
-    ffmpeg -y -hide_banner -loglevel error \
-        -f lavfi -t 40 -i "anullsrc=r=${sample_rate}:cl=${sil_layout}" \
-        -c:a "$codec" -b:a "$bitrate" "$sil_master" || { rm -rf "$work_dir"; return 1; }
-    # Codec frame duration, probed from the master itself (MP2@48k 24ms,
-    # AC3 32ms, ...) - used to round each silence insert to the NEAREST
-    # whole-frame amount below. Empty/zero on probe failure -> no rounding.
-    local sil_frame_dur
-    sil_frame_dur=$(ffprobe -v error -select_streams a:0 -show_entries \
-        packet=duration_time -of csv=p=0 "$sil_master" 2>/dev/null | head -1)
-    sil_frame_dur="${sil_frame_dur%,}"
-
-    # Frame grid of the SOURCE track. Probed from the source and not reused
-    # from sil_frame_dur above: the master is a re-encode that only happens
-    # to share the grid, and the cut points below belong to the source.
-    local src_frame_dur
-    src_frame_dur=$(ffprobe -v error -select_streams a:0 -show_entries \
-        packet=duration_time -of csv=p=0 "$audio_file" 2>/dev/null | head -1)
-    src_frame_dur="${src_frame_dur%,}"
-
-    # One-pass assembly: reference the SOURCE FILE directly with inpoint/
-    # outpoint directives, the same way the silence master is already
-    # referenced, instead of extracting every [prev_end, pos) span into its
-    # own file first. The old form spawned one ffmpeg per gap with the seek
-    # as an OUTPUT option ("-i file -ss pos"), so each call re-demuxed the
-    # track from byte 0 up to pos - quadratic over the list, and measurably
-    # so: the rate fell from 450 to 356 segments/min as pos grew from 958s to
-    # 1548s on the recording that prompted this (3364 gaps in one track of
-    # two, ~9 minutes each). Measured on identical input, this function
-    # against its predecessor: 50.7s -> 11.7s (400 MP2 gaps), 32.6s -> 7.0s
-    # (300 AC3 gaps), output byte-identical both times.
-    # Dropping the per-segment files also drops the failure mode where
-    # ffmpeg writes a 0-byte segment and still exits 0, which the concat
-    # demuxer then chokes on mid-list (see the duration validation below).
-    # Aligning the cut points needs the frame grid; without it, fall back to
-    # the per-segment path, which is correct on its own - just slow.
-    local use_onepass=false src_abs=""
-    if awk -v f="${src_frame_dur:-0}" 'BEGIN {exit !(f > 0)}' 2>/dev/null; then
-        use_onepass=true
-        src_abs=$(readlink -f "$audio_file")
-        # The list entry carries the real path now, and that path ends in the
-        # user's -n basename ("Tatort - Der Fall O'Brien"). An apostrophe in
-        # it closes the concat demuxer's quoted string early: measured, the
-        # entry silently becomes "Der Fall OBrien_deu.ac3" and the whole list
-        # fails to open. Escape it the way the demuxer expects - close, quote,
-        # reopen. The old per-segment entries were generated basenames and
-        # never carried user text, so this could not bite before.
-        src_abs=${src_abs//\'/\'\\\'\'}
-    fi
-
-    local concat_list="$work_dir/concat.txt"
-    : > "$concat_list"
-    local prev_end=0 seg_idx=0 applied_sum=0
-    # One source segment [from, to) of the concat list; no "to" = the tail,
-    # which runs to EOF. One-pass mode references the master with frame-
-    # quantized inpoint/outpoint directives, otherwise the segment is
-    # stream-copied into work_dir first. Reads the enclosing function's
-    # use_onepass, src_abs, src_frame_dur, audio_file, work_dir, audio_ext,
-    # concat_list and seg_idx (bash dynamic scope). Returns ffmpeg's failure.
-    _emit_segment() {
-        local from=$1 to=${2:-}
-        if $use_onepass; then
-            if [ -n "$to" ]; then
-                printf "file '%s'\ninpoint %s\noutpoint %s\n" "$src_abs" \
-                    "$(quantize_up_to_frame "$from" "$src_frame_dur")" \
-                    "$(quantize_up_to_frame "$to" "$src_frame_dur")" >> "$concat_list"
-            else
-                printf "file '%s'\ninpoint %s\n" "$src_abs" \
-                    "$(quantize_up_to_frame "$from" "$src_frame_dur")" >> "$concat_list"
-            fi
-            return 0
-        fi
-        local seg="$work_dir/seg${seg_idx}.${audio_ext}"
-        local -a to_args=()
-        if [ -n "$to" ]; then to_args=(-to "$to"); fi
-        ffmpeg -y -hide_banner -loglevel error -i "$audio_file" \
-            -ss "$from" "${to_args[@]}" -c copy "$seg" || return 1
-        # ffmpeg's concat demuxer resolves relative "file" entries relative
-        # to the DIRECTORY OF THE LIST FILE ITSELF, not the process CWD.
-        # concat_list lives inside work_dir, and so do the segments - so a
-        # work_dir-prefixed path here gets work_dir prepended TWICE by
-        # ffmpeg (observed: "./.gap_repair_PID/./.gap_repair_PID/seg0.mp2",
-        # "Impossible to open"). Write the basename only. The one-pass
-        # branch above writes an ABSOLUTE path instead - it points outside
-        # work_dir, and the concat call passes -safe 0 for exactly that.
-        echo "file '$(basename "$seg")'" >> "$concat_list"
-    }
-    local n=${#gap_positions[@]}
-    local i
-    for ((i = 0; i < n; i++)); do
-        repair_progress $((25 + i * 25 / (n > 0 ? n : 1))) "$rp_label"
-        local pos="${gap_positions[$i]}" dur="${gap_durations[$i]}"
-        # Original segment [prev_end, pos) as a stream-copy
-        _emit_segment "$prev_end" "$pos" || { rm -rf "$work_dir"; return 1; }
-        seg_idx=$((seg_idx + 1))
-        if awk "BEGIN {exit !($dur > 0)}"; then
-            if awk "BEGIN {exit !($dur > 40)}"; then
-                warn "repair_audio_with_silence_inserts: silence gap ${dur}s exceeds 40s master, capping"
-                dur=40
-            fi
-            # Insert silence by referencing the MASTER with an outpoint
-            # directive - never a per-gap trimmed file. A trim shorter than
-            # 2 codec frames (e.g. 8ms of MP2) yields a 1-frame file the
-            # mp3 demuxer cannot open ("Failed to find two consecutive
-            # MPEG audio frames"); the concat demuxer then aborts the list
-            # mid-way but ffmpeg still EXITS 0, silently truncating the
-            # track to the first segment (measured 2026-08-17 "Gerber":
-            # 16.464s left of a 7198s track).
-            # Stream-copy quantizes to whole codec frames either way; round
-            # to the NEAREST frame count (a plain outpoint=dur rounds UP,
-            # costing up to a full frame of sync error per insert). n=0:
-            # skip the insert entirely - the sub-half-frame remainder is a
-            # smaller error than one full frame of silence. The half-frame
-            # margin on the outpoint keeps float jitter in packet dts from
-            # flipping the packet count at exact frame-multiple boundaries.
-            local n_frames ins_dur
-            if awk -v f="$sil_frame_dur" 'BEGIN {exit !(f > 0)}'; then
-                n_frames=$(awk -v d="$dur" -v f="$sil_frame_dur" 'BEGIN {printf "%d", int(d/f + 0.5)}')
-                ins_dur=$(awk -v n="$n_frames" -v f="$sil_frame_dur" 'BEGIN {printf "%.6f", n * f}')
-            else
-                n_frames=1
-                ins_dur="$dur"
-            fi
-            if [ "$n_frames" -gt 0 ]; then
-                printf "file '%s'\noutpoint %s\n" "$(basename "$sil_master")" \
-                    "$(awk -v n="$n_frames" -v f="$sil_frame_dur" -v d="$ins_dur" \
-                        'BEGIN {printf "%.6f", (f > 0) ? (n - 0.5) * f : d}')" >> "$concat_list"
-                applied_sum=$(awk -v a="$applied_sum" -v d="$ins_dur" 'BEGIN {printf "%.6f", a + d}')
-            fi
-            prev_end="$pos"
-        else
-            local abs_dur
-            abs_dur=$(awk -v d="$dur" 'BEGIN {printf "%.6f", (d<0)?-d:d}')
-            prev_end=$(awk -v p="$pos" -v a="$abs_dur" 'BEGIN {printf "%.6f", p+a}')
-            applied_sum=$(awk -v a="$applied_sum" -v d="$abs_dur" 'BEGIN {printf "%.6f", a - d}')
-        fi
-    done
-    # Tail segment [prev_end, EOF) - no outpoint, it runs to the end.
-    _emit_segment "$prev_end" || { rm -rf "$work_dir"; return 1; }
-
-    # Expected result duration. Needed twice: as the yardstick for the
-    # progress percentage below, and by the validation after the concat -
-    # so it is measured once, here, before the long-running call.
-    local orig_dur rep_dur exp_dur
-    orig_dur=$(audio_es_duration "$audio_file")
-    exp_dur=$(awk -v o="$orig_dur" -v s="$applied_sum" 'BEGIN {printf "%.6f", o + s}')
-
-    # The concat is ONE ffmpeg call over the whole list, and it says nothing
-    # until it is done - measured at ~70s per track on a recording with 3364
-    # gaps, during which every caller watching the log (the VDR wrapper puts
-    # the last line in its progress dialog) sees the same line and cannot
-    # tell a slow repair from a hung one. Run it in the background against
-    # -progress and report how far it has got.
-    local repaired="$work_dir/repaired.${audio_ext}"
-    local prog_file="$work_dir/progress.txt"
-    : > "$prog_file"
-    ffmpeg -y -hide_banner -loglevel error -progress "$prog_file" -nostats \
-        -f concat -safe 0 -i "$concat_list" -c copy "$repaired" \
-        2>>"$work_dir/repair.log" &
-    local ff_pid=$! ff_rc=0
-    # Against the expected duration out_time_us is a percentage, capped at
-    # 99 so a rounding overshoot never announces completion before the
-    # call returns; the concat remux is the second half of the repair bar.
-    _report_concat_progress() {
-        local pct
-        pct=$(awk -v u="$1" -v d="$exp_dur" \
-            'BEGIN { p = (d > 0) ? int(u / (d * 10000.0)) : 0; if (p > 99) p = 99; if (p < 0) p = 0; print p }')
-        repair_progress $((50 + pct / 2)) "$rp_label"
-    }
-    _poll_ffmpeg_progress "$ff_pid" "$prog_file" _report_concat_progress
-    wait "$ff_pid" || ff_rc=$?
-    [ "$ff_rc" -eq 0 ] || { rm -rf "$work_dir"; return 1; }
-
-    # A clean exit code does NOT prove the concat succeeded: a mid-list
-    # demux error ("Impossible to open ...") stops consuming the list but
-    # ffmpeg still exits 0 with whatever prefix it wrote. Validate the
-    # result duration against orig + sum of signed edits before replacing
-    # the original; 1s tolerance covers per-edit frame rounding.
-    rep_dur=$(audio_es_duration "$repaired")
-    if ! awk -v r="$rep_dur" -v e="$exp_dur" 'BEGIN {d = r - e; if (d < 0) d = -d; exit !(d <= 1.0)}'; then
-        warn "repair_audio_with_silence_inserts: result duration ${rep_dur}s deviates from expected ${exp_dur}s - keeping original"
-        rm -rf "$work_dir"
-        return 1
-    fi
-
-    # Replace original
-    mv "$repaired" "$audio_file"
-    rm -rf "$work_dir"
-    return 0
+    progress_set $(( PROGRESS_TAIL_BASE + (100 - PROGRESS_TAIL_BASE) * $1 / 10 ))
 }
 
 # ac3_decode_errors FILE
@@ -1551,6 +1051,13 @@ echo ""
 # Check we have video
 [ -n "$VIDEO_STREAM" ] || error "No video stream found"
 
+# The audio tracks are placed on the picture timeline by ttcut-audiofix -p
+# (slot rule). Without that mode every track would come out as extracted, up
+# to a second off the picture - stop before any work is done.
+if [ ${#AUDIO_STREAMS[@]} -gt 0 ] && ! { ttcut-audiofix 2>&1 || true; } | grep -q -- '-p <plan>'; then
+    error "ttcut-audiofix with the assemble mode (-p) not found in PATH - it places the audio on the picture timeline. Install the ttcut-audiofix that belongs to this ttcut-demux."
+fi
+
 # Determine video extension based on codec
 case "$VIDEO_CODEC" in
     h264)
@@ -1633,54 +1140,33 @@ step "Repairing timestamps (normalizing to start at 0)..."
 REPAIRED_INPUT="$OUTDIR/.${BASENAME}_repaired.ts"
 _CLEANUP_FILES+=("$REPAIRED_INPUT")
 
-# Calculate A/V offset BEFORE repair (from original file)
-# For H.264/H.265: use minimum PTS from first 2 seconds (= first display frame PTS)
-# because leading B-frames have lower PTS than the I-frame which comes first in decode order.
-# For MPEG-2: use first packet PTS (I-frame); B-frame skipping is handled separately below.
+# PTS of frame 0 and of every audio track's first packet, from the original
+# (the repaired file below has re-stamped timestamps). The head of each track
+# is cut by the slot rule after the extraction: frames before frame 0 are
+# dropped, a track that starts later gets leading silence.
 ORIG_VIDEO_PTS=$(probe_first_video_pts "$INPUT")
-# Per-track audio PTS probe: each track gets its own trim value
-declare -a ORIG_AUDIO_PTS_ARR=()   # Original PTS per audio track
-declare -a AUDIO_TRIM_SECS=()      # Trim value per audio track
-AUDIO_TRIM_SEC="0"                 # Legacy: maximum trim (for B-frame skip base)
-
+declare -a ORIG_AUDIO_PTS_ARR=()   # first packet PTS per audio track
 for i in "${!AUDIO_STREAMS[@]}"; do
     IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
     TRACK_PTS=$(_probe_first_packet_pts "$idx" "$INPUT")
     ORIG_AUDIO_PTS_ARR[i]="${TRACK_PTS:-0}"
-
-    if [ -n "$ORIG_VIDEO_PTS" ] && [ -n "$TRACK_PTS" ]; then
-        TRACK_AHEAD=$(awk "BEGIN {printf \"%.6f\", $ORIG_VIDEO_PTS - $TRACK_PTS}")
-        TRACK_AHEAD_MS=$(awk "BEGIN {printf \"%.0f\", ($ORIG_VIDEO_PTS - $TRACK_PTS) * 1000}")
-
-        if awk "BEGIN {exit !($TRACK_AHEAD > 0.01)}"; then
-            info "Audio track $idx ($codec [$lang]) starts ${TRACK_AHEAD_MS}ms before video - will trim"
-            AUDIO_TRIM_SECS[i]="$TRACK_AHEAD"
-        elif awk "BEGIN {exit !($TRACK_AHEAD < -0.01)}"; then
-            warn "Audio track $idx ($codec [$lang]): video starts ${TRACK_AHEAD_MS}ms before audio - may need padding"
-            AUDIO_TRIM_SECS[i]="0"
-        else
-            AUDIO_TRIM_SECS[i]="0"
-        fi
-    else
-        AUDIO_TRIM_SECS[i]="0"
-    fi
+    info "Audio track $idx ($codec [$lang]) first PTS ${TRACK_PTS:-unknown}s"
 done
-
-# Legacy AUDIO_TRIM_SEC: use first track's value (for B-frame skip adjustment logging)
-if [ ${#AUDIO_TRIM_SECS[@]} -gt 0 ]; then
-    AUDIO_TRIM_SEC="${AUDIO_TRIM_SECS[0]}"
-fi
 
 # Repair timestamps: generate new PTS, ignore corrupt DTS, shift to start at 0
 #
-# The repair remux maps only video+audio (-map 0:v:0 -map 0:a?), so the
-# repaired TS carries NO subtitle streams. Subtitle extraction must read the
-# pre-repair source - keep its input args here, from before $INPUT and
-# $FFMPEG_INPUT_ARGS are repointed at the repaired file below. MEASURED
-# 2026-08-16: extracting from the repaired file yielded "empty, skipped" on
-# every recording, while the same stream on the original carries hundreds of
-# KB per 5 min - DVB subtitle export never worked since the repair step.
-SUBS_INPUT_ARGS=("${FFMPEG_INPUT_ARGS[@]}")
+# Subtitles AND audio read the pre-repair source - keep its input args here,
+# from before $INPUT and $FFMPEG_INPUT_ARGS are repointed at the repaired
+# file below.
+# Subtitles: the repair remux maps only video+audio (-map 0:v:0 -map 0:a?),
+# so the repaired TS carries NO subtitle streams. MEASURED 2026-08-16:
+# extracting from the repaired file yielded "empty, skipped" on every
+# recording, while the same stream on the original carries hundreds of KB
+# per 5 min.
+# Audio: the remux (+igndts) stamps the first 5-10 packets of an audio track
+# about 140 ms early (measured 2026-10-07, ffmpeg 9.0.2, 4 of 5 Das Erste HD
+# recordings), and the slot rule needs the sender's own PTS of every packet.
+ORIG_INPUT_ARGS=("${FFMPEG_INPUT_ARGS[@]}")
 FFMPEG_LOG="$OUTDIR/.ffmpeg_repair.log"
 _CLEANUP_FILES+=("$FFMPEG_LOG")
 # This remux is the longest single call of a run without gaps - measured 72s
@@ -1771,8 +1257,8 @@ if $ES_MODE; then
     info "Using up to $NPROC parallel processes"
     echo ""
 
-    # Note: Video is extracted as-is, audio padding happens after extraction
-    # This matches ProjectX's approach of adding audio frames at the end
+    # Note: video and audio are extracted as they are; the audio tracks are
+    # placed on the picture timeline afterwards (slot rule below).
 
     # 1. Prepare video extraction parameters
     OUTPUT_VIDEO="$OUTDIR/${BASENAME}.${VIDEO_EXT}"
@@ -1801,22 +1287,9 @@ if $ES_MODE; then
         fi
     fi
 
-    # Adjust audio trim to account for skipped video B-frames
-    # If we skipped video by VIDEO_START_TIME, we need to also skip that much audio
-    if [ "$VIDEO_START_TIME" != "0" ]; then
-        for i in "${!AUDIO_TRIM_SECS[@]}"; do
-            AUDIO_TRIM_SECS[i]=$(awk "BEGIN {printf \"%.6f\", ${AUDIO_TRIM_SECS[$i]} + $VIDEO_START_TIME}")
-        done
-        # Legacy variable for logging
-        AUDIO_TRIM_SEC="${AUDIO_TRIM_SECS[0]}"
-        TOTAL_SKIP_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_TRIM_SEC * 1000}")
-        info "  Total audio trim adjusted (A/V offset + B-frame skip), e.g. track 0: ${TOTAL_SKIP_MS}ms"
-    fi
-
     # 2. Prepare audio extraction parameters (before parallel extraction)
     AUDIO_FILES=()
     declare -A LANG_COUNT  # Track how many times each language appears
-    declare -a AUDIO_EXTRACT_SS=()      # -ss value (empty = no trim)
     declare -a AUDIO_EXTRACT_MAPS=()    # Stream map index
 
     if [ ${#AUDIO_STREAMS[@]} -gt 0 ]; then
@@ -1837,20 +1310,13 @@ if $ES_MODE; then
 
             AUDIO_FILES+=("$OUTPUT_AUDIO")
 
-            # Build extraction command (will be run in parallel).
-            # All tracks use FFMPEG_INPUT_ARGS (which is -i $ORIGINAL_INPUT
-            # for single-file recordings and -f concat -safe 0 -i $LIST_FILE
-            # for VDR multi-file). The per-track variation is only -ss, used
-            # when the audio stream starts before the video and we want to
-            # trim the lead-in. -ss MUST be after -i for MPEG-TS audio
-            # extraction with -c:a copy (decoder-side seek; an input-side
-            # seek silently produces identical output here).
-            TRACK_TRIM="${AUDIO_TRIM_SECS[$i]:-0}"
-            if awk "BEGIN {exit !($TRACK_TRIM > 0.001)}"; then
-                AUDIO_EXTRACT_SS+=("$TRACK_TRIM")
-            else
-                AUDIO_EXTRACT_SS+=("")
-            fi
+            # Every track is extracted whole from the ORIGINAL (see
+            # ORIG_INPUT_ARGS): the file is the track's packet list in
+            # order, head and holes are handled by the slot rule below.
+            # -ss is no usable trim: on a single file it counts from the
+            # track's own first packet, on the concat input of a recording
+            # in several files from the earliest stream (measured
+            # 2026-10-07).
             AUDIO_EXTRACT_MAPS+=("$idx")
         done
     fi
@@ -1912,15 +1378,9 @@ if $ES_MODE; then
         info "  Audio $idx [$lang] -> $(basename "${AUDIO_FILES[$i]}")"
 
         # Run each audio extraction in background (direct invocation, no eval)
-        if [ -n "${AUDIO_EXTRACT_SS[$i]}" ]; then
-            ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -ss "${AUDIO_EXTRACT_SS[$i]}" \
-                -map "0:${AUDIO_EXTRACT_MAPS[$i]}" -c:a copy \
-                "${AUDIO_FILES[$i]}" > "$EXTRACT_LOG_DIR/audio_$i.log" 2>&1 &
-        else
-            ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
-                -map "0:${AUDIO_EXTRACT_MAPS[$i]}" -c:a copy \
-                "${AUDIO_FILES[$i]}" > "$EXTRACT_LOG_DIR/audio_$i.log" 2>&1 &
-        fi
+        ffmpeg -y "${ORIG_INPUT_ARGS[@]}" \
+            -map "0:${AUDIO_EXTRACT_MAPS[$i]}" -c:a copy \
+            "${AUDIO_FILES[$i]}" > "$EXTRACT_LOG_DIR/audio_$i.log" 2>&1 &
         AUDIO_PIDS+=($!)
     done
 
@@ -1985,6 +1445,202 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
     # Clean up log directory
     rm -rf "$EXTRACT_LOG_DIR"
+    echo ""
+
+    # Parse frame rate fraction (e.g., "25/1" or "30000/1001")
+    _parse_fraction "$FRAME_RATE" FRAME_RATE_NUM FRAME_RATE_DEN
+
+    # Interlaced material: the TS may report the field rate as r_frame_rate
+    # (1080i25 PAFF: 50/1); video_frame_rate halves it against the TS
+    # avg_frame_rate. field_order comes from the extracted ES. Runs before
+    # the slot rule, which works in frame durations.
+    if $ES_MODE; then
+        FIELD_ORDER=$(_probe_field v:0 stream=field_order "$OUTPUT_VIDEO")
+        if [[ -n "$FIELD_ORDER" && "$FIELD_ORDER" != "progressive" && "$FIELD_ORDER" != "unknown" ]]; then
+            # shellcheck disable=SC2153  # FRAME_RATE_DEN is assigned through _parse_fraction's nameref
+            ORIG_RATE="$FRAME_RATE_NUM/$FRAME_RATE_DEN"
+            FRAME_RATE=$(video_frame_rate "$ORIG_RATE" "$TS_AVG_FRAME_RATE" "$FIELD_ORDER")
+            _parse_fraction "$FRAME_RATE" FRAME_RATE_NUM FRAME_RATE_DEN
+            if [[ "$FRAME_RATE" != "$ORIG_RATE" ]]; then
+                info "  Interlaced ($FIELD_ORDER): corrected field rate $ORIG_RATE to frame rate $FRAME_RATE"
+            else
+                info "  Interlaced ($FIELD_ORDER): r_frame_rate=$ORIG_RATE is already frame rate (TS avg_frame_rate=$TS_AVG_FRAME_RATE)"
+            fi
+        fi
+    fi
+
+    # Frame rate as a decimal for awk arithmetic (all later sections).
+    FRAME_RATE_DEC=$(awk "BEGIN {printf \"%.6f\", $FRAME_RATE_NUM / $FRAME_RATE_DEN}")
+
+    #########################################################################
+    # SLOT RULE: every audio frame on the picture slot its PTS names
+    # (design 2026-10-07; replaces the head trim, the disturbance-zone
+    # balance and the end padding). One ffprobe pass per segment of the
+    # ORIGINAL gives the packet lists - video: PTS and key flag, audio: PTS
+    # and size; the extracted audio file is exactly that list of packets in
+    # order. plan_audio_slots decides keep / drop / silence per packet,
+    # ttcut-audiofix -p assembles the ES from the plan.
+    #########################################################################
+    progress_set 10
+    step "Placing audio frames on the picture timeline..."
+    SLOT_DIR="$OUTDIR/.slots_$$"
+    mkdir -p "$SLOT_DIR"
+    _CLEANUP_DIRS+=("$SLOT_DIR")
+    if [ "$VDR_MULTIFILE" = true ]; then
+        SLOT_SEGMENTS=("${VDR_SEGMENTS[@]}")
+    else
+        SLOT_SEGMENTS=("$ORIGINAL_INPUT")
+    fi
+    # Durations go to the slot functions as fractions: 1001/30000 or
+    # 1152/44100 have no finite decimal, and six places drift by an audio
+    # frame within 23 minutes.
+    SLOT_FRAME_DUR="$FRAME_RATE_DEN/$FRAME_RATE_NUM"
+
+    # csv row of the probe: stream_index,pts_time,size,flags
+    VIDEO_PKT_FILE="$SLOT_DIR/video.pkt"          # "pts flags" per video packet
+    : > "$VIDEO_PKT_FILE"
+    SLOT_AUDIO_MAP=""                             # "streamindex:track ..." for the splitter
+    for i in "${!AUDIO_STREAMS[@]}"; do
+        : > "$SLOT_DIR/a$i.pkt"                   # "pts size" per audio packet
+        SLOT_AUDIO_MAP="$SLOT_AUDIO_MAP ${AUDIO_STREAMS[$i]%%:*}:$i"
+    done
+    for seg in "${SLOT_SEGMENTS[@]}"; do
+        ffprobe -v error -show_entries packet=stream_index,pts_time,size,flags -of csv=p=0 "$seg" 2>/dev/null \
+        | LC_ALL=C awk -F, -v vidx="$VIDEO_STREAM" -v amap="$SLOT_AUDIO_MAP" -v dir="$SLOT_DIR" '
+            BEGIN { n = split(amap, m, " ")
+                    for (k = 1; k <= n; k++) { split(m[k], kv, ":"); out[kv[1]] = dir "/a" kv[2] ".pkt" } }
+            $1 == vidx  { print $2, $4 >> (dir "/video.pkt"); next }
+            ($1 in out) { print $2, $3 >> out[$1] }' || true
+    done
+
+    # Frame 0. H.264/H.265: the first packet, what is displayed before it is
+    # dropped (mode h26x). MPEG-2: the smallest PTS, nothing is dropped (mode
+    # mpeg2). MPEG-2 with the leading-B skip: the video ES starts at the
+    # first I picture and holds nothing displayed before it, so the list
+    # starts at the first key packet and is treated like the H.26x case.
+    SLOT_V0_ARG="$ORIG_VIDEO_PTS"
+    case "$VIDEO_CODEC" in h264|hevc|h265) SLOT_MODE=h26x ;; *) SLOT_MODE=mpeg2 ;; esac
+    if [ "$VIDEO_START_TIME" != "0" ]; then
+        awk 'f || $2 ~ /^K/ { f = 1; print }' "$VIDEO_PKT_FILE" > "$VIDEO_PKT_FILE.cut" \
+            && mv "$VIDEO_PKT_FILE.cut" "$VIDEO_PKT_FILE"
+        SLOT_V0_ARG=$(awk '$1 != "N/A" { print $1; exit }' "$VIDEO_PKT_FILE")
+        SLOT_MODE=h26x
+    fi
+    VIDEO_PTS_FILE="$SLOT_DIR/video.pts"
+    VIDEO_GAPS_FILE="$SLOT_DIR/holes"                 # picture holes, read by the es_missing_* emission
+    cut -d' ' -f1 "$VIDEO_PKT_FILE" > "$VIDEO_PTS_FILE"
+    SLOTS_FILE="$SLOT_DIR/slots"
+    video_slots "$VIDEO_PTS_FILE" "$SLOT_MODE" "$SLOT_V0_ARG" "$SLOT_FRAME_DUR" "$SLOTS_FILE" "$VIDEO_GAPS_FILE"
+    SLOT_COUNT=$(grep -c . "$SLOTS_FILE" || true)
+    SLOT_V0=$(awk 'NR == 1 { print $3 }' "$SLOTS_FILE")       # PTS of frame 0
+    SLOT_RUNS=$(awk 'END { print (NR > 0) ? $1 + 1 : 0 }' "$SLOTS_FILE")
+
+    declare -A TRACK_SILENCE_MS TRACK_REMOVED_MS TRACK_HEAD_MS TRACK_START_OFFSET_MS SLOT_TRACK_OF_PID
+    AUDIO_SILENCE_POS_FILE="$SLOT_DIR/silence.pos"   # "slot_time_s n" of every track, for audio_gap_frames
+    : > "$AUDIO_SILENCE_POS_FILE"
+    SLOT_TRACKS_PLACED=0
+    SLOT_PIDS=()
+    if [ "${SLOT_COUNT:-0}" -eq 0 ]; then
+        warn "  No video packet timestamps in the source - audio tracks are left as extracted (NOT aligned to the picture)"
+    else
+        SLOT_RUN_NOTE=""
+        [ "$SLOT_RUNS" -gt 1 ] && SLOT_RUN_NOTE=", $SLOT_RUNS timestamp runs"
+        info "  Picture slots: $SLOT_COUNT (frame 0 at PTS ${SLOT_V0}s, $SLOT_MODE$SLOT_RUN_NOTE)"
+        for i in "${!AUDIO_FILES[@]}"; do
+            IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+            AF="${AUDIO_FILES[$i]}"
+            # Samples per frame. E-AC3 is taken as 6 blocks per frame, the
+            # form DVB transmits.
+            case "$codec" in
+                mp2)       FD_SAMPLES=1152 ;;
+                ac3|eac3)  FD_SAMPLES=1536 ;;
+                *) warn "  $(basename "$AF"): $codec has no known frame length - left as extracted (NOT aligned to the picture)"; continue ;;
+            esac
+            (
+                APKT="$SLOT_DIR/a$i.pkt"
+                # The plan addresses the file by packet sizes; they must
+                # add up to the file, or every later frame would be read
+                # from the wrong place.
+                PKT_BYTES=$(awk '{ s += $2 } END { printf "%d", s }' "$APKT")
+                ES_BYTES=$(stat -c%s "$AF" 2>/dev/null || echo 0)
+                if [ "$PKT_BYTES" != "$ES_BYTES" ]; then
+                    echo "packet list ($PKT_BYTES bytes) and extracted file ($ES_BYTES bytes) differ"
+                    exit 1
+                fi
+                probe_audio_props "$AF"
+                SR="${APROBE_SAMPLE_RATE:-48000}"
+                plan_audio_slots "$SLOTS_FILE" "$APKT" "$SLOT_FRAME_DUR" "$FD_SAMPLES/$SR" \
+                    "$SLOT_DIR/a$i.plan" "$SLOT_DIR/a$i.stats" "$SLOT_DIR/a$i.sil"
+                # Silence in the track's own format; -p takes the first frame.
+                sil_layout="${APROBE_CHANNELS:-2}c"
+                [ -n "$APROBE_CHANNEL_LAYOUT" ] && sil_layout="$APROBE_CHANNEL_LAYOUT"
+                SIL_FILE="$SLOT_DIR/a$i.silence.${AF##*.}"
+                ffmpeg -y -hide_banner -loglevel error -f lavfi -t 1 \
+                    -i "anullsrc=r=${SR}:cl=${sil_layout}" \
+                    -c:a "$codec" -b:a "${APROBE_BITRATE:-192000}" "$SIL_FILE" || exit 1
+                ttcut-audiofix -p "$SLOT_DIR/a$i.plan" -s "$SIL_FILE" "$AF" "$AF.placed" \
+                    > "$SLOT_DIR/a$i.asm" || exit 1
+                awk -v s="$FD_SAMPLES" -v r="$SR" 'BEGIN {printf "%.3f\n", s * 1000 / r}' > "$SLOT_DIR/a$i.fd_ms"
+                mv "$AF.placed" "$AF"
+            ) > "$SLOT_DIR/a$i.log" 2>&1 &
+            SLOT_PIDS+=($!)
+            SLOT_TRACK_OF_PID[${SLOT_PIDS[-1]}]=$i
+        done
+    fi
+    frames_ms() { awk -v n="$1" -v f="$FD_MS" 'BEGIN {printf "%.0f", n * f}'; }   # frames of this track -> ms
+    for pid in "${SLOT_PIDS[@]}"; do
+        i=${SLOT_TRACK_OF_PID[$pid]}
+        AF="${AUDIO_FILES[$i]}"
+        IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+        if ! wait "$pid"; then
+            warn "  $(basename "$AF"): placement failed - left as extracted (NOT aligned to the picture)"
+            while IFS= read -r line; do warn "    $line"; done < <(tail -3 "$SLOT_DIR/a$i.log" 2>/dev/null)
+            rm -f "$AF.placed"
+            continue
+        fi
+        SLOT_TRACKS_PLACED=$((SLOT_TRACKS_PLACED + 1))
+        ST="$SLOT_DIR/a$i.stats"
+        S_KEPT=$(stats_value "$ST" kept);            S_DROPPED=$(stats_value "$ST" dropped)
+        S_SILENCE=$(stats_value "$ST" silence);      S_HEAD=$(stats_value "$ST" head_dropped)
+        S_TAIL_DROPPED=$(stats_value "$ST" tail_dropped); S_TAIL_SILENCE=$(stats_value "$ST" tail_silence)
+        S_FIRST_PTS=$(stats_value "$ST" first_kept_pts); S_OFFSET=$(stats_value "$ST" start_offset_ms)
+        S_REPLACED=$(stats_value "$SLOT_DIR/a$i.asm" replaced); S_SHORT=$(stats_value "$SLOT_DIR/a$i.asm" short)
+        S_TAIL_BYTES=$(stats_value "$SLOT_DIR/a$i.asm" tail_bytes)
+        FD_MS=$(cat "$SLOT_DIR/a$i.fd_ms")
+        TRACK_HEAD_MS[$i]=$(frames_ms "$S_HEAD")
+        TRACK_REMOVED_MS[$i]=$(frames_ms "$S_DROPPED")
+        TRACK_SILENCE_MS[$i]=$(frames_ms "$S_SILENCE")
+        cat "$SLOT_DIR/a$i.sil" >> "$AUDIO_SILENCE_POS_FILE"
+        info "  $(basename "$AF"): $S_KEPT frames kept; head -$S_HEAD (${TRACK_HEAD_MS[$i]} ms), in picture holes -$S_DROPPED (${TRACK_REMOVED_MS[$i]} ms), behind the last picture -$S_TAIL_DROPPED; silence +$S_SILENCE (${TRACK_SILENCE_MS[$i]} ms, of which tail $S_TAIL_SILENCE)"
+        if [ "$((S_REPLACED + S_SHORT))" -gt 0 ] || [ "${S_TAIL_BYTES:-0}" -gt 0 ]; then
+            info "    $((S_REPLACED + S_SHORT)) packet(s) were no whole frame (partial frame at a recording edge, or damage) - their slots hold silence"
+        fi
+
+        # Start offset = the remainder below one frame between the first kept
+        # frame and its slot. Written only when the finished file proves the
+        # plan: the first frame ttcut-audiofix COPIED (a partial first packet
+        # is replaced by silence and proves nothing) must be the source
+        # packet with that index and PTS - same MD5.
+        COPY_PKT=$(stats_value "$SLOT_DIR/a$i.asm" first_copy_packet)
+        COPY_OFF=$(stats_value "$SLOT_DIR/a$i.asm" first_copy_offset)
+        if [ -n "$S_FIRST_PTS" ]; then
+            ES_MD5=""; PKT_ROW=""; C_PTS=""; C_SIZE=""
+            if [ "${COPY_PKT:--1}" -ge 0 ] && [ "$COPY_PKT" -lt 20000 ]; then
+                read -r C_PTS C_SIZE < <(sed -n "$((COPY_PKT + 1))p" "$SLOT_DIR/a$i.pkt") || true
+            fi
+            if [ -n "$C_SIZE" ]; then
+                ES_MD5=$(tail -c +$(( COPY_OFF + 1 )) "$AF" | head -c "$C_SIZE" | md5sum | cut -d' ' -f1)
+                PKT_ROW=$(_ffprobe "$idx" -read_intervals "%+#$((COPY_PKT + 1))" -show_data_hash md5 \
+                    -show_entries packet=pts_time,data_hash -of csv=p=0 "${SLOT_SEGMENTS[0]}" | tail -1)
+            fi
+            if [ -n "$ES_MD5" ] && [ "$PKT_ROW" = "$C_PTS,MD5:$ES_MD5," ]; then
+                TRACK_START_OFFSET_MS[$i]="$S_OFFSET"
+                info "    start offset ${S_OFFSET} ms (verified on the frame with PTS ${C_PTS}s)"
+            else
+                warn "    first copied frame does not match its source packet - audio_${i}_start_offset_ms not written"
+            fi
+        fi
+    done
     echo ""
 
     #########################################################################
@@ -2067,97 +1723,66 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # right before the duration measurement — the interlace correction and
     # the audio ES sanitize run first and report under their own headings.
 
-    # Parse frame rate fraction (e.g., "25/1" or "30000/1001")
-    _parse_fraction "$FRAME_RATE" FRAME_RATE_NUM FRAME_RATE_DEN
-
-    # Interlaced material: the TS may report the field rate as r_frame_rate
-    # (1080i25 PAFF: 50/1); video_frame_rate halves it against the TS
-    # avg_frame_rate. field_order comes from the extracted ES.
-    if $ES_MODE; then
-        FIELD_ORDER=$(_probe_field v:0 stream=field_order "$OUTPUT_VIDEO")
-        if [[ -n "$FIELD_ORDER" && "$FIELD_ORDER" != "progressive" && "$FIELD_ORDER" != "unknown" ]]; then
-            # shellcheck disable=SC2153  # FRAME_RATE_DEN is assigned through _parse_fraction's nameref
-            ORIG_RATE="$FRAME_RATE_NUM/$FRAME_RATE_DEN"
-            FRAME_RATE=$(video_frame_rate "$ORIG_RATE" "$TS_AVG_FRAME_RATE" "$FIELD_ORDER")
-            _parse_fraction "$FRAME_RATE" FRAME_RATE_NUM FRAME_RATE_DEN
-            if [[ "$FRAME_RATE" != "$ORIG_RATE" ]]; then
-                info "  Interlaced ($FIELD_ORDER): corrected field rate $ORIG_RATE to frame rate $FRAME_RATE"
-            else
-                info "  Interlaced ($FIELD_ORDER): r_frame_rate=$ORIG_RATE is already frame rate (TS avg_frame_rate=$TS_AVG_FRAME_RATE)"
-            fi
-        fi
-    fi
+    # (The frame rate is parsed, and halved for interlaced material, right
+    # after the extraction - the slot rule needs it. FRAME_RATE_DEC too.)
 
     #########################################################################
     # AUDIO ES SANITIZE (ttcut-audiofix)
-    # Walk each extracted audio ES frame by frame: drop junk bytes between
-    # valid frames, report CRC-damaged frames. Runs BEFORE the Rev-2 audio-gap
-    # detection/repair section below so that repair operates on structurally
-    # clean material. Placed here (after the interlace field/frame-rate
-    # correction above, not right after AC3 header repair) so the ms->video-
-    # frame conversion for audio_${i}_corrupt_ranges uses the corrected
-    # FRAME_RATE — an interlaced ES can report double (field) rate until that
-    # correction runs. Any tool failure leaves the original file untouched.
+    # Walk each audio ES frame by frame: drop junk bytes between valid
+    # frames, report CRC-damaged frames. Runs on the PLACED files (slot rule
+    # above), so the positions it reports are positions in the final ES; the
+    # partial frames at the recording edges are already gone there. Runs
+    # after the interlace field/frame-rate correction, so the ms->video-frame
+    # conversion for audio_${i}_corrupt_ranges uses the corrected frame rate.
+    # Any tool failure leaves the file untouched.
     #########################################################################
     declare -A AUDIOFIX_CORRUPT_RANGES AUDIOFIX_JUNK_BYTES AUDIOFIX_DROPPED
     if [ ${#AUDIO_FILES[@]} -gt 0 ]; then
-        if command -v ttcut-audiofix &>/dev/null; then
-            step "Checking audio ES structure..."
-            # Decimal frame rate for the ms->video-frame conversion. The Rev-2
-            # gap section further below recomputes the same value into the
-            # global FRAME_RATE_DEC from the same (by-then-unchanged)
-            # FRAME_RATE_NUM/DEN — a harmless no-op duplicate, kept so this
-            # block doesn't have to move past AC3 header repair per the
-            # original plan.
-            FRAME_RATE_DEC=$(awk "BEGIN {printf \"%.6f\", $FRAME_RATE_NUM / $FRAME_RATE_DEN}")
-            for i in "${!AUDIO_FILES[@]}"; do
-                AF="${AUDIO_FILES[$i]}"
-                case "$AF" in *.mp2|*.ac3|*.eac3) ;; *) continue ;; esac
-                set +e
-                AFIX_OUT=$(ttcut-audiofix -a "$AF" 2>/dev/null)
-                AFIX_RC=$?
-                set -e
-                if [ "$AFIX_RC" -eq 0 ]; then
-                    info "  $(basename "$AF"): structure OK"
-                    continue
-                elif [ "$AFIX_RC" -ge 2 ]; then
-                    warn "  $(basename "$AF"): ttcut-audiofix analyze failed (rc=$AFIX_RC), leaving untouched"
-                    continue
-                fi
-                TEMP_FIXED="${AF}.sanitized"
-                set +e
-                ttcut-audiofix -f "$AF" "$TEMP_FIXED" >/dev/null 2>&1
-                FIX_RC=$?
-                set -e
-                if [ "$FIX_RC" -le 1 ] && [ -s "$TEMP_FIXED" ]; then
-                    mv "$TEMP_FIXED" "$AF"
-                    JUNK=$(echo "$AFIX_OUT" | grep -oP '^junk_regions=\K.*' || true)
-                    CRCB=$(echo "$AFIX_OUT" | grep -oP '^crc_bad_frames=\K.*' || true)
-                    # A recording starts and ends mid-frame; ttcut-audiofix
-                    # reports those two partial frames as edge_junk_bytes rather
-                    # than in junk_regions. They are removed like any junk (that
-                    # is why they count towards the byte total below), but they
-                    # are not damage and must not reach audio_N_corrupt_ranges -
-                    # otherwise TTCut-ng puts a "Ton-Datenfehler" marker on every single
-                    # recording. Empty when an older ttcut-audiofix is in PATH,
-                    # which then behaves exactly as before.
-                    EDGEB=$(echo "$AFIX_OUT" | grep -oP '^edge_junk_bytes=\K[0-9]+' || echo 0)
-                    MIDB=$(echo "$JUNK" | tr ',' '\n' | grep -oP ':\K[0-9]+' | awk '{s+=$1} END{print s+0}')
-                    AUDIOFIX_JUNK_BYTES[$i]=$(( MIDB + ${EDGEB:-0} ))
-                    AUDIOFIX_DROPPED[$i]=$(echo "$AFIX_OUT" | grep -oP '^dropped_frames=\K[0-9]+' || echo 0)
-                    # ms positions (junk + CRC) -> video frames, clustered (<=2s)
-                    AUDIOFIX_CORRUPT_RANGES[$i]=$(audiofix_ranges_to_video_frames "$JUNK" "$CRCB" "$FRAME_RATE_DEC")
-                    audiofix_report "$(basename "$AF")" "$JUNK" "$CRCB" "$MIDB" "${EDGEB:-0}" "$FRAME_RATE_DEC"
-                else
-                    rm -f "$TEMP_FIXED"
-                    warn "  $(basename "$AF"): sanitize failed (rc=$FIX_RC), leaving untouched"
-                fi
-            done
-            echo ""
-        else
-            warn "ttcut-audiofix not found in PATH, skipping audio ES sanitize"
-            echo ""
-        fi
+        step "Checking audio ES structure..."
+        for i in "${!AUDIO_FILES[@]}"; do
+            AF="${AUDIO_FILES[$i]}"
+            case "$AF" in *.mp2|*.ac3|*.eac3) ;; *) continue ;; esac
+            set +e
+            AFIX_OUT=$(ttcut-audiofix -a "$AF" 2>/dev/null)
+            AFIX_RC=$?
+            set -e
+            if [ "$AFIX_RC" -eq 0 ]; then
+                info "  $(basename "$AF"): structure OK"
+                continue
+            elif [ "$AFIX_RC" -ge 2 ]; then
+                warn "  $(basename "$AF"): ttcut-audiofix analyze failed (rc=$AFIX_RC), leaving untouched"
+                continue
+            fi
+            TEMP_FIXED="${AF}.sanitized"
+            set +e
+            ttcut-audiofix -f "$AF" "$TEMP_FIXED" >/dev/null 2>&1
+            FIX_RC=$?
+            set -e
+            if [ "$FIX_RC" -le 1 ] && [ -s "$TEMP_FIXED" ]; then
+                mv "$TEMP_FIXED" "$AF"
+                JUNK=$(echo "$AFIX_OUT" | grep -oP '^junk_regions=\K.*' || true)
+                CRCB=$(echo "$AFIX_OUT" | grep -oP '^crc_bad_frames=\K.*' || true)
+                # A recording starts and ends mid-frame; ttcut-audiofix
+                # reports those two partial frames as edge_junk_bytes rather
+                # than in junk_regions. They are removed like any junk (that
+                # is why they count towards the byte total below), but they
+                # are not damage and must not reach audio_N_corrupt_ranges -
+                # otherwise TTCut-ng puts a "Ton-Datenfehler" marker on every single
+                # recording. Empty when an older ttcut-audiofix is in PATH,
+                # which then behaves exactly as before.
+                EDGEB=$(echo "$AFIX_OUT" | grep -oP '^edge_junk_bytes=\K[0-9]+' || echo 0)
+                MIDB=$(echo "$JUNK" | tr ',' '\n' | grep -oP ':\K[0-9]+' | awk '{s+=$1} END{print s+0}')
+                AUDIOFIX_JUNK_BYTES[$i]=$(( MIDB + ${EDGEB:-0} ))
+                AUDIOFIX_DROPPED[$i]=$(echo "$AFIX_OUT" | grep -oP '^dropped_frames=\K[0-9]+' || echo 0)
+                # ms positions (junk + CRC) -> video frames, clustered (<=2s)
+                AUDIOFIX_CORRUPT_RANGES[$i]=$(audiofix_ranges_to_video_frames "$JUNK" "$CRCB" "$FRAME_RATE_DEC")
+                audiofix_report "$(basename "$AF")" "$JUNK" "$CRCB" "$MIDB" "${EDGEB:-0}" "$FRAME_RATE_DEC"
+            else
+                rm -f "$TEMP_FIXED"
+                warn "  $(basename "$AF"): sanitize failed (rc=$FIX_RC), leaving untouched"
+            fi
+        done
+        echo ""
     fi
 
     progress_set 29
@@ -2166,8 +1791,8 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # Video duration = video PTS span, NOT the container span.
     # ffprobe format=duration (CONTAINER_VIDEO_DURATION) spans the latest
     # stream end minus the earliest stream start; with DVB audio leading the
-    # video it overshoots by the audio lead, inflating the frame count, the
-    # padding target and the reported drift. Measure the video stream itself:
+    # video it overshoots by the audio lead, inflating the frame count and
+    # the reported drift. Measure the video stream itself:
     # first display PTS (min over the first 2s -- covers leading B-frames) to
     # last PTS + one frame duration, on the repaired TS (monotonic PTS; also
     # collapses VDR multi-file to one clean timeline).
@@ -2180,8 +1805,8 @@ with open('$OUTPUT_VIDEO','rb') as f:
         # First frame PTS = the stream's start_time (first DECODABLE frame).
         # Not the minimum packet PTS: open-GOP leading B-frames at a mid-
         # recording start have a lower PTS but are dropped by every decoder, so
-        # counting them would overstate the duration (by up to M-1 frames) and
-        # over-pad the audio. start_time excludes them and matches the decoded
+        # counting them would overstate the duration (by up to M-1 frames).
+        # start_time excludes them and matches the decoded
         # frame count. MPEG-2 leading-B skip already trimmed the ES to the
         # first I; align the span start with it in that case.
         if [ "$VIDEO_START_TIME" != "0" ]; then
@@ -2244,9 +1869,8 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # elementary stream (verified: "stream,2964," vs. "stream,184960" for
     # a raw .264 - reproduces even for the plain index/codec_name entries,
     # so it's a demuxer-side csv quirk, not a frame-vs-packet count
-    # difference). Not limited to raw mpegvideo: mpegts does it too,
-    # which is why detect_video_gaps_multifile() has to strip the same
-    # comma. "2964," fails bash's [ -eq ] integer test
+    # difference). Not limited to raw mpegvideo: mpegts does it too.
+    # "2964," fails bash's [ -eq ] integer test
     # silently (exit 2, swallowed by the 2>/dev/null), so this whole
     # count-check was a no-op for every MPEG-2 run. Strip it before the
     # numeric test.
@@ -2275,10 +1899,20 @@ with open('$OUTPUT_VIDEO','rb') as f:
         VIDEO_FRAME_COUNT=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION * $FRAME_RATE_NUM / $FRAME_RATE_DEN}")
     fi
 
+    # With a slot table the reference is TTCut-ng's frame index: the pictures
+    # it shows, at one frame duration each. The packet count of the ES is not
+    # that number - it includes the cold-start leading pictures TTCut-ng
+    # drops (7 on Das Erste HD = 140 ms), and counts an H.264 PAFF frame as
+    # two packets. The audio was placed on the slots, so the drift below is
+    # measured against them.
+    if [ "${SLOT_COUNT:-0}" -gt 0 ]; then
+        VIDEO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $SLOT_COUNT * 1000.0 * $FRAME_RATE_DEN / $FRAME_RATE_NUM}")
+        VIDEO_FRAME_COUNT="$SLOT_COUNT"
+    fi
+
     # Duration of the first audio track and its drift against the video ES
-    # (AUDIO_DURATION, AUDIO_DURATION_MS, AV_DRIFT_MS). Measured before the
-    # repair, after the mid-stream repair and after the end padding; the
-    # drift RATE is derived at the sites that need it.
+    # (AUDIO_DURATION, AUDIO_DURATION_MS, AV_DRIFT_MS), measured on the placed
+    # file.
     _recalc_av_drift() {
         FIRST_AUDIO="${AUDIO_FILES[0]}"
         AUDIO_DURATION=$(audio_es_duration "$FIRST_AUDIO")
@@ -2286,435 +1920,98 @@ with open('$OUTPUT_VIDEO','rb') as f:
         AV_DRIFT_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION_MS - $AUDIO_DURATION_MS}")
     }
 
-    # Check first audio file for duration comparison
+    # Loud count-check, second half: a hole the PTS list does not show.
+    if $COUNTED_FRAMES_VALID; then
+        EXPECTED_FRAMES=$(awk "BEGIN {printf \"%.0f\", ($VIDEO_SPAN_MS / 1000.0) * $FRAME_RATE_DEC}")
+        if [ $((EXPECTED_FRAMES - COUNTED_FRAMES)) -gt 1 ]; then
+            warn "Video ES is missing $((EXPECTED_FRAMES - COUNTED_FRAMES)) frames mid-stream (counted $COUNTED_FRAMES, PTS span implies $EXPECTED_FRAMES) - audio was placed around the holes, defect positions are reported below (and as markers in TTCut-ng)"
+        fi
+    fi
+
+    # audio_gap_frames: one entry per silence insert inside the recording.
+    # The position is a slot time, i.e. already an output-ES time; adding the
+    # PTS of frame 0 puts it into the form the emission further down reads
+    # ("src_start src_end 0", third field 0 = mark the start frame only: with
+    # the real length a single long outage would write hundreds of frame
+    # indices into the .info and run into the maxExtraFrames cap of
+    # ttesinfo.cpp; how long the loss was is in es_missing_ranges).
+    AUDIO_GAP_FRAMES_SOURCE_PTS=()
+    N_SILENCE_INSERTS=0
+    if [ -s "${AUDIO_SILENCE_POS_FILE:-}" ]; then
+        N_SILENCE_INSERTS=$(grep -c . "$AUDIO_SILENCE_POS_FILE")
+        while IFS=' ' read -r st _; do
+            [ -z "$st" ] && continue
+            AUDIO_GAP_FRAMES_SOURCE_PTS+=("$(awk -v v="$SLOT_V0" -v t="$st" 'BEGIN {printf "%.6f", v + t}') 0 0")
+        done < <(LC_ALL=C sort -g -u "$AUDIO_SILENCE_POS_FILE")
+    fi
+    N_HOLES=0
+    [ -s "${VIDEO_GAPS_FILE:-}" ] && N_HOLES=$(grep -c . "$VIDEO_GAPS_FILE")
+    if [ $((N_HOLES + N_SILENCE_INSERTS)) -gt 0 ]; then
+        info "  Picture holes: $N_HOLES; silence inserts inside the recording: $N_SILENCE_INSERTS (all tracks)"
+
+        # Overall damage verdict. The per-defect lines say WHERE the holes
+        # are; on a recording that lost transmission for good they scroll
+        # past by the thousand and the fact that the whole thing is beyond
+        # saving gets lost in them. Two independent measures, either one is
+        # enough to trip it: the share of video frames that never arrived,
+        # and how densely the defects sit. Reference case (Futurama 06x03,
+        # 2026-08-23, measured with the gap detection of that time): 15.6%
+        # of frames missing and ~150 gaps/min. This only reports; the run
+        # continues and still produces its output, because where the line
+        # between "damaged" and "worthless" falls is the viewer's call.
+        DEFECT_LOSS_PCT_LIMIT=5
+        DEFECT_GAPS_PER_MIN_LIMIT=20
+        # Silence inserts per TRACK, not summed: one outage shows up once in
+        # every audio track.
+        DEFECT_TRACKS=${SLOT_TRACKS_PLACED:-0}
+        [ "$DEFECT_TRACKS" -gt 0 ] || DEFECT_TRACKS=1
+        DEFECT_TOTAL_GAPS=$(( N_HOLES + N_SILENCE_INSERTS / DEFECT_TRACKS ))
+        DEFECT_LOSS_PCT=0
+        if [ "${EXPECTED_FRAMES:-0}" -gt 0 ] 2>/dev/null; then
+            DEFECT_LOSS_PCT=$(awk -v e="$EXPECTED_FRAMES" -v c="${COUNTED_FRAMES:-0}" \
+                'BEGIN {d = e - c; if (d < 0) d = 0; printf "%.1f", d * 100.0 / e}')
+        fi
+        DEFECT_GAPS_PER_MIN=0
+        if [ "${VIDEO_DURATION_MS:-0}" -gt 0 ] 2>/dev/null; then
+            # Whole numbers: a per-minute count has no decimal precision. The
+            # rounding happens BEFORE the threshold test, so the limit
+            # applies to the number that is printed.
+            DEFECT_GAPS_PER_MIN=$(awk -v g="$DEFECT_TOTAL_GAPS" -v ms="$VIDEO_DURATION_MS" \
+                'BEGIN {printf "%.0f", g * 60000.0 / ms}')
+        fi
+        if awk -v l="$DEFECT_LOSS_PCT" -v lm="$DEFECT_LOSS_PCT_LIMIT" \
+               -v g="$DEFECT_GAPS_PER_MIN" -v gm="$DEFECT_GAPS_PER_MIN_LIMIT" \
+               'BEGIN {exit !(l > lm || g > gm)}'; then
+            # The wording is a contract: the VDR wrapper (tools/vdr-demux-example.sh)
+            # reads the percentage and the "N audio gaps/min" figure from this
+            # line. N counts picture holes plus silence inserts per track.
+            warn "SEVERELY DAMAGED RECORDING: ${DEFECT_LOSS_PCT}% of video frames missing (limit ${DEFECT_LOSS_PCT_LIMIT}%), ${DEFECT_GAPS_PER_MIN} audio gaps/min per track (limit ${DEFECT_GAPS_PER_MIN_LIMIT})"
+            warn "  The result is very likely unusable - check it before cutting. Demux continues."
+        fi
+    fi
+
+    # Duration comparison on the first audio track: by the slot rule it ends
+    # on the last picture slot, so anything beyond one audio frame is a
+    # failed placement.
     AUDIO_DURATION_MS=0
     AV_DRIFT_MS=0
     AV_DRIFT_RATE=0
     if [ ${#AUDIO_FILES[@]} -gt 0 ]; then
         _recalc_av_drift
 
-        info "  Video: ~$VIDEO_FRAME_COUNT frames = ${VIDEO_DURATION_MS}ms"
+        info "  Video: $VIDEO_FRAME_COUNT frames = ${VIDEO_DURATION_MS}ms"
         info "  Audio: ${AUDIO_DURATION_MS}ms"
-        info "  Duration difference: ${AV_DRIFT_MS}ms"
-
-        # Calculate drift rate (ms per minute)
         if [ "$VIDEO_DURATION_MS" -gt 0 ]; then
             AV_DRIFT_RATE=$(awk "BEGIN {printf \"%.2f\", $AV_DRIFT_MS / ($VIDEO_DURATION_MS / 60000)}")
-            info "  Drift rate: ${AV_DRIFT_RATE}ms/min"
         fi
-
-        # === Audio-Gap Detection, Classification, and Mid-Stream Repair (Rev 2) ===
-        # Detect audio packet gaps per track. For each gap, compute how many ms of
-        # silence to insert to keep A/V sync: silence_ms = audio_gap_ms minus the
-        # video content that was also lost in the same PTS range.
-        # Video gaps are detected ONCE per recording (not per audio track).
-
-        # Frame rate as a decimal for awk arithmetic
-        FRAME_RATE_DEC=$(awk "BEGIN {printf \"%.6f\", $FRAME_RATE_NUM / $FRAME_RATE_DEN}")
-
-        if $COUNTED_FRAMES_VALID; then
-            EXPECTED_FRAMES=$(awk "BEGIN {printf \"%.0f\", ($VIDEO_SPAN_MS / 1000.0) * $FRAME_RATE_DEC}")
-            if [ $((EXPECTED_FRAMES - COUNTED_FRAMES)) -gt 1 ]; then
-                warn "Video ES is missing $((EXPECTED_FRAMES - COUNTED_FRAMES)) frames mid-stream (counted $COUNTED_FRAMES, PTS span implies $EXPECTED_FRAMES) - audio was adjusted, defect positions are reported below (and as markers in TTCut-ng)"
-            fi
-        fi
-
-        # Frame-skalige Gap-Schwellen: 2.5 x nominale Paketdauer.
-        # Video: Frame-Dauer aus FRAME_RATE (Feld-Kadenz bei MPEG-2 halbiert die
-        # Dauer -> Schwelle bleibt trotzdem > jede legale Kadenz-Luecke).
-        VIDEO_GAP_THRESHOLD_S=$(awk "BEGIN {printf \"%.6f\", 2.5 / $FRAME_RATE_DEC}")
-        # Audio: MP2@48k = 24 ms, AC3 = 32 ms -> 2.5 x 32 ms deckt beide konservativ.
-        AUDIO_GAP_THRESHOLD_S=0.080
-
-        VIDEO_GAPS_FILE="$OUTDIR/.video_gaps.txt"
-        _CLEANUP_FILES+=("$VIDEO_GAPS_FILE")
-        # VDR multi-file: ORIGINAL_INPUT is only the first segment - scan all
-        # of them (plus inter-segment splice gaps), see
-        # detect_video_gaps_multifile() for why.
-        if [ "$VDR_MULTIFILE" = true ]; then
-            detect_video_gaps_multifile "$VIDEO_GAPS_FILE" "$VIDEO_GAP_THRESHOLD_S"
+        if [ "${AV_DRIFT_MS#-}" -gt 50 ]; then
+            warn "  A/V duration mismatch: video minus audio = ${AV_DRIFT_MS}ms (the first audio track should end on the last picture slot)"
         else
-            detect_video_gaps "$ORIGINAL_INPUT" "$VIDEO_GAPS_FILE" "$VIDEO_GAP_THRESHOLD_S"
-        fi
-
-        CLASSIFIED_FILES=()
-        HAS_ANY_SILENCE_NEEDED=false
-        progress_set 35
-        AUDIO_GAP_FRAMES_SOURCE_PTS=()  # entries: "src_start src_end 0" - one per
-        # detected audio gap (see the loop over $GAP_FILE below), independent
-        # of whether the zone it falls in needed a repair edit; the 3rd
-        # field's meaning ("0") is explained there.
-        declare -A TRACK_SILENCE_MS TRACK_REMOVED_MS  # per-track repair balance for .info
-        declare -A EFFECTIVE_FIRST_AUDIO_PTS_ARR  # per-track, reused by the repair loop below
-        # Zone counts for the severity verdict below. Counted as ZONES, not
-        # CLASSIFIED_FILE rows: under the zone model a zone with |balance| <
-        # the 20ms threshold in build_zone_edits() never produces a row at
-        # all (it needs no repair), so counting rows would silently drop
-        # every symmetric A+V outage from the tally - exactly the recordings
-        # the severity check exists to catch. $ZONES_FILE (all zones) and
-        # build_zone_edits' output (zones that got an edit) are both still
-        # in scope inside this loop, before the per-track temp files are
-        # cleaned up at exit; sum them here while they're available.
-        N_NO_SILENCE=0
-        N_WITH_SILENCE=0
-        for i in "${!AUDIO_FILES[@]}"; do
-            # Jede Spur wird einmal ganz durchlaufen; auf einer sauberen
-            # Aufnahme ist das der laengste Abschnitt vor dem Ende, und ohne
-            # diese Meldung stand der Balken hier gemessene 15s still.
-            progress_set $(( 35 + (i + 1) * 5 / ${#AUDIO_FILES[@]} ))
-            IFS=':' read -r idx _ _ <<< "${AUDIO_STREAMS[$i]}"
-            GAP_FILE="$OUTDIR/.gaps_track_${i}.txt"
-            CLASSIFIED_FILE="$OUTDIR/.classified_track_${i}.txt"
-            _CLEANUP_FILES+=("$GAP_FILE" "$CLASSIFIED_FILE")
-            if [ "$VDR_MULTIFILE" = true ]; then
-                detect_audio_gaps_multifile "$idx" "$GAP_FILE" "$AUDIO_GAP_THRESHOLD_S"
-            else
-                detect_audio_gaps "$ORIGINAL_INPUT" "$idx" "$GAP_FILE" "$AUDIO_GAP_THRESHOLD_S"
-            fi
-            CLASSIFIED_FILES[i]="$CLASSIFIED_FILE"
-
-            # Melde-Pfad, getrennt vom Reparatur-Pfad: audio_gap_frames zeigt,
-            # WO der Ton Luecken hatte - unabhaengig davon, ob die Zonenbilanz
-            # eine Reparatur ausgeloest hat. Ein symmetrischer A+V-Ausfall
-            # braucht keine Reparatur, ist aber sehr wohl eine Stoerstelle,
-            # die in TTCut-ng als Landezone sichtbar sein muss.
-            #
-            # Drittes Feld bewusst 0, nicht die Gap-Laenge: der Emissionspfad
-            # (~Zeile 2794) rechnet daraus die BREITE des Markers in Frames
-            # und schreibt jeden einzelnen Frame-Index in die CSV. Mit der
-            # echten Gap-Laenge ergaebe allein der 26s-Ausfall der Referenz-
-            # aufnahme 03x15 660 Indizes und die Segmentnaht weitere 2700 -
-            # die .info-Zeile waere unbrauchbar und liefe in den
-            # maxExtraFrames-Cap von ttesinfo.cpp. Mit 0 markiert jeder Gap
-            # nur seinen Startframe; wie lang der Verlust war, steht ohnehin
-            # in es_missing_ranges.
-            if [ -s "$GAP_FILE" ]; then
-                while IFS=' ' read -r g_start g_end g_ms; do
-                    [ -z "$g_start" ] && continue
-                    AUDIO_GAP_FRAMES_SOURCE_PTS+=("$g_start $g_end 0")
-                done < "$GAP_FILE"
-            fi
-
-            # Erster PTS des GETRIMMTEN Ton-ES. Der Trim schneidet den
-            # Vorlauf weg, mit dem der Ton vor dem Video beginnt - die
-            # Positionen in build_zone_edits() beziehen sich auf das
-            # getrimmte ES, nicht auf den Originalton.
-            #
-            # Frueher: max(FIRST_AUDIO_PTS_TRACK, ${FIRST_VIDEO_PTS:-0}).
-            # Richtig gemeint, aber wirkungslos - FIRST_VIDEO_PTS wird
-            # erst weiter unten gesetzt, der Ausdruck lieferte immer den
-            # ungetrimmten Audio-PTS und verschob jede Position um den
-            # Trim (gemessen 2026-08-24 auf "03x15": 450 ms).
-            FIRST_AUDIO_PTS_TRACK="${ORIG_AUDIO_PTS_ARR[$i]:-0}"
-            EFFECTIVE_FIRST_AUDIO_PTS=$(awk \
-                "BEGIN {printf \"%.6f\", $FIRST_AUDIO_PTS_TRACK + ${AUDIO_TRIM_SECS[$i]:-0}}")
-            EFFECTIVE_FIRST_AUDIO_PTS_ARR[$i]="$EFFECTIVE_FIRST_AUDIO_PTS"
-
-            ZONES_FILE="$OUTDIR/.zones_track_${i}.txt"
-            _CLEANUP_FILES+=("$ZONES_FILE")
-            build_disturbance_zones "$VIDEO_GAPS_FILE" "$GAP_FILE" 2.0 "$ZONES_FILE"
-
-            # Zonen -> CLASSIFIED_FILE. src_end == src_start: der Offset wird
-            # jetzt in build_zone_edits() gefuehrt, repair_audio_with_silence_
-            # inserts() darf ihn nicht ein zweites Mal aufaddieren.
-            : > "$CLASSIFIED_FILE"
-            while IFS=' ' read -r z_pos z_bal; do
-                [ -z "$z_pos" ] && continue
-                Z_SRC=$(awk -v p="$z_pos" -v f="$EFFECTIVE_FIRST_AUDIO_PTS" \
-                    'BEGIN {printf "%.6f", p + f}')
-                echo "$Z_SRC $Z_SRC ${z_bal#-} $z_bal" >> "$CLASSIFIED_FILE"
-                HAS_ANY_SILENCE_NEEDED=true
-            done < <(build_zone_edits "$ZONES_FILE" "$EFFECTIVE_FIRST_AUDIO_PTS")
-
-            # Zone tally for the severity verdict (see the comment on
-            # N_NO_SILENCE/N_WITH_SILENCE above the loop): every zone in
-            # $ZONES_FILE either produced a CLASSIFIED_FILE row (edit
-            # needed) or didn't (balance under threshold - pure A+V loss).
-            TRACK_ZONE_COUNT=0
-            TRACK_EDIT_COUNT=0
-            [ -s "$ZONES_FILE" ] && TRACK_ZONE_COUNT=$(grep -c . "$ZONES_FILE")
-            [ -s "$CLASSIFIED_FILE" ] && TRACK_EDIT_COUNT=$(grep -c . "$CLASSIFIED_FILE")
-            N_WITH_SILENCE=$(( N_WITH_SILENCE + TRACK_EDIT_COUNT ))
-            N_NO_SILENCE=$(( N_NO_SILENCE + TRACK_ZONE_COUNT - TRACK_EDIT_COUNT ))
-
-            # Per-track audio repair balance for .info (audio_${i}_silence_ms /
-            # audio_${i}_removed_ms): sum the signed sms column (4th field) of
-            # CLASSIFIED_FILE — positive rows are inserted silence, negative
-            # rows are truncated (removed) audio.
-            TRACK_SILENCE_MS[$i]=0
-            TRACK_REMOVED_MS[$i]=0
-            if [ -s "$CLASSIFIED_FILE" ]; then
-                read -r TRACK_SILENCE_MS_I TRACK_REMOVED_MS_I < <(awk '
-                    { if ($4 > 0) s += $4; else if ($4 < 0) r += -$4 }
-                    END { printf "%.0f %.0f\n", s, r }' "$CLASSIFIED_FILE")
-                TRACK_SILENCE_MS[$i]="$TRACK_SILENCE_MS_I"
-                TRACK_REMOVED_MS[$i]="$TRACK_REMOVED_MS_I"
-            fi
-        done
-
-        # Gated on zone counts, not on AUDIO_GAP_FRAMES_SOURCE_PTS: the two
-        # can diverge. AUDIO_GAP_FRAMES_SOURCE_PTS is filled only from
-        # $GAP_FILE (audio gaps), so a recording whose loss is entirely
-        # video-only (audio ran through, video-lost balance -> truncation
-        # edit needed) has zones and a nonzero N_WITH_SILENCE but adds
-        # nothing there - the severity verdict below must still see it.
-        if [ $(( N_NO_SILENCE + N_WITH_SILENCE )) -gt 0 ]; then
-            info "  Audio gaps detected across all tracks: $N_NO_SILENCE pure A+V, $N_WITH_SILENCE needing silence"
-
-            # Overall damage verdict. The per-defect lines above say WHERE
-            # the holes are; on a recording that lost transmission for good
-            # they scroll past by the thousand and the fact that the whole
-            # thing is beyond saving gets lost in them. Two independent
-            # measures, either one is enough to trip it: the share of video
-            # frames that never arrived, and how densely the audio holes sit.
-            # Reference case (Futurama 06x03, 2026-08-23): 15.6% of frames
-            # missing and ~150 gaps/min - both far past the thresholds. This
-            # only reports; the run continues and still produces its output,
-            # because where the line between "damaged" and "worthless" falls
-            # is the viewer's call, not the demuxer's.
-            DEFECT_LOSS_PCT_LIMIT=5
-            DEFECT_GAPS_PER_MIN_LIMIT=20
-            # Per TRACK, not summed over all of them. N_NO_SILENCE and
-            # N_WITH_SILENCE count disturbance ZONES across every audio
-            # track's $ZONES_FILE, so one broadcast outage lands once per
-            # audio track: on the reference
-            # recording that turned ~3419 gaps into 6839 and doubled the rate
-            # to 123/min for two tracks. The outage happened once, so the
-            # figure has to be per track to mean anything.
-            DEFECT_TRACKS=${#AUDIO_FILES[@]}
-            [ "$DEFECT_TRACKS" -gt 0 ] || DEFECT_TRACKS=1
-            DEFECT_TOTAL_GAPS=$(( (N_NO_SILENCE + N_WITH_SILENCE) / DEFECT_TRACKS ))
-            DEFECT_LOSS_PCT=0
-            if [ "${EXPECTED_FRAMES:-0}" -gt 0 ] 2>/dev/null; then
-                DEFECT_LOSS_PCT=$(awk -v e="$EXPECTED_FRAMES" -v c="${COUNTED_FRAMES:-0}" \
-                    'BEGIN {d = e - c; if (d < 0) d = 0; printf "%.1f", d * 100.0 / e}')
-            fi
-            DEFECT_GAPS_PER_MIN=0
-            if [ "${VIDEO_DURATION_MS:-0}" -gt 0 ] 2>/dev/null; then
-                # Whole gaps, no decimal: "123.0 gaps/min" claims a precision a
-                # per-minute count does not have. The loss share next to it
-                # keeps its digit - there 15.6% against 16% is a real
-                # difference. Note the rounding happens BEFORE the threshold
-                # test below, so the limit applies to the number that is
-                # printed; a true 20.4 now reads 20 and does not trip.
-                DEFECT_GAPS_PER_MIN=$(awk -v g="$DEFECT_TOTAL_GAPS" -v ms="$VIDEO_DURATION_MS" \
-                    'BEGIN {printf "%.0f", g * 60000.0 / ms}')
-            fi
-            if awk -v l="$DEFECT_LOSS_PCT" -v lm="$DEFECT_LOSS_PCT_LIMIT" \
-                   -v g="$DEFECT_GAPS_PER_MIN" -v gm="$DEFECT_GAPS_PER_MIN_LIMIT" \
-                   'BEGIN {exit !(l > lm || g > gm)}'; then
-                warn "SEVERELY DAMAGED RECORDING: ${DEFECT_LOSS_PCT}% of video frames missing (limit ${DEFECT_LOSS_PCT_LIMIT}%), ${DEFECT_GAPS_PER_MIN} audio gaps/min per track (limit ${DEFECT_GAPS_PER_MIN_LIMIT})"
-                warn "  The result is very likely unusable - check it before cutting. Demux continues."
-            fi
-        fi
-
-        # Bandplanung, unabhaengig davon OB Luecken gefunden wurden: auf einer
-        # sauberen Aufnahme lief dieser Zweig frueher gar nicht, der Balken
-        # blieb auf dem Wert vor der Erkennung stehen und sprang erst ganz am
-        # Ende weiter (gemessen: 33% bis kurz vor "fertig"). Mit
-        # N_WITH_SILENCE=0 faellt das Reparaturband auf null, und der Rest
-        # verteilt sich auf die Endphase - genau das gewuenschte Verhalten.
-        PROGRESS_IN_BYTES=$(du -cb "${VDR_SEGMENTS[@]:-$INPUT}" 2>/dev/null | tail -1 | cut -f1)
-        progress_set "$PROGRESS_PRE_END"
-        progress_plan "${N_WITH_SILENCE:-0}" "${PROGRESS_IN_BYTES:-0}"
-
-        if $HAS_ANY_SILENCE_NEEDED; then
-            info "  Inserting silence for gaps with audio loss exceeding video loss..."
-            _REPAIR_TRACK_N=${#AUDIO_FILES[@]}
-            [ "$_REPAIR_TRACK_N" -gt 0 ] || _REPAIR_TRACK_N=1
-            for i in "${!AUDIO_FILES[@]}"; do
-                _REPAIR_TRACK_IDX=$i
-                # Count the gaps that need silence (silence_ms != 0) rather
-                # than just proving one exists: the count is announced before
-                # the repair starts, so a caller tailing the log - the VDR
-                # wrapper puts the last line in its progress dialog - can see
-                # what is being worked on instead of the same stale line for
-                # minutes. The old code found the count a second time after
-                # the repair had succeeded; one pass answers both.
-                NEEDS_REPAIR=false
-                N_TRACK_GAPS=0
-                while IFS=' ' read -r _gs _ge _gms sms; do
-                    if [ "${sms:-0}" != "0" ]; then
-                        NEEDS_REPAIR=true
-                        N_TRACK_GAPS=$(( N_TRACK_GAPS + 1 ))
-                    fi
-                done < "${CLASSIFIED_FILES[$i]}"
-
-                if $NEEDS_REPAIR; then
-                    AUDIO_FILE="${AUDIO_FILES[$i]}"
-                    EFFECTIVE_FIRST_AUDIO_PTS="${EFFECTIVE_FIRST_AUDIO_PTS_ARR[$i]}"
-                    info "    $(basename "$AUDIO_FILE") (track $((i + 1))/${#AUDIO_FILES[@]}): repairing $N_TRACK_GAPS gap(s)..."
-                    if repair_audio_with_silence_inserts "$AUDIO_FILE" "${CLASSIFIED_FILES[$i]}" "$EFFECTIVE_FIRST_AUDIO_PTS"; then
-                        info "    $(basename "$AUDIO_FILE"): $N_TRACK_GAPS silence-insertion(s) applied"
-                    else
-                        warn "    $(basename "$AUDIO_FILE"): silence-insert FAILED — leaving original"
-                        # Repair didn't happen — don't let the .info claim
-                        # a balance (audio_${i}_silence_ms/removed_ms) that
-                        # was only ever the INTENDED balance computed from
-                        # CLASSIFIED_FILE above, before the actual repair
-                        # attempt failed and left the original audio file
-                        # untouched.
-                        TRACK_SILENCE_MS[$i]=0
-                        TRACK_REMOVED_MS[$i]=0
-                    fi
-                fi
-            done
-
-            # Recalculate AV_DRIFT_MS after repair so the end-pad block below
-            # operates on the residual drift only.
-            _recalc_av_drift
-            info "  After silence-insertion: Audio=${AUDIO_DURATION_MS}ms, residual drift=${AV_DRIFT_MS}ms"
-        elif [ ${#AUDIO_GAP_FRAMES_SOURCE_PTS[@]} -gt 0 ]; then
-            # AUDIO_GAP_FRAMES_SOURCE_PTS is filled from every detected
-            # audio gap (see the loop over $GAP_FILE above), independent of
-            # whether its zone needed a repair edit. HAS_ANY_SILENCE_NEEDED
-            # only goes true when build_zone_edits() actually emits one, so
-            # this branch is reachable again: a recording whose only outages
-            # are zero-balance zones (real, symmetric A+V loss - the exact
-            # 03x15 reference case, one zone at -16ms, under the 20ms
-            # threshold) has audio gaps to report but no repair to run.
-            info "  All audio gaps perfectly synchronized with video gaps — no silence insertion needed"
-        fi
-
-        # Cleanup gap detection files (handled by _CLEANUP_FILES on exit)
-
-        # If video is longer than audio, pad audio with silence (like ProjectX does)
-        # This ensures A/V sync throughout the file
-        if [ "$AV_DRIFT_MS" -gt 20 ]; then
-            progress_set_tail 5
-            info "  Padding ${#AUDIO_FILES[@]} audio track(s) in parallel to match video duration..."
-
-            # Calculate target duration in seconds
-            TARGET_AUDIO_DUR=$(awk "BEGIN {printf \"%.6f\", $VIDEO_DURATION_MS / 1000}")
-
-            # Create temp directory for padding logs
-            PAD_LOG_DIR="$OUTDIR/.pad_logs_$$"
-            mkdir -p "$PAD_LOG_DIR"
-            _CLEANUP_DIRS+=("$PAD_LOG_DIR")
-
-            # Start all audio padding in parallel
-            # Strategy: Generate silence separately, then concatenate with original
-            # using ffmpeg concat demuxer + stream copy. This preserves original
-            # AC3 frames bit-for-bit (including per-frame acmod/channel changes).
-            PAD_PIDS=()
-            for i in "${!AUDIO_FILES[@]}"; do
-                AUDIO_FILE="${AUDIO_FILES[$i]}"
-                AUDIO_EXT="${AUDIO_FILE##*.}"
-                TEMP_PADDED="$OUTDIR/.temp_padded_${i}.${AUDIO_EXT}"
-                TEMP_SILENCE="$OUTDIR/.temp_silence_${i}.${AUDIO_EXT}"
-                TEMP_CONCAT="$OUTDIR/.temp_concat_${i}.txt"
-                _CLEANUP_FILES+=("$TEMP_PADDED" "$TEMP_SILENCE" "$TEMP_CONCAT")
-
-                # Get audio codec, bitrate, channels, and sample rate from original.
-                # On probe failure APROBE_CODEC is empty and the ENCODER case
-                # below falls through to -c:a copy (same effect as the old
-                # `|| echo "copy"` fallback).
-                probe_audio_props "$AUDIO_FILE"
-                AUDIO_CODEC="$APROBE_CODEC"
-                ORIG_BITRATE="$APROBE_BITRATE"
-                ORIG_CHANNELS="$APROBE_CHANNELS"
-                ORIG_SAMPLE_RATE="$APROBE_SAMPLE_RATE"
-                ORIG_DURATION=$(audio_es_duration "$AUDIO_FILE")
-
-                # Calculate padding duration
-                PAD_DURATION=$(awk "BEGIN {d = $TARGET_AUDIO_DUR - $ORIG_DURATION; printf \"%.6f\", (d > 0) ? d : 0}")
-
-                # Choose encoder for silence generation (matching original format)
-                case "$AUDIO_CODEC" in
-                    mp2)
-                        ENCODER=(-c:a mp2 -b:a "${ORIG_BITRATE:-192000}" -ac "${ORIG_CHANNELS:-2}")
-                        ;;
-                    ac3)
-                        ENCODER=(-c:a ac3 -b:a "${ORIG_BITRATE:-384000}" -ac "${ORIG_CHANNELS:-2}")
-                        ;;
-                    aac)
-                        ENCODER=(-c:a aac -b:a "${ORIG_BITRATE:-192000}" -ac "${ORIG_CHANNELS:-2}")
-                        ;;
-                    *)
-                        ENCODER=(-c:a copy)
-                        ;;
-                esac
-
-                # Prefer probed channel_layout over bare channel count (e.g. "3.0",
-                # "5.1(side)") to avoid acmod mismatch when splicing silence.
-                pad_layout="${ORIG_CHANNELS:-2}c"
-                [ -n "$APROBE_CHANNEL_LAYOUT" ] && pad_layout="$APROBE_CHANNEL_LAYOUT"
-
-                # Run padding in background
-                (
-                    # 1. Generate silence matching original audio format
-                    ffmpeg -y -f lavfi \
-                        -i "anullsrc=r=${ORIG_SAMPLE_RATE:-48000}:cl=${pad_layout}" \
-                        -t "$PAD_DURATION" \
-                        "${ENCODER[@]}" \
-                        "$TEMP_SILENCE" 2>&1
-
-                    # 2. Concatenate original + silence via concat demuxer (stream copy).
-                    # realpath: the list lives in $OUTDIR and the concat demuxer
-                    # resolves its entries relative to the list file's own
-                    # directory. Writing "$OUTDIR/..." entries would therefore be
-                    # looked up as "$OUTDIR/$OUTDIR/..." whenever output_dir was
-                    # given as a relative path (see the same guard above where the
-                    # VDR multi-file list is built).
-                    printf "file '%s'\nfile '%s'\n" \
-                        "$(realpath "$AUDIO_FILE")" "$(realpath "$TEMP_SILENCE")" > "$TEMP_CONCAT"
-                    ffmpeg -y -f concat -safe 0 -i "$TEMP_CONCAT" \
-                        -c:a copy \
-                        "$TEMP_PADDED" 2>&1
-
-                    rm -f "$TEMP_SILENCE" "$TEMP_CONCAT"
-                ) > "$PAD_LOG_DIR/pad_$i.log" 2>&1 &
-                PAD_PIDS+=($!)
-            done
-
-            # Wait for all padding to complete and process results
-            for i in "${!PAD_PIDS[@]}"; do
-                wait "${PAD_PIDS[$i]}"
-                PAD_EXIT=$?
-
-                AUDIO_FILE="${AUDIO_FILES[$i]}"
-                AUDIO_EXT="${AUDIO_FILE##*.}"
-                TEMP_PADDED="$OUTDIR/.temp_padded_${i}.${AUDIO_EXT}"
-
-                if [ $PAD_EXIT -eq 0 ] && [ -s "$TEMP_PADDED" ]; then
-                    # Get original duration for comparison
-                    ORIG_DUR=$(audio_es_duration "$AUDIO_FILE")
-                    ORIG_DUR_MS=$(awk "BEGIN {printf \"%.0f\", $ORIG_DUR * 1000}")
-
-                    # Replace original with padded version
-                    mv "$TEMP_PADDED" "$AUDIO_FILE"
-
-                    # Calculate how much was added
-                    NEW_DURATION=$(audio_es_duration "$AUDIO_FILE")
-                    NEW_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $NEW_DURATION * 1000}")
-                    ADDED_MS=$((NEW_DURATION_MS - ORIG_DUR_MS))
-
-                    info "    $(basename "$AUDIO_FILE"): +${ADDED_MS}ms padding"
-                else
-                    warn "    Failed to pad $(basename "$AUDIO_FILE")"
-                    warn_ffmpeg_log "$PAD_LOG_DIR/pad_$i.log" "    "
-                    rm -f "$TEMP_PADDED"
-                fi
-            done
-
-            # Clean up log directory
-            rm -rf "$PAD_LOG_DIR"
-
-            # Recalculate drift after padding
-            _recalc_av_drift
-            # Recalculate drift rate with corrected values
-            AV_DRIFT_RATE=$(awk "BEGIN {printf \"%.2f\", $AV_DRIFT_MS / ($VIDEO_DURATION_MS / 60000)}")
-
-            info "  After padding: Video=${VIDEO_DURATION_MS}ms, Audio=${AUDIO_DURATION_MS}ms, Drift=${AV_DRIFT_MS}ms"
-        elif [ "${AV_DRIFT_MS#-}" -gt 50 ]; then
-            # Negative drift (audio longer than video) - warn but don't fix
-            warn "  A/V duration mismatch detected!"
-            warn "  Audio is longer than video by ${AV_DRIFT_MS#-}ms"
-            warn "  This may cause issues at the end of playback."
-        else
-            info "  A/V sync is good (drift: ${AV_DRIFT_MS}ms)"
+            info "  A/V durations match (difference: ${AV_DRIFT_MS}ms)"
         fi
     fi
+    progress_set "$PROGRESS_PRE_END"
+    PROGRESS_TAIL_BASE=$PROGRESS_LAST
     echo ""
 
     # 3. Try to extract subtitles (opt-in via --subs; an empty SUBTITLE_FILES
@@ -2749,11 +2046,11 @@ with open('$OUTPUT_VIDEO','rb') as f:
             # therefore skipped every such stream as "empty". Byte-counting
             # an ffmpeg stream-copy sample is the reliable probe.
             sub_bytes=$(timeout 90 ffmpeg -v error -ss "$sub_midpoint" -t 120 \
-                "${SUBS_INPUT_ARGS[@]}" -map "0:$idx" -c copy -f mpegts - 2>/dev/null | wc -c)
+                "${ORIG_INPUT_ARGS[@]}" -map "0:$idx" -c copy -f mpegts - 2>/dev/null | wc -c)
             if [ "${sub_bytes:-0}" -eq 0 ]; then
                 # Subs may simply be absent during the mid-point window.
                 sub_bytes=$(timeout 90 ffmpeg -v error -t 120 \
-                    "${SUBS_INPUT_ARGS[@]}" -map "0:$idx" -c copy -f mpegts - 2>/dev/null | wc -c)
+                    "${ORIG_INPUT_ARGS[@]}" -map "0:$idx" -c copy -f mpegts - 2>/dev/null | wc -c)
             fi
             if [ "${sub_bytes:-0}" -eq 0 ]; then
                 info "  Subtitle $idx [$lang] ($codec) - empty, skipped"
@@ -2959,7 +2256,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 subrip|srt|text)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
                     info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
-                    ffmpeg -y "${SUBS_INPUT_ARGS[@]}" -map "0:$idx" "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    ffmpeg -y "${ORIG_INPUT_ARGS[@]}" -map "0:$idx" "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     SUBTITLE_FILES+=("$OUTPUT_SUB")
                     ;;
                 *)
@@ -2970,51 +2267,31 @@ with open('$OUTPUT_VIDEO','rb') as f:
         echo ""
     fi
 
-    # 4. Calculate A/V sync offset
-    # Get first packet PTS for video and audio from the ORIGINAL input (before repair)
-    # The repaired file has timestamps normalized to 0, so we need the original for offset
+    # 4. A/V start report
     progress_set_tail 8
-    step "Calculating A/V sync offset..."
+    step "A/V start..."
 
-    # Reuse the pre-repair measurement (probe_first_video_pts): for a single
-    # file $INPUT and $ORIGINAL_INPUT were the same path; for VDR multi-file
-    # the concat chain and the first segment share the same first PTS
-    # (recording start).
-    FIRST_VIDEO_PTS="$ORIG_VIDEO_PTS"
-    # Use per-track PTS from earlier probe (ORIG_AUDIO_PTS_ARR)
+    # PTS of frame 0: slot 0 of the slot table, else the pre-repair probe.
+    FIRST_VIDEO_PTS="${SLOT_V0:-$ORIG_VIDEO_PTS}"
     # Legacy: FIRST_AUDIO_PTS = first track's PTS (for backwards compat in .info)
     FIRST_AUDIO_PTS="${ORIG_AUDIO_PTS_ARR[0]:-}"
 
-    # Calculate per-track A/V offset and report
     if [ -n "$FIRST_VIDEO_PTS" ]; then
-        info "  Original video PTS: ${FIRST_VIDEO_PTS}s"
+        info "  Frame 0 PTS: ${FIRST_VIDEO_PTS}s"
         for i in "${!AUDIO_STREAMS[@]}"; do
             IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
             TRACK_PTS="${ORIG_AUDIO_PTS_ARR[$i]:-}"
-            TRACK_TRIM="${AUDIO_TRIM_SECS[$i]:-0}"
             if [ -n "$TRACK_PTS" ]; then
                 TRACK_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", ($TRACK_PTS - $FIRST_VIDEO_PTS) * 1000}")
-                TRACK_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $TRACK_TRIM * 1000}")
-                info "  Audio track $idx ($codec [$lang]): PTS=${TRACK_PTS}s offset=${TRACK_OFFSET_MS}ms trimmed=${TRACK_TRIM_MS}ms"
+                info "  Audio track $idx ($codec [$lang]): first PTS=${TRACK_PTS}s (${TRACK_OFFSET_MS}ms against frame 0), head cut=${TRACK_HEAD_MS[$i]:-0}ms, start offset=${TRACK_START_OFFSET_MS[$i]:-not written}ms"
             fi
         done
-
-        # Legacy global av_offset_ms: use first track
-        if [ -n "$FIRST_AUDIO_PTS" ]; then
-            AV_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", ($FIRST_AUDIO_PTS - $FIRST_VIDEO_PTS) * 1000}")
-            FIRST_TRIM="${AUDIO_TRIM_SECS[0]:-0}"
-            if awk "BEGIN {exit !($FIRST_TRIM > 0.01)}"; then
-                FIRST_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $FIRST_TRIM * 1000}")
-                AV_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", $AV_OFFSET_MS + $FIRST_TRIM_MS}")
-            fi
-            info "  Global av_offset_ms (from track 0): ${AV_OFFSET_MS}ms"
-        else
-            AV_OFFSET_MS="0"
-        fi
     else
-        AV_OFFSET_MS="0"
-        warn "  Could not determine A/V offset"
+        warn "  Could not determine the PTS of frame 0"
     fi
+    # Legacy global av_offset_ms: the first track's start offset, so a reader
+    # that knows no per-track key still gets the best single value.
+    AV_OFFSET_MS="${TRACK_START_OFFSET_MS[0]:-0}"
     echo ""
 
     # 5. Create info file with metadata
@@ -3022,8 +2299,8 @@ with open('$OUTPUT_VIDEO','rb') as f:
     progress_set_tail 9
     step "Creating info file: $OUTPUT_INFO"
 
-    # Calculate trimmed ms for info file
-    AUDIO_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_TRIM_SEC * 1000}")
+    # Legacy global audio_trimmed_ms: the first track's head cut
+    AUDIO_TRIM_MS="${TRACK_HEAD_MS[0]:-0}"
 
     cat > "$OUTPUT_INFO" << EOF
 # TTCut Elementary Stream Info File
@@ -3040,10 +2317,11 @@ start_pts=$START_PTS
 filler_stripped=$FILLER_STRIPPED
 
 [timing]
-# A/V sync offset in milliseconds (after correction)
-# av_offset_ms = audio_pts - video_pts
-# Positive = audio starts AFTER video (audio is too early in ES, delay it)
-# Negative = audio starts BEFORE video (audio is too late in ES, advance it)
+# first_video_pts = PTS of frame 0. The audio tracks are placed on the
+# picture timeline frame by frame; what remains is below one audio frame and
+# stands per track in audio_N_start_offset_ms (positive = the track belongs
+# later than its ES plays it). av_offset_ms repeats track 0's value for
+# readers that know no per-track key.
 first_video_pts=$FIRST_VIDEO_PTS
 first_audio_pts=$FIRST_AUDIO_PTS
 audio_trimmed_ms=$AUDIO_TRIM_MS
@@ -3061,15 +2339,17 @@ EOF
 
     for i in "${!AUDIO_STREAMS[@]}"; do
         IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
-        TRACK_TRIM="${AUDIO_TRIM_SECS[$i]:-0}"
-        TRACK_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $TRACK_TRIM * 1000}")
         TRACK_PTS="${ORIG_AUDIO_PTS_ARR[$i]:-}"
         echo "audio_${i}_file=$(basename "${AUDIO_FILES[$i]}" 2>/dev/null || echo "")" >> "$OUTPUT_INFO"
         echo "audio_${i}_codec=$codec" >> "$OUTPUT_INFO"
         echo "audio_${i}_lang=$lang" >> "$OUTPUT_INFO"
         echo "audio_${i}_first_pts=$TRACK_PTS" >> "$OUTPUT_INFO"
-        echo "audio_${i}_trimmed_ms=$TRACK_TRIM_MS" >> "$OUTPUT_INFO"
-        # Repair balance from gap-fix classification (0 = not emitted, see brief).
+        echo "audio_${i}_trimmed_ms=${TRACK_HEAD_MS[$i]:-0}" >> "$OUTPUT_INFO"
+        if [ -n "${TRACK_START_OFFSET_MS[$i]:-}" ]; then
+            echo "audio_${i}_start_offset_ms=${TRACK_START_OFFSET_MS[$i]}" >> "$OUTPUT_INFO"
+        fi
+        # Balance of the slot rule: silence frames written (head, holes, tail)
+        # and frames dropped in picture holes (0 = not emitted).
         if [ -n "${TRACK_SILENCE_MS[$i]:-}" ] && [ "${TRACK_SILENCE_MS[$i]:-0}" != "0" ]; then
             echo "audio_${i}_silence_ms=${TRACK_SILENCE_MS[$i]}" >> "$OUTPUT_INFO"
         fi
@@ -3190,15 +2470,14 @@ EOF
         fi
     fi
 
-    # es_lost_ms: total picture loss, summed from the DETECTED video gaps,
-    # not from the span difference: the repair stage runs with
+    # es_lost_ms: total picture loss, summed from the picture holes of the
+    # slot table, not from the span difference: the repair stage runs with
     # -fflags +genpts+igndts and smooths the PTS jump at the segment seam
     # before VIDEO_SPAN_MS is measured. The difference therefore only sees
     # the loss INSIDE a segment (measured 2026-08-24 on "03x15": 27178
-    # instead of 135520 ms). The gap file knows both parts. Audio stays in
-    # sync (padded to fill the same gaps), so this is a picture-only defect
-    # the user should be told about, distinct from the AV drift reported
-    # above.
+    # instead of 135520 ms). The hole list knows both parts. Audio stays in
+    # sync (its frames of that time are dropped), so this is a picture-only
+    # defect the user should be told about.
     ES_LOST_MS=0
     if [ -s "$VIDEO_GAPS_FILE" ]; then
         ES_LOST_MS=$(awk '{s += $2 - $1} END {printf "%.0f", s * 1000}' "$VIDEO_GAPS_FILE")

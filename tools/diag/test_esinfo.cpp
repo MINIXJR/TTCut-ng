@@ -124,6 +124,54 @@ int main()
   check(info2.esTotalAus() == -1, "es_total_aus default -1");
   check(info2.esDoubledPtsAus().isEmpty(), "es_doubled_pts_aus default empty");
 
+  // --- audio_N_start_offset_ms (slot rule, 2026-10-07) ---
+  {
+    const QString p2 = dir + "/offsets.info";
+    QFile f2(p2);
+    if (!f2.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) { fprintf(stderr, "cannot write\n"); return 1; }
+    QTextStream o2(&f2);
+    o2 << "[video]\nfile=o.264\ncodec=h264\nframe_rate=50/1\n\n"
+          "[timing]\nfirst_video_pts=100.0\nfirst_audio_pts=99.5\naudio_trimmed_ms=500\nav_offset_ms=-8\n\n"
+          "[audio]\ncount=3\n"
+          "audio_0_file=o_deu.mp2\naudio_0_codec=mp2\naudio_0_lang=deu\naudio_0_start_offset_ms=-8\n"
+          "audio_1_file=o_mis.mp2\naudio_1_codec=mp2\naudio_1_lang=mis\n"                      // no offset
+          "audio_2_file=o_deu.ac3\naudio_2_codec=ac3\naudio_2_lang=deu\naudio_2_start_offset_ms=20000\n"; // out of range
+    f2.close();
+    TTESInfo e2(p2);
+    check(e2.isLoaded(), "offsets: loaded");
+    check(e2.audioTrack(0).hasStartOffset && e2.audioTrack(0).startOffsetMs == -8, "offsets: track 0 = -8");
+    check(!e2.audioTrack(1).hasStartOffset && e2.audioTrack(1).startOffsetMs == 0, "offsets: track 1 absent -> 0");
+    check(!e2.audioTrack(2).hasStartOffset, "offsets: 20000 ms rejected");
+    check(e2.hasTrackStartOffsets(), "offsets: hasTrackStartOffsets");
+    check(e2.startOffsetMsForAudioFile("/x/y/o_deu.mp2") == -8, "offsets: lookup by file name");
+    check(e2.startOffsetMsForAudioFile("/x/y/o_mis.mp2") == 0, "offsets: unlisted file -> 0");
+    check(e2.avOffsetMs() == 0, "offsets: av_offset_ms superseded -> 0");
+    const TTESInfoTiming t2 = TTESInfo::timingForVideo(dir + "/offsets.264");
+    check(t2.found && t2.hasTrackStartOffsets && t2.trackStartOffsetMs.value("o_deu.mp2") == -8 && t2.avOffsetMs == 0,
+          "offsets: timingForVideo carries the table and a zero global offset");
+  }
+  {
+    const QString p3 = dir + "/nooffsets.info";
+    QFile f3(p3);
+    if (!f3.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) { fprintf(stderr, "cannot write\n"); return 1; }
+    QTextStream o3(&f3);
+    o3 << "[video]\nfile=n.264\ncodec=h264\nframe_rate=50/1\n\n[timing]\nfirst_video_pts=1\nfirst_audio_pts=1\nav_offset_ms=-8\n\n[audio]\ncount=1\naudio_0_file=n_deu.mp2\naudio_0_codec=mp2\naudio_0_lang=deu\n";
+    f3.close();
+    TTESInfo e3(p3);
+    check(!e3.hasTrackStartOffsets() && e3.avOffsetMs() == -8, "no offsets: old .info keeps av_offset_ms");
+  }
+
+  // --- effective per-track delay = user delay + .info start offset ---
+  {
+    const QString v = dir + "/offsets.264";   // resolves offsets.info written above
+    check(TTESInfo::effectiveAudioDelayMs(100, v, "/x/y/o_deu.mp2") == 92, "effective delay: 100 + (-8) = 92");
+    check(TTESInfo::effectiveAudioDelayMs(0, v, "/x/y/o_deu.mp2") == -8, "effective delay: no user delay -> the offset");
+    check(TTESInfo::effectiveAudioDelayMs(100, v, "/x/y/o_mis.mp2") == 100, "effective delay: track without offset -> user delay");
+    check(TTESInfo::effectiveAudioDelayMs(100, v, "/x/y/o_deu.ac3") == 100, "effective delay: rejected offset (20000) -> user delay");
+    check(TTESInfo::effectiveAudioDelayMs(100, dir + "/nosuch.264", "/x/y/o_deu.mp2") == 100, "effective delay: no .info -> user delay");
+    check(TTESInfo::effectiveAudioDelayMs(100, QString(), "/x/y/o_deu.mp2") == 100, "effective delay: no video path -> user delay");
+  }
+
   if (failures == 0) {
     printf("PASS\n");
     return 0;

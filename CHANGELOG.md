@@ -5,6 +5,43 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **Audio sits on the picture again after demuxing.** In the cut MKV the
+  sound was off the picture compared with the original recording — measured
+  end to end (original TS → `ttcut-demux` → cut → MKV): +100 to +464 ms on
+  "Das Erste HD" (H.264), +128 ms on DF1 HD (H.264 PAFF), +268 ms on an
+  H.265 UHD recording, −72 to −96 ms on MPEG-2 SD, and on a recording with
+  heavy signal loss (The Rookie 07x12, 500 s lost) up to 19 seconds behind
+  the damage. Three causes, one remedy: `ttcut-demux` now places every audio
+  frame on the picture its own timestamp names — read from the original TS,
+  against the picture TTCut-ng shows as frame 0, from the first frame to the
+  last and through every damage zone. Audio frames without a picture are
+  dropped, missing ones become silence; frames are copied, never re-encoded.
+  This replaces the head trim, the disturbance-zone balance and the end
+  padding. Measured on 15 recordings (`tools/diag/gate_av_sync_real.sh`;
+  the first 250 MB of each, the three recordings in several files whole):
+  every track within one audio frame of the picture throughout the part
+  checked, and within half a frame in the cut MKV on the 14 TTCut-ng can
+  cut. **Recordings must be demuxed again** — existing elementary streams
+  keep their offset.
+  - `.info`: new per-track key `audio_N_start_offset_ms` (the remainder
+    below one audio frame); TTCut-ng adds it to the track's delay when
+    cutting and for the drift column. The delay field and the project file
+    keep showing your own value. `first_video_pts` is the PTS of frame 0,
+    `video_duration_ms` counts the pictures TTCut-ng shows (H.264 PAFF
+    recordings were reported at twice their length and padded with as much
+    silence).
+  - A recording in several files, a timestamp wrap between them and
+    interlaced MPEG-2 across a signal loss are covered by the same rule
+    (Remington Steele 03x15: about 150 ms off at the seam before, now −6 to
+    +2 ms).
+  - `ttcut-demux` needs the `ttcut-audiofix` of the same version (new
+    assemble mode `-p`) and stops at once with a message when an older one
+    is on the PATH.
+  - Subtitle export: times are relative to the same frame 0 (not
+    re-measured).
+  - Gates: `demux_slotplan`, `demux_slot_e2e`, `audiofix_assemble`,
+    `esinfo`; measurement tools `tools/diag/av_chain_check.py` and
+    `tools/diag/av_track_audit.py`.
 - **Closing a marker's context menu without choosing no longer opens the
   audio repair dialog.** It did so on every marker, also on a hand-placed
   one: an empty choice was taken for "Repair…". Gate:

@@ -1,6 +1,6 @@
 ---
-base_commit: 2e5c29e13ce384daaa30e2f0407fa29f42e6b93c
-last_verified: 2026-10-02
+base_commit: a344b304337852286cbf2ceaeadcb6ccefe648a0
+last_verified: 2026-10-08
 sources:
   - data/ttavdata.cpp
   - data/ttavdata.h
@@ -72,7 +72,7 @@ flowchart TD
   CEFB["countExtraFramesBefore"]
   PROD["Producers (7 call sites)<br/>onDoCut (GUI-Thread, MPEG-2) ·<br/>TTH26xCutTask::runCut (Worker) ·<br/>TTAudioOnlyCutTask::runAudioCut (Worker) ·<br/>TTCutPreviewTask (Segmentschleife + createH264PreviewClip) ·<br/>ttRebuildMpeg2PreviewClip · ttRebuildSmartCutPreviewClip"]
   VKL["videoKeepList<br/>(sec, extra-corrected)"]
-  DELAY["per-track delay<br/>getDelayMs"]
+  DELAY["wirksamer Delay je Spur<br/>getDelayMs + .info start_offset<br/>(TTESInfo::effectiveAudioDelayMs)"]
   PLAN["planAudioCut"]
   KEEP["keepList<br/>(audio-frame-aligned)"]
   ACMOD["targetAcmods<br/>(AC3 only)"]
@@ -108,7 +108,7 @@ flowchart TD
 | `EXTRA → CEFB` | Sortierte Extra-Index-Liste; `countExtraFramesBefore(idx)` delegiert an die gemeinsame `ttCountBelow(ascending, idx)` (`avstream/ttcommon.h`, `std::lower_bound`) — dieselbe Implementierung wie `TTMpeg2VideoStream::extrasBefore()` (`mpeg2-cut.md`). Zählt die Einträge `< idx`. Invariante: Liste aufsteigend sortiert. |
 | `CEFB → VKL` | Extra-Anzahl `N`; Zeit = `(index − N)/fps`. Cut-Out nutzt `index+1` (Grenze **hinter** den letzten behaltenen Frame). Bildet den aufgeblähten Anzeige-Index auf echte Audiozeit ab. |
 | `PROD → VKL` | Alle Final-Cut-Produzenten bauen die (start,end)-Sekundenliste **einheitlich** über `buildVideoKeepList`, ohne Delay. `TTAVData::onDoCut` (MPEG-2) baut `VKL` und ruft `cutAudioTracks` im selben Funktionskörper, synchron im GUI-Thread, noch bevor der Pool für die Video-Task startet. `TTAVData::doH264Cut`/`doAudioOnlyCut` bauen `VKL` ebenfalls im GUI-Thread, reichen sie aber nur noch als Wertkopie in `TTH26xCutParams`/`TTAudioOnlyCutParams` weiter — der eigentliche `cutAudioTracks`-Aufruf sitzt in `TTH26xCutTask::runCut` (`data/tth26xcuttask.cpp`) bzw. `TTAudioOnlyCutTask::runAudioCut` (`data/ttaudioonlycuttask.cpp`), beide auf einem Pool-Worker-Thread. Seit 2026-09-22 gilt das für **alle** Produzenten: die beiden Vorschau-Pfade (`TTCutPreviewTask::createH264PreviewClip`, `ttRebuildSmartCutPreviewClip`) bauten ihre Liste bis dahin roh ohne Extra-Korrektur und rufen jetzt ebenfalls `buildVideoKeepList` + `cutAudioTracks` (Option A, siehe Redundanz-Abschnitt). `TTCutPreviewTask`s MPEG-2-Segment-Zweig und `ttRebuildMpeg2PreviewClip` taten das schon vorher. |
-| `DELAY → PLAN` | Per-Track-Delay in ms (`TTAudioItem::getDelayMs`), als `delaySec` von den Segmentzeiten **subtrahiert** (mkvmerge-Konvention: positiv = Spur spielt später, Quellfenster rückt früher). Pro Tonspur eigener Wert. |
+| `DELAY → PLAN` | **Wirksamer** Delay in ms = Benutzer-Delay (`TTAudioItem::getDelayMs`) + Startversatz der Tondatei aus der `.info` (`audio_N_start_offset_ms`, über `TTESInfo::effectiveAudioDelayMs(userDelay, Videopfad, Tonpfad)`, Zuordnung über den Dateinamen; 0 ohne `.info` oder ohne Schlüssel). Der Startversatz ist der Rest unter einem Tonrahmen, den `ttcut-demux` nicht schneiden kann (Slot-Regel, `ttcut-demux.md`); gleiches Vorzeichen wie der Delay. Als `delaySec` von den Segmentzeiten **subtrahiert** (mkvmerge-Konvention: positiv = Spur spielt später, Quellfenster rückt früher). Pro Tonspur eigener Wert; beide Aufrufer (`cutAudioTracks`, Drift-Spalte in `onCutPreviewFinished`) rechnen ihn gleich. Drehfeld und Projektdatei zeigen weiter nur den Benutzerwert. Gemessen 2026-10-08 (05x08, Bilder 500–2000, `av_chain_check.py`): ohne den Versatz MP2 −20 / AC3 −4 ms, mit ihm +4 / −4 ms. |
 | `VKL → PLAN` | (start,end) Sekunden je Segment, extra-korrigiert, **noch ohne Delay**. Kontrakt: bereits anzeige-/B-Frame-korrekt — `planAudioCut` verschiebt nur, prüft nicht. |
 | `PLAN → KEEP` | (start,end) auf das **Audio-Frame-Raster** gerundet (Vielfache der Frame-Dauer = `frame_time` von Kopf 0, Samples / Abtastrate: MP2@48k = 24 ms, AC3@48k = 32 ms, MP2@44,1k = 26,122 ms — audio-es-input.md). Feed-Forward: `numFrames` je Segment so gewählt, dass die kumulierte Audiolänge der Videolänge folgt. |
 | `PLAN → DRIFT` | Kumulierter A/V-Versatz in ms nach jedem Segment (Audiolänge − Videolänge, Summe aller vorherigen). Im eingeschwungenen Zustand ±½ Audioframe. |

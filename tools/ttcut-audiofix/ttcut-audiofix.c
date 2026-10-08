@@ -9,8 +9,9 @@
 
 /* ttcut-audiofix - structural sanitizer for MP2/AC3/E-AC3 elementary streams.
  * Walks the ES frame by frame, drops junk bytes between valid frames,
- * reports CRC-damaged frames. No time insertion (that is ttcut-demux Rev 3's
- * job) and no re-encode. Exit: 0 clean, 1 defects found/fixed, 2 error.
+ * reports CRC-damaged frames. No re-encode. Exit: 0 clean, 1 defects
+ * found/fixed, 2 error. A third mode (-p) assembles an ES from a slot plan
+ * that ttcut-demux computed (keep / drop / silence per frame).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,6 +48,10 @@ typedef struct {
     bool (*check_crc)(const uint8_t *p, size_t frame_len, const frame_info_t *fi);
     /* Folge-/Resync-Regel gegen Baseline */
     bool (*params_plausible)(const frame_info_t *ref, const frame_info_t *cur);
+    /* Assemble mode: builds a silent frame with the header of the frame at
+     * tmpl into out (cap bytes) and returns its size, 0 when it cannot.
+     * NULL = the codec has no builder, the -s silence frame is used. */
+    size_t (*make_silence)(const uint8_t *tmpl, size_t tmpl_len, uint8_t *out, size_t cap);
 } codec_ops_t;
 
 /* ---------- CRC-16, ISO/IEC 11172-3 Annex A (x^16+x^15+x^2+1, 0x8005) ----------
@@ -134,10 +139,10 @@ static unsigned mp2_read_bits(const uint8_t *p, size_t len, size_t *bitpos, int 
     return v;
 }
 
-static bool mp2_check_crc(const uint8_t *p, size_t fs, const frame_info_t *fi)
+/* CRC of the frame at p as the encoder computes it; false when the protected
+ * area cannot be walked (truncated or corrupted bit allocation). */
+static bool mp2_compute_crc(const uint8_t *p, size_t fs, const frame_info_t *fi, uint16_t *crc_out)
 {
-    if (!fi->crc_present) return true;
-
     int mode     = (p[3] >> 6) & 0x03;   /* 0 stereo, 1 joint stereo, 2 dual, 3 mono */
     int mode_ext = (p[3] >> 4) & 0x03;
     int bitrate  = (int)fi->bitrate_kbps;  /* parsed by mp2_parse_frame */
@@ -185,9 +190,47 @@ static bool mp2_check_crc(const uint8_t *p, size_t fs, const frame_info_t *fi)
 
     size_t nbits = bitpos - 6 * 8;
     uint16_t crc = crc16_msb(0xFFFF, p + 2, 2);
-    crc = crc16_msb_bits(crc, p + 6, nbits);
-    uint16_t stored = (uint16_t)(((unsigned)p[4] << 8) | p[5]);
-    return crc == stored;
+    *crc_out = crc16_msb_bits(crc, p + 6, nbits);
+    return true;
+}
+
+static bool mp2_check_crc(const uint8_t *p, size_t fs, const frame_info_t *fi)
+{
+    if (!fi->crc_present) return true;
+    uint16_t crc;
+    if (!mp2_compute_crc(p, fs, fi, &crc)) return false;
+    return crc == (uint16_t)(((unsigned)p[4] << 8) | p[5]);
+}
+
+/* A silent Layer II frame with the header of the frame at tmpl: nothing is
+ * allocated in any subband, so no scale factors and no samples follow and
+ * the rest of the frame is zero - valid for every mode and bitrate. The
+ * padding bit is cleared; a CRC is written when the track carries one.
+ *
+ * Why not the encoder's silence frame: its header differs from a
+ * broadcaster's (ffmpeg sets the "original" bit; the mode may differ too),
+ * and libavformat skips the first MP2 frame of a file when the second one
+ * has another mode, copyright, original or emphasis field. One leading
+ * silence frame then shifted every timestamp TTCut-ng reads by one frame
+ * (measured 2026-10-08: the cut started 24 ms late). */
+static size_t mp2_make_silence(const uint8_t *tmpl, size_t tmpl_len, uint8_t *out, size_t cap)
+{
+    if (tmpl_len < 4 || cap < 6) return 0;
+    memset(out, 0, cap);
+    out[0] = tmpl[0];
+    out[1] = tmpl[1];
+    out[2] = (uint8_t)(tmpl[2] & ~0x02);
+    out[3] = tmpl[3];
+    frame_info_t fi;
+    ssize_t fs = mp2_parse_frame(out, cap, &fi);
+    if (fs <= 0) return 0;
+    if (fi.crc_present) {
+        uint16_t crc;
+        if (!mp2_compute_crc(out, (size_t)fs, &fi, &crc)) return 0;
+        out[4] = (uint8_t)(crc >> 8);
+        out[5] = (uint8_t)(crc & 0xFF);
+    }
+    return (size_t)fs;
 }
 
 static bool mp2_params_plausible(const frame_info_t *ref, const frame_info_t *cur)
@@ -198,7 +241,7 @@ static bool mp2_params_plausible(const frame_info_t *ref, const frame_info_t *cu
         && cur->version    == ref->version;
 }
 
-static const codec_ops_t mp2_ops = { "mp2", mp2_parse_frame, mp2_check_crc, mp2_params_plausible };
+static const codec_ops_t mp2_ops = { "mp2", mp2_parse_frame, mp2_check_crc, mp2_params_plausible, mp2_make_silence };
 
 /* ---------- AC3 (ATSC A/52) ---------- */
 
@@ -335,7 +378,7 @@ static bool ac3_params_plausible(const frame_info_t *ref, const frame_info_t *cu
     return cur->samplerate == ref->samplerate;
 }
 
-static const codec_ops_t ac3_ops = { "ac3", ac3_parse_frame, ac3_check_crc, ac3_params_plausible };
+static const codec_ops_t ac3_ops = { "ac3", ac3_parse_frame, ac3_check_crc, ac3_params_plausible, NULL };
 
 static const codec_ops_t *all_ops[] = { &mp2_ops, &ac3_ops, NULL };
 
@@ -556,17 +599,144 @@ static void print_report(const codec_ops_t *ops, const walk_stats_t *st)
     printf("\n");
 }
 
+/* ---------- Assemble mode (-p) ----------
+ * Builds an ES from a slot plan written by ttcut-demux's plan_audio_slots:
+ *   k SIZE  the next SIZE input bytes are one frame -> copy it; when they do
+ *           not parse as exactly one frame (damaged payload) write a silence
+ *           frame instead, so the slot - and every slot after it - stays
+ *           where the plan put it
+ *   d SIZE  skip SIZE input bytes (a frame without a picture)
+ *   s N     write N silence frames (slots without a frame)
+ * Silence frame: for MP2 built from the header of the neighbouring real
+ * frame (mp2_make_silence), otherwise the first valid frame of the silence
+ * file. A k op that runs past the input end writes a silence frame too
+ * (counted as short); input bytes behind the last op are not copied
+ * (tail_bytes). */
+/* first_copy_*: where the first frame that was COPIED (not replaced) comes
+ * from - its packet index, i.e. the number of k and d ops before it - and
+ * the byte offset it was written to; packet -1 = nothing was copied. */
+typedef struct {
+    uint64_t kept, dropped, silence, replaced, shortk;
+    long long first_copy_packet;
+    uint64_t  first_copy_offset;
+} asm_stats_t;
+
+#define ASM_SILENCE_CAP 2048        /* largest Layer II frame: 1729 bytes */
+#define ASM_TEMPLATE_SCAN 8192      /* how far ahead a template frame is looked for */
+
+typedef struct {
+    const uint8_t *file_frame;      /* first frame of the -s file */
+    size_t         file_len;
+    uint8_t        built[ASM_SILENCE_CAP];
+    size_t         built_len;       /* 0 = nothing built yet */
+    uint8_t        built_hdr[4];    /* header the built frame was made from */
+} asm_silence_t;
+
+/* Writes one silence frame for the input position pos and adds its size to
+ * *written. With a builder (MP2) the frame takes the header of the next
+ * valid input frame at or behind pos, else of the last kept frame; without
+ * one, or when the input offers no template, the -s frame is written. */
+static bool write_silence(const codec_ops_t *ops, const uint8_t *in, size_t in_len, size_t pos,
+                          const uint8_t *last_kept, asm_silence_t *sl, FILE *sink, uint64_t *written)
+{
+    const uint8_t *tmpl = NULL;
+    size_t tmpl_len = 0;
+    if (ops->make_silence) {
+        frame_info_t fi;
+        size_t end = (in_len - pos > ASM_TEMPLATE_SCAN) ? pos + ASM_TEMPLATE_SCAN : in_len;
+        for (size_t q = pos; q + 4 <= end; q++) {
+            if (ops->parse_frame(in + q, in_len - q, &fi) > 0) { tmpl = in + q; tmpl_len = in_len - q; break; }
+        }
+        if (!tmpl && last_kept) { tmpl = last_kept; tmpl_len = (size_t)(in + in_len - last_kept); }
+    }
+    if (tmpl) {
+        const uint8_t hdr[4] = { tmpl[0], tmpl[1], (uint8_t)(tmpl[2] & ~0x02), tmpl[3] };
+        if (sl->built_len == 0 || memcmp(hdr, sl->built_hdr, 4) != 0) {
+            sl->built_len = ops->make_silence(tmpl, tmpl_len, sl->built, sizeof sl->built);
+            memcpy(sl->built_hdr, hdr, 4);
+        }
+        if (sl->built_len > 0) {
+            *written += sl->built_len;
+            return fwrite(sl->built, 1, sl->built_len, sink) == sl->built_len;
+        }
+    }
+    *written += sl->file_len;
+    return fwrite(sl->file_frame, 1, sl->file_len, sink) == sl->file_len;
+}
+
+static int assemble(const codec_ops_t *ops, const uint8_t *in, size_t in_len,
+                    const uint8_t *sil, size_t sil_len, FILE *plan, FILE *sink,
+                    asm_stats_t *st, size_t *tail_bytes)
+{
+    frame_info_t fi;
+    size_t pos = 0;
+    char op;
+    unsigned long long arg;
+    int nread;
+    const uint8_t *last_kept = NULL;
+    uint64_t out_bytes = 0, packets = 0;
+    asm_silence_t sl;
+    memset(&sl, 0, sizeof sl);
+    sl.file_frame = sil;
+    sl.file_len   = sil_len;
+    st->first_copy_packet = -1;
+    while ((nread = fscanf(plan, " %c %llu", &op, &arg)) == 2) {
+        bool fits = arg <= in_len - pos;
+        if (op == 'k') {
+            bool valid = fits
+                      && ops->parse_frame(in + pos, in_len - pos, &fi) == (ssize_t)arg;
+            if (valid) {
+                if (fwrite(in + pos, 1, (size_t)arg, sink) != (size_t)arg) return 2;
+                if (st->first_copy_packet < 0) {
+                    st->first_copy_packet = (long long)packets;
+                    st->first_copy_offset = out_bytes;
+                }
+                out_bytes += arg;
+                last_kept = in + pos;
+                st->kept++;
+            } else {
+                /* template: the frame behind the damaged one */
+                size_t from = fits ? pos + (size_t)arg : in_len;
+                if (!write_silence(ops, in, in_len, from, last_kept, &sl, sink, &out_bytes)) return 2;
+                if (fits) st->replaced++; else st->shortk++;
+            }
+            pos = fits ? pos + (size_t)arg : in_len;
+            packets++;
+        } else if (op == 'd') {
+            pos = fits ? pos + (size_t)arg : in_len;
+            st->dropped++;
+            packets++;
+        } else if (op == 's') {
+            for (unsigned long long i = 0; i < arg; i++)
+                if (!write_silence(ops, in, in_len, pos, last_kept, &sl, sink, &out_bytes)) return 2;
+            st->silence += arg;
+        } else {
+            fprintf(stderr, "Error: unknown plan op '%c'\n", op);
+            return 2;
+        }
+    }
+    if (nread != EOF) {   /* a line that is not "<op> <number>" */
+        fprintf(stderr, "Error: malformed plan line after %llu ops\n",
+                (unsigned long long)(st->kept + st->dropped + st->replaced + st->shortk));
+        return 2;
+    }
+    *tail_bytes = in_len - pos;
+    return 0;
+}
+
 static void print_usage(const char *prog)
 {
     fprintf(stderr,
         "Usage: %s -a <file>          Analyze (report only)\n"
         "       %s -f <in> <out>      Fix (write sanitized copy)\n"
+        "       %s -p <plan> -s <silence> <in> <out>\n"
+        "                             Assemble from a slot plan (k/d/s ops)\n"
         "\n"
         "Exit codes:\n"
         "  0  clean\n"
         "  1  defects found\n"
         "  2  error\n",
-        prog, prog);
+        prog, prog, prog);
 }
 
 /* Read-only mmap of a file. On any error prints a message to stderr and
@@ -600,25 +770,41 @@ static const uint8_t *map_file_ro(const char *path, size_t *len_out, void **mapp
 int main(int argc, char *argv[])
 {
     bool analyze = false, fix = false;
+    const char *plan_path = NULL, *sil_path = NULL;
     int opt;
 
-    while ((opt = getopt(argc, argv, "af")) != -1) {
+    while ((opt = getopt(argc, argv, "afp:s:")) != -1) {
         switch (opt) {
         case 'a': analyze = true; break;
         case 'f': fix = true; break;
+        case 'p': plan_path = optarg; break;
+        case 's': sil_path = optarg; break;
         default:
             print_usage(argv[0]);
             return 2;
         }
     }
 
-    if (analyze == fix) {   /* weder noch, oder beide zugleich */
+    /* exactly one mode: analyze, fix or assemble */
+    if ((analyze ? 1 : 0) + (fix ? 1 : 0) + (plan_path ? 1 : 0) != 1) {
         print_usage(argv[0]);
         return 2;
     }
 
-    if (fix && optind + 1 >= argc) {
-        fprintf(stderr, "Error: fix mode (-f) requires <in> and <out>.\n");
+    if (plan_path && !sil_path) {
+        fprintf(stderr, "Error: assemble mode (-p) requires -s <silence>.\n");
+        print_usage(argv[0]);
+        return 2;
+    }
+    if (sil_path && !plan_path) {
+        fprintf(stderr, "Error: -s is only valid with -p.\n");
+        print_usage(argv[0]);
+        return 2;
+    }
+
+    if ((fix || plan_path) && optind + 1 >= argc) {
+        fprintf(stderr, "Error: %s requires <in> and <out>.\n",
+                fix ? "fix mode (-f)" : "assemble mode (-p)");
         print_usage(argv[0]);
         return 2;
     }
@@ -629,12 +815,56 @@ int main(int argc, char *argv[])
         return 2;
     }
     const char *in_path = argv[optind];
-    const char *out_path = fix ? argv[optind + 1] : NULL;
+    const char *out_path = (fix || plan_path) ? argv[optind + 1] : NULL;
 
     size_t len = 0;
     void *mapped = NULL;
     const uint8_t *p = map_file_ro(in_path, &len, &mapped);
     if (!p) return 2;
+
+    if (plan_path) {
+        /* The codec comes from the silence file (same codec as the track):
+         * the input may begin with a damaged frame. */
+        size_t sil_len = 0;
+        void *sil_map = NULL;
+        const uint8_t *silf = map_file_ro(sil_path, &sil_len, &sil_map);
+        if (!silf) { munmap(mapped, len); return 2; }
+        size_t sil_start = 0;
+        const codec_ops_t *sil_ops = detect_codec(silf, sil_len, &sil_start);
+        frame_info_t sfi;
+        ssize_t sfs = sil_ops ? sil_ops->parse_frame(silf + sil_start, sil_len - sil_start, &sfi) : 0;
+        FILE *plan = NULL, *asm_sink = NULL;
+        int asm_rc = 2;
+        asm_stats_t ast = {0};
+        size_t tail = 0;
+        if (sfs <= 0) {
+            fprintf(stderr, "Error: no valid frame in silence file '%s'\n", sil_path);
+        } else if (!(plan = fopen(plan_path, "r"))) {
+            fprintf(stderr, "Error: cannot open plan '%s': %s\n", plan_path, strerror(errno));
+        } else if (!(asm_sink = fopen(out_path, "wb"))) {
+            fprintf(stderr, "Error: cannot open '%s' for writing: %s\n", out_path, strerror(errno));
+        } else {
+            asm_rc = assemble(sil_ops, p, len, silf + sil_start, (size_t)sfs, plan, asm_sink, &ast, &tail);
+        }
+        if (plan) fclose(plan);
+        if (asm_sink) {
+            if (fclose(asm_sink) != 0) asm_rc = 2;
+            if (asm_rc != 0) {
+                fprintf(stderr, "Error: failed to assemble '%s', removing it\n", out_path);
+                unlink(out_path);
+            }
+        }
+        if (asm_rc == 0)
+            printf("kept=%llu dropped=%llu silence=%llu replaced=%llu short=%llu tail_bytes=%zu"
+                   " first_copy_packet=%lld first_copy_offset=%llu\n",
+                   (unsigned long long)ast.kept, (unsigned long long)ast.dropped,
+                   (unsigned long long)ast.silence, (unsigned long long)ast.replaced,
+                   (unsigned long long)ast.shortk, tail,
+                   ast.first_copy_packet, (unsigned long long)ast.first_copy_offset);
+        munmap(sil_map, sil_len);
+        munmap(mapped, len);
+        return asm_rc;
+    }
 
     size_t start = 0;
     const codec_ops_t *ops = detect_codec(p, len, &start);

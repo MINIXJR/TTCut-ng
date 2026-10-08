@@ -10,6 +10,7 @@
 #include "ttesinfo.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QTextStream>
 #include <QDir>
 #include <QDebug>
@@ -241,6 +242,21 @@ void TTESInfo::parseAudioSection(const QMap<QString, QString>& values)
         track.silenceMs = values.value(QString("audio_%1_silence_ms").arg(i), "0").toInt();
         track.removedMs = values.value(QString("audio_%1_removed_ms").arg(i), "0").toInt();
 
+        // Start offset: a whole number of ms within +-10 s, anything else is
+        // ignored with a warning (the track then counts as carrying none).
+        const QString soKey = QString("audio_%1_start_offset_ms").arg(i);
+        if (values.contains(soKey)) {
+            bool ok = false;
+            const int so = values.value(soKey).toInt(&ok);
+            if (ok && so >= -10000 && so <= 10000) {
+                track.startOffsetMs  = so;
+                track.hasStartOffset = true;
+            } else {
+                TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                    QString("%1: ignored (%2)").arg(soKey, values.value(soKey)));
+            }
+        }
+
         // Parse per-track structural-damage ranges (from ttcut-demux
         // sanitizer). Format: "start-end". No duration is reported ->
         // ms is always -1. Hardened exactly like the global
@@ -450,6 +466,30 @@ TTAudioTrackInfo TTESInfo::audioTrack(int index) const
 }
 
 // ----------------------------------------------------------------------------
+// Per-track start offsets
+// ----------------------------------------------------------------------------
+bool TTESInfo::hasTrackStartOffsets() const
+{
+    for (const TTAudioTrackInfo& track : mAudioTracks)
+        if (track.hasStartOffset) return true;
+    return false;
+}
+
+int TTESInfo::startOffsetMsForAudioFile(const QString& audioFilePath) const
+{
+    const QString name = QFileInfo(audioFilePath).fileName();
+    for (const TTAudioTrackInfo& track : mAudioTracks)
+        if (track.hasStartOffset && QFileInfo(track.file).fileName() == name)
+            return track.startOffsetMs;
+    return 0;
+}
+
+int TTESInfo::avOffsetMs() const
+{
+    return hasTrackStartOffsets() ? 0 : mAvOffsetMs;
+}
+
+// ----------------------------------------------------------------------------
 // Per-track audio repair balance (0 when the track has no repair entry)
 // ----------------------------------------------------------------------------
 int TTESInfo::audioSilenceMs(int track) const
@@ -486,7 +526,21 @@ TTESInfoTiming TTESInfo::timingForVideo(const QString& videoFilePath)
     t.found = true;
     if (esInfo.hasFrameRate()) t.frameRate = esInfo.frameRate();
     if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) t.avOffsetMs = esInfo.avOffsetMs();
+    for (int i = 0; i < esInfo.audioTrackCount(); ++i) {
+        const TTAudioTrackInfo track = esInfo.audioTrack(i);
+        if (!track.hasStartOffset) continue;
+        t.trackStartOffsetMs.insert(QFileInfo(track.file).fileName(), track.startOffsetMs);
+        t.hasTrackStartOffsets = true;
+    }
     return t;
+}
+
+int TTESInfo::effectiveAudioDelayMs(int userDelayMs, const QString& videoFilePath,
+                                    const QString& audioFilePath)
+{
+    if (videoFilePath.isEmpty() || audioFilePath.isEmpty()) return userDelayMs;
+    const TTESInfoTiming t = timingForVideo(videoFilePath);
+    return userDelayMs + t.trackStartOffsetMs.value(QFileInfo(audioFilePath).fileName(), 0);
 }
 
 QString TTESInfo::findInfoFile(const QString& videoFilePath)
