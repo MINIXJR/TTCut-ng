@@ -501,7 +501,8 @@ class TTAVData : public QObject
     // Plan from a video-domain keep list: (startTime, endTime) per segment in
     // seconds (already extra-frame-corrected, B-frame-adjusted, etc., but
     // without per-track audio delay). Adds the delay and snaps to audio-frame
-    // boundaries with feed-forward.
+    // boundaries with feed-forward. Callers pass the effective delay
+    // (TTESInfo::effectiveAudioDelayMs: user delay + .info start offset).
     static AudioCutPlan planAudioCut(TTAudioStream* audioStream,
                               const QList<QPair<double, double>>& videoKeepList,
                               int delayMs);

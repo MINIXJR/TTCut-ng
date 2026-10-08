@@ -1514,8 +1514,12 @@ void TTAVData::onCutPreviewFinished(TTCutList* cutList)
     const TTAVItem* driftAvItem = mpCutList->at(0).avDataItem();
     if (driftAvItem && driftAvItem->audioCount() > 0 && driftAvItem->videoStream()) {
       const double fr      = driftAvItem->videoStream()->frameRate();
-      const int    delayMs = driftAvItem->audioListItemAt(0).getDelayMs();
-      audioDrifts = planAudioCut(driftAvItem->audioStreamAt(0),
+      TTAudioStream* driftAudio = driftAvItem->audioStreamAt(0);
+      const int    delayMs = TTESInfo::effectiveAudioDelayMs(
+          driftAvItem->audioListItemAt(0).getDelayMs(),
+          driftAvItem->videoStream()->filePath(),
+          driftAudio ? driftAudio->filePath() : QString());
+      audioDrifts = planAudioCut(driftAudio,
                                  buildVideoKeepList(mpCutList, fr), delayMs).drifts;
     }
   }
@@ -3050,7 +3054,15 @@ QList<float> TTAVData::cutAudioTracks(
     TTAudioStream* stream = avItem->audioStreamAt(idx);
     if (!stream) continue;
 
-    int delayMs = avItem->audioListItemAt(idx).getDelayMs();
+    // User delay plus the track's start offset from the .info (what
+    // ttcut-demux could not cut, below one audio frame).
+    const int userDelayMs = avItem->audioListItemAt(idx).getDelayMs();
+    const int delayMs = TTESInfo::effectiveAudioDelayMs(
+        userDelayMs, avItem->videoStream() ? avItem->videoStream()->filePath() : QString(),
+        stream->filePath());
+    if (delayMs != userDelayMs && TTSettings::instance()->logCutPipeline())
+      qDebug() << "[DRIFT] track" << idx << "effective delay" << delayMs
+               << "ms (user" << userDelayMs << "+ .info start offset)";
     AudioCutPlan plan = planAudioCut(stream, videoKeepList, delayMs);
     if (plan.keepList.isEmpty()) {
       log->errorMsg(__FILE__, __LINE__,

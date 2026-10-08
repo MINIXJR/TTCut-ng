@@ -1039,7 +1039,13 @@ bool TTCurrentFrame::buildPlaybackMuxParams(TTPlaybackMuxParams& params)
   double frameRate = videoStream->frameRate();
   const TTESInfoTiming info = TTESInfo::timingForVideo(videoStream->filePath());
   if (frameRate <= 0 && info.frameRate > 0) frameRate = info.frameRate;
-  const int avOffsetMs = info.avOffsetMs;
+  // The playback MKV carries the first audio track. Its start offset from
+  // the .info replaces the single global A/V offset where the .info has
+  // per-track values (info.avOffsetMs is 0 then).
+  TTAudioStream* audioStream = mAVItem->audioCount() > 0 ? mAVItem->audioStreamAt(0) : nullptr;
+  int avOffsetMs = info.avOffsetMs;
+  if (info.hasTrackStartOffsets && audioStream != nullptr)
+    avOffsetMs = info.trackStartOffsetMs.value(QFileInfo(audioStream->filePath()).fileName(), 0);
   if (avOffsetMs != 0 && TTSettings::instance()->logUI())
       qDebug() << "Playback: A/V sync offset from .info:" << avOffsetMs << "ms";
 
@@ -1056,12 +1062,8 @@ bool TTCurrentFrame::buildPlaybackMuxParams(TTPlaybackMuxParams& params)
   params.video = TTMkvMergeProvider::videoOptionsFor(videoStream, frameRate, avOffsetMs);
 
   // Collect audio file(s)
-  if (mAVItem->audioCount() > 0) {
-    TTAudioStream* audioStream = mAVItem->audioStreamAt(0);
-    if (audioStream != 0) {
-      params.audioFiles << audioStream->filePath();
-    }
-  }
+  if (audioStream != nullptr)
+    params.audioFiles << audioStream->filePath();
 
   // Display-PTS: pass the source display-order map so B-frames get true
   // display timestamps (uncut stream -> indices are already compact 0..N-1).
