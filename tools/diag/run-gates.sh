@@ -35,7 +35,8 @@
 #   compare two builds, need a baseline: gate_cut_identity.sh,
 #     gate_refactor_identity.sh, gate_ac3fix.sh
 #   need material outside the repository: gate_ac3_reencode_real.sh (a DVB AC3
-#     recording), gate_audiofix.sh (NAS corpus, no skip
+#     recording), gate_av_sync_real.sh (recordings; sound against picture
+#     through demux and cut), gate_audiofix.sh (NAS corpus, no skip
 #     path), gate_h264_leading.sh corpus cases, test_wrapper_map and
 #     test_stillframe (expectations frozen on corpus files), test_aspectscan
 #     (no Tux fixture has an aspect switch), test_auto_anomaly_scan_trigger
@@ -151,15 +152,16 @@ anomalyscan            unit  300  test_anomalyscan
 audiorepair            unit  300  test_audiorepair
 audiorepair_cut        unit  300  test_audiorepair_cut
 repairdialog_model     unit  300  test_repairdialog_model
-demux_zonesync         unit  300  -
 demux_framerate        unit  60   -
+demux_slotplan         unit  120  -
+demux_slot_e2e         unit  300  -
 vdr_example_names      unit  120  -
 ocr_glyphs_selftest    unit  60   -
-demux_gapsync          unit  300  -
 ffmpeg_edge_packets    unit  120  -
 audiofix_log_text      unit  60   -
 audiofix_edge_ac3      unit  120  -
 audiofix_edge_mp2      unit  120  -
+audiofix_assemble      unit  120  -
 ac3fix_contract        unit  120  -
 screenshots_script     unit  60   -
 h264_leading           tux   600  test_h264_leading
@@ -417,19 +419,20 @@ gate_anomalyscan()           { "$D/test_anomalyscan"; }
 gate_audiorepair()           { "$D/test_audiorepair"; }
 gate_audiorepair_cut()       { "$D/test_audiorepair_cut"; }
 gate_repairdialog_model()    { need "$TESTDATA/tux_test.264" "$TESTDATA/tux_test.ac3"; "$D/test_repairdialog_model"; }
-gate_demux_zonesync()        { need "$DEMUX"; "$D/gate_demux_zonesync.sh"; }
 gate_demux_framerate()       { need "$DEMUX"; "$D/gate_demux_framerate.sh"; }
+gate_demux_slotplan()        { need "$DEMUX"; "$D/gate_demux_slotplan.sh"; }
+gate_demux_slot_e2e()        { need "$DEMUX" "$AUDIOFIX"; "$D/gate_demux_slot_e2e.sh"; }
 gate_vdr_example_names()     { need "$DEMUX"; "$D/gate_vdr_example_names.sh" "$W"; }
 # Edge-repair rules and line bands of the subtitle glyph repair (needs Pillow).
 gate_ocr_glyphs_selftest() {
   python3 -c "import PIL" 2>/dev/null || { echo "SKIP: python3-pil not installed"; exit 77; }
   python3 "$ROOT/tools/ttcut-demux/ttcut-ocr-glyphs" --selftest
 }
-gate_demux_gapsync()         { need "$DEMUX"; "$D/gate_demux_gapsync.sh"; }
 gate_ffmpeg_edge_packets()   { need "$DEMUX"; "$D/gate_ffmpeg_edge_packets.sh" "$DEMUX"; }
 gate_audiofix_log_text()     { need "$DEMUX"; "$D/gate_audiofix_log_text.sh" "$DEMUX"; }
 gate_audiofix_edge_ac3()     { need "$AUDIOFIX" "$A264"; "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$A264" 768; }
 gate_audiofix_edge_mp2()     { need "$AUDIOFIX" "$MP2";  "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$MP2" 576; }
+gate_audiofix_assemble()     { need "$AUDIOFIX"; "$D/gate_audiofix_assemble.sh" "$AUDIOFIX"; }
 # tools/ttcut-screenshots.sh must fail when the application run fails or
 # leaves no image (audit run 20, T5); it used to report "0 updated" with exit
 # code 0. The fixture has to exist, or the script would first encode it.
