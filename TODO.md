@@ -9,106 +9,72 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
   - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
 
-- **Ton gegen Bild in der fertigen MKV: +100 bis +464 ms (H.264 „Das Erste
-  HD") und −72 bis −96 ms (MPEG-2 SD) gegen das Original** (gemessen
-  2026-10-07, nicht behoben)
-  - **Messung:** Original-TS → `ttcut-demux` → Schnitt mit `--auto-cut`
-    (Bilder 500–2000) → MKV; Bilder über die MD5 des dekodierten Bildes,
-    Tonpakete über die MD5 der Nutzdaten im Original wiedergefunden, je Spur
-    „Verschiebung Ton minus Verschiebung Bild". Positiv = Ton später zum Bild
-    als im Original. Kontrolle (reiner `ffmpeg -c copy`-Umpack, H.264 und
-    MPEG-2): 0,0 ms.
-  - **Heutiges Skript** (MP2 / AC3): 05x05 +116 / +100; 05x08 +268 / +124
-    (ganze Aufnahme, Bild 100000: +284 / +140); 05x06 ganze Aufnahme, Bild
-    100000: +344, +344, +368 / +224; Tatort 2011x01 (Kopf, hinter der Lücke):
-    +464 / +440; Whitney Houston (H.264 ohne vorgezogene Bilder): −8, −28,
-    +56 / +37; MPEG-2 (Navy CIS 23x14, Ted 02x07, Simpsons 02x06):
-    −72 bis −80 / −88 bis −96.
-  - **Drei Anteile, je einzeln gemessen:**
-    1. der `+igndts`-Versatz des nächsten Eintrags (+120 bis +136 ms auf den
-       betroffenen Spuren); mit „Ton aus dem Original-TS" fällt 05x08 von
-       +268 / +124 auf +124 / +124.
-    2. +140 ms auf allen Das-Erste-HD-Aufnahmen: `ttcut-demux` kürzt den Ton
-       auf den kleinsten Bild-Zeitstempel (7 vorgezogene B-Bilder), Bild 0 in
-       TTCut-ng ist aber das erste zeigbare Bild, 7 Bilder später
-       (`TTDisplayOrderMap::markH264ColdStartLeadingPics`). Probe: Trim auf
-       `start_time` des Videostroms statt auf den kleinsten Zeitstempel →
-       05x08 −20 / −36, 05x05 −28 / −28, 05x06 vor der Lücke −12 / −28.
-       MPEG-2 liegt umgekehrt (Ton zu früh); dort ist keine Probe gelaufen,
-       `docs/code-map/ttcut-demux.md` („PTS0 (video) semantics") nennt
-       denselben Aufbau mit umgekehrtem Vorzeichen.
-    3. hinter einer Störzone liegt der Ton zusätzlich daneben, und zwar bis
-       zum Ende der Aufnahme: 05x06 +76 bis +108 ms, Tatort +196 ms (je eine
-       Lücke); **„The Rookie 07x12" (Korpus, 5 Dateien, 328 Löcher = 500 s):
-       −0,3 s ab 11 min, −11 s (deu, mul) bis −19 s (mis, ac3) ab 48 min** —
-       vom Skript selbst belegt (`residual drift=11696ms`, hinten mit Stille
-       aufgefüllt, Enddrift −16 ms). Ursache gemessen: die Zonenbilanz setzt
-       den Bildverlust als PTS-Differenz der Pakete um den DTS-Sprung an
-       (05x06 380, Tatort 2340 ms); tatsächlich fehlen 460 bzw. 2500 ms an
-       Bildern. **Regel „jeder Ton-Frame an seinen eigenen Zeitstempel"
-       (Bildachse = TTCut-Bildindex; Frame im Loch → weg, Platz leer →
-       Stille) an den Paketlisten durchgerechnet, die ES danach gebaut und
-       über die ganze Aufnahme gemessen (2026-10-07): Rookie −18…+19 ms
-       durchgehend, 05x06 −4…0, Tatort −12…+8, 05x08 unverändert 0 Edits;
-       Remington (MPEG-2 interlaced) ±14 und PTS-Umlauf +5 nur gerechnet.
-       05x06 damit durch den echten Schnitt: −12/−8 ms (heute +252/+328).**
-       Hörproben wurden gebaut und gehört (2026-10-07), Dateien gelöscht;
-       Befehle im Projekt-Memory.
-  - **Rest nach 1 und 2:** −12 bis −36 ms (Ton zu früh): Rest unterhalb einer
-    Framelänge am ES-Anfang plus Rundung am Schnitt-Anfang, beide in dieselbe
-    Richtung. `audio_N_first_pts` und `audio_N_trimmed_ms` liest `TTESInfo`,
-    verwendet sie aber niemand; `av_offset_ms` gilt für alle Spuren und kommt
-    von Spur 0 (Whitney: Spuren untereinander bis 84 ms auseinander).
-  - Messwerkzeuge: `tools/diag/scratch/av-sync-2026-10-07/` (README dort;
-    `chain.py` = Kette bis zur MKV; `zoneaudit.py` = ganze Aufnahme ohne
-    Schnitt; `zonesim.py` + `applyrule.py` = Regel rechnen und ES bauen;
-    Ergebnisse `chain-result.txt`, `nas-result.txt`). Paketlisten
-    (`pk/*.pickle`, regenerierbar) und Skriptkopien `variants/` nur unter
-    `CLAUDE_TMP/TTCut-ng/demux-shift/`.
-- **ttcut-demux: Ton 120–136 ms zu spät im ES** (gefunden 2026-10-07,
-  noch nicht behoben)
-  - **Gemessen:** „Babylon Berlin 05x08": alle drei MP2-Spuren +136 ms gegen
-    ihren Original-Zeitstempel, AC3 0,0 ms. „Tatort 2011x01" (erste 80 MB
-    durch `ttcut-demux`): MP2 ×3 +136 ms, **AC3 +120 ms**. Im Original-TS
-    liegt MP2 gegen AC3 auf 05x05 und 05x08 gleich (−19,5 ms); der Versatz
-    entsteht erst beim Demuxen.
-  - **Mechanismus:** Der Reparatur-Remux (`-fflags +genpts+igndts`,
-    `tools/ttcut-demux/ttcut-demux`, „Repair timestamps") gibt den ersten 5
-    bis 10 Paketen einer Tonspur einen um 140 ms kleineren Zeitstempel als
-    allen folgenden. Die Extraktion (`-ss TRIM` nach `-i`) zählt ab dem
-    ersten Paket der Spur und schneidet deshalb 140 ms zu wenig weg. Die
-    Trim-Werte selbst stimmen (592/544 ms auf 05x08, dieselben Zahlen meldet
-    tsMuxeR als „Stream delay").
-  - **Auslöser:** `+igndts` — je Lauf eine Option geändert: Sprung mit
-    `+igndts` (allein oder mit `+genpts`), nicht ohne `-fflags`, nicht mit
-    `+genpts` allein; `-avoid_negative_ts` unbeteiligt (ffmpeg 9.0.2).
-  - **Umfang** (11 Aufnahmen, je erste 80 MB): betroffen 4 von 5 Aufnahmen
-    „Das Erste HD" (H.264 720p50) — 05x06 (MP2 ×3), 05x07 (nur `qks`),
-    05x08 (MP2 ×3), Tatort (alle vier Spuren); 05x05 sauber. Sauber auch
-    alle 5 MPEG-2-SD-Aufnahmen und eine H.264-Aufnahme ohne vorgezogene
-    B-Bilder. Hinter dem Sprung stehen Ton und Bild im Remux überall richtig
-    zueinander (0,0 ms).
-  - **Nicht gemessen:** warum ffmpeg das tut und welche Pakete es trifft
-    (die Zahl der Tonpakete, die der Demuxer vor dem ersten Bildpaket
-    ausgibt, erklärt es nicht: 05x08 hat dort 0/0/6, verschoben sind
-    6/6/10); Aufnahmen aus mehreren Dateien. Ton gegen das Bild: siehe den
-    Eintrag darüber. Bei den fünf Das-Erste-Aufnahmen
-    stempelt der Remux auch die ersten drei Bildpakete um
-    (+140/+120/+80 ms), auch bei der sauberen 05x05.
-  - **Vor dem Fix prüfen** (User 2026-10-07): wie
-    `/home/fpwild/Skripte/Ts2MKV.sh` es macht — läuft nach Wissen des Users
-    seit Jahren richtig. Gelesen: Es schreibt die Zeitstempel nie um.
-    tsMuxeR liest den Original-TS, das Skript übergibt dessen „Stream delay"
-    je Spur als `timeshift=` und schneidet mit `--cut-start` um den größten
-    negativen Wert. Gemessen (05x08, erste 80 MB, Parameter des Skripts, nur
-    an den Zeitstempeln des `.m2ts`, nicht an einer MKV, nicht gehört): MP2
-    60 ms, AC3 156 ms später zum Bild als im Original.
-  - Vorhandene ES-Dateien behalten ihren Versatz; nach dem Fix neu demuxen.
-  - Messwerkzeuge: `tools/diag/scratch/av-sync-2026-10-07/` (`survey.py`
-    bildet Remux-Pakete per MD5 auf die Originalpakete ab, `survey-all.txt`,
-    `order.py`, `es_start.py`).
-
 ## Medium Priority
+
+- **Nach der Zeitstempel-Regel in `ttcut-demux` offen** (2026-10-08; die Regel
+  selbst und ihre Messungen stehen in `docs/completed-work.md`, „Ton nach
+  Zeitstempeln platzieren")
+  - **Nähte nach dem ersten Segment: bis ±1 Tonrahmen.** `planAudioCut`
+    rundet Segmentanfang und mitgeführte Längendrift unabhängig voneinander;
+    im ersten Segment bleibt es bei ±½ Rahmen. Unverändert, nicht Teil der
+    Regel.
+  - **Verlust an einem PTS-Umlauf wird nicht gemeldet.** Der Ton sitzt über
+    den Umlauf hinweg richtig (Comedy-Central-Aufnahme mit Umlauf zwischen
+    den zwei Dateien: +5 ms vor und hinter der Naht), aber die dort
+    fehlenden 258 s stehen nicht in `es_missing_ranges`/`es_lost_ms`: zwei
+    Läufe haben keine gemeinsame Zeitachse, aus der die Länge folgt. An der
+    Stelle steht nur der „Audio-Gap"-Marker der eingefügten Stille.
+  - **Aufnahmen, die mitten in einer Bildgruppe beginnen** (MPEG-2-Zweig
+    „leading-B skip"): die Slot-Tabelle folgt dem Zweig (ab dem ersten
+    Schlüsselpaket), an echtem Material ist das nicht geprüft — keine der
+    29 Korpus-Aufnahmen beginnt so.
+  - **HEVC mit RADL-Bildern** (dekodierbare vorgezogene Bilder, die TTCut-ng
+    zeigt): die Regel wirft alle Bilder vor dem ersten Paket ab. Im Korpus
+    kommt nur RASL vor.
+  - **Sender mit falschen Ton-Zeitstempeln**: die Regel vertraut den PTS.
+    In 29 Aufnahmen nicht gesehen.
+  - **libav überspringt den ersten MP2-Rahmen einer Datei**, wenn der zweite
+    einen anderen Kopf hat (Modus, Copyright, Original, Emphasis). Der
+    Tonschnitt (`TTAudioCutter`) liest über libav, die Planung zählt Rahmen
+    — bei so einer Datei sitzt der Schnitt einen Rahmen daneben.
+    `ttcut-demux` erzeugt solche Dateien nicht mehr (Stille-Rahmen mit dem
+    Kopf der Spur); eine fremde ES kann so beginnen.
+  - **„The Rookie 07x12" lässt sich nicht schneiden**: TTCut-ng meldet
+    „display-order map … misaligned" (bestand schon vorher). Der Ton der ES
+    ist geprüft (ganze Aufnahme −21 bis +19 ms), die Kette bis zur MKV dort
+    nicht.
+  - **Nicht nachgemessen:** die Untertitel-Zeitachse nach dem neuen Bezug
+    (H.264/H.265: Bild 0 ist das erste Paket, 140 ms später als bisher auf
+    „Das Erste HD"); die Schwellen des Urteils „SEVERELY DAMAGED" gegen die
+    neue Zählung (Bildlöcher + Stille-Einfügungen je Spur); die
+    Fortschrittsmarken; die Laufzeit auf freier Maschine (ganze 05x08 unter
+    Fremdlast: 67 s gegen 97 s vorher).
+  - **Meldung „Video ES is missing N frames mid-stream"** feuert am
+    abgeschnittenen Ende einer Aufnahme (5 Bilder auf einem 80-MB-Kopf) und
+    nie bei PAFF, wo die Paketzahl die Feldzahl ist. Bestand schon vorher.
+  - **MPEG-2-Direktwiedergabe** nimmt keinen Versatz aus der `.info`; der
+    Wiedergabe-Cache (Fingerabdruck) beachtet die `.info` nicht.
+  - **Warum ffmpeg 9.0.2 unter `+igndts` die ersten Tonpakete umstempelt**,
+    ist ungeklärt. Der Ton liest seither das Original; der Remux bleibt für
+    Bild, Dauer und Korrupt-Marker.
+  - **Wiki**: beschreibt noch Trim und Auffüllen; beim nächsten
+    `wiki-audit` nachziehen.
+  - **Dateigrenze einer Mehrdatei-Aufnahme mitten in einem Ton-PES:** der
+    über die Grenze geteilte Tonrahmen geht verloren (jede Datei wird für
+    sich gelesen), sein Platz bekommt Stille und einen „Audio-Gap"-Marker.
+    Vom Prüfer an einem geteilten 12-s-TS gemessen; an echten
+    VDR-Aufnahmen ohne Störung an der Grenze nicht gemessen. Das Gate
+    `demux_slot_e2e` hat keinen Mehrdatei-Fall.
+  - **Kleinere Befunde der Durchsicht vom 2026-10-08, nicht umgesetzt:**
+    zwei Definitionen eines Lochs (Bildachse: Abstand > 1,5 Bilddauern; Ton:
+    Rahmen fällt ab PTS ≥ Bild + 1 Bilddauer) — bei Bild-PTS-Jitter fiele
+    Ton ohne gemeldetes Loch weg, nicht gesehen; `write_silence` nimmt die
+    erste Position, die als Rahmen liest, ungeprüft als Kopfvorlage; der
+    Startversatz-Nachweis hängt am Komma am Zeilenende von ffprobes CSV;
+    `plan_audio_slots` liest bei leerer Slot-Datei die Tonliste als Slots
+    (der Aufrufer fängt den Fall ab); `-p` begrenzt `s N` eines kaputten
+    Plans nicht; `docs/code-audit/build-verdicts.py:82` nennt die
+    gelöschten `detect_*_gaps_multifile`.
 
 - **Zwei überlagerte Widgets in „Aktueller Frame" — sind sie nötig?**
   (2026-08-26, vertagt auf User-Entscheid: „aber nicht heute")
@@ -768,73 +734,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   auf die TODO oder Memory verweisen, müssen beim Entstehen an einen gesicherten
   Ort — ins Repo oder unter `/home/` —, nicht ins Temp-Verzeichnis. Solange das
   nicht festgelegt ist, wiederholt sich der Verlust beim nächsten Aufräumen.
-
-
-- **Restversatz an Störzonen: welche Gaplänge ist die richtige?**
-  (2026-08-24, offen, niedrige Priorität — Größenordnung einer halben
-  Framedauer bis ~150 ms je nach Codec.)
-
-  Nach dem Störzonen-Umbau bleibt auf der Referenzaufnahme
-  `SDTV/…RTLup-Remington-Steele-03x15` ein konstanter Versatz von ~150 ms an
-  der Segmentnaht: Bild vor der Naht 1079 Frames = 43 160 ms, Ton dort
-  43 300–43 320 ms. Ursache ist, mit welcher Größe die Gaplänge gemessen wird.
-  `detect_video_gaps` löst auf **DTS** aus, gibt als Grenzen aber **PTS** aus,
-  und `build_disturbance_zones` bildet den Verlust aus der Differenz der
-  Grenzen — bei B-Frame-Reorder sind das zwei verschiedene Zahlen.
-
-  **Ein Umstellen auf die DTS-Länge wurde versucht und wieder verworfen**
-  (2026-08-24). Auf MPEG-2 ist DTS klar richtig: 1079 Pakete + 665 Frames
-  Lücke = 1744 gegen 1745 aus der PTS-Spanne, ein Frame Abweichung; mit der
-  PTS-Länge sind es vier. Der Fix senkte den Restversatz dort messbar von
-  ~150 ms auf 19–40 ms. Auf H.264 kehrt sich das aber um — gemessen an
-  `HDTV/…The-Rookie-07x12`, 133 Lücken über fünf Segmente:
-
-  | Segment | PTS-Spanne | Pakete+DTS | Pakete+PTS |
-  |---|---|---|---|
-  | 00001 | 2780,960 s | +0,280 | **+0,160** |
-  | 00002 | 16,200 s | −0,040 | **±0,000** |
-  | 00004 | 0,440 s | +0,080 | **−0,020** |
-
-  Dort ist PTS durchweg näher, und die DTS-Länge würde die Video-Lücken um
-  120 ms überschätzen — also zu viel Ton kürzen. Der Fix hätte den Fehler von
-  MPEG-2 auf H.26x verschoben statt ihn zu beseitigen.
-
-  Eine codec-abhängige Fallunterscheidung wäre messbar besser, wurde aber
-  bewusst nicht gebaut: die Ursache des Unterschieds ist unverstanden, und
-  eine Regel ohne verstandenen Grund bricht beim nächsten Codec wieder.
-  Auffällig ist, dass auf H.264 **beide** Größen systematisch überschätzen
-  (~0,2 Frames je Lücke, Segment 00001: real fehlen 559 Frames, PTS sagt 567,
-  DTS 573). Das deutet darauf hin, dass die richtige Größe eine dritte ist —
-  die tatsächlich fehlende Framezahl. Die sauber zu bestimmen wäre der
-  eigentliche Einstiegspunkt für einen neuen Anlauf.
-
-- **PTS-Umlauf macht die Lückenerkennung an dieser Stelle blind**
-  (2026-08-23, offen, niedrige Priorität — Sonderfall per User-Einschätzung).
-  Der 33-Bit-Zeitstempel läuft alle 2³³/90000 = 95443,718 s (26,5 h) auf 0
-  zurück. Beide Lückenerkennungen rechnen mit Differenzen roher Zeitstempel:
-  `detect_video_gaps` prüft `curr_dts - prev_dts > threshold`, die
-  Multifile-Varianten `nächster_Anfang - vorheriges_Ende > threshold`. Am
-  Umlauf ist diese Differenz stark **negativ**, die Prüfung greift nicht — es
-  wird nie eine Lücke erfunden, aber eine echte an dieser Stelle übersehen.
-
-  Belegt an `SDTV/MPEG2_SD576i25_16-9_multifile-2part-ptswrap_MP2-deu+eng_Comedy-Central`
-  im Testkorpus (Details in dessen `BESCHREIBUNG.md`): letzte PTS von Segment 0
-  bei 95386,744 s, Umlauf bei 95443,718 s, erste PTS von Segment 1 bei
-  201,426 s. Bild und Ton verlieren die 258 s gleichermassen, der Sync leidet
-  also nicht — nur die Meldung fehlt.
-
-  **Nachgemessen 2026-08-24, nach dem Störzonen-Umbau.** Herausgerechnet sind es
-  258,480 s Video- und 258,744 s Audio-Lücke, Bilanz +264 ms. Der frühere Grund,
-  es nicht anzufassen (die Grenze würde doppelt korrigiert, weil
-  `detect_segment_boundaries` dort ohnehin eine Zeile schrieb), ist mit dieser
-  Funktion entfallen. An ihre Stelle tritt ein anderer, grösserer:
-  `build_disturbance_zones()` sortiert **alle** Fenster global nach Startzeit.
-  Eine wrap-korrigierte Nahtlücke läge bei 95386…95645, jede Lücke innerhalb des
-  Folgesegments bei 201…3140 — die Naht sortierte ans Ende, und der Offset würde
-  in falscher Reihenfolge akkumuliert. Genau die Fehlerklasse, die der Umbau
-  beseitigt hat. Eine Behandlung muss deshalb **alle** Segment-PTS auf eine
-  durchgehende Achse normalisieren, nicht nur die Splice-Differenz. Deutlich
-  mehr Aufwand als „ein Vorzeichen richtigstellen".
 
 
 - **Cut-ES-Dateinamen zwischen den Codec-Pfaden vereinheitlichen**

@@ -164,7 +164,7 @@ For version-specific changes, see `CHANGELOG.md`.
 
 - **Audio delay**: Editable per-track delay (±9999 ms, QSpinBox in audio list) applied during audio cutting (keepList PTS offset) for all codecs. Sign follows the mkvmerge/mpv convention since v0.81.0: positive = track plays later (source window shifts earlier)
 - **Audio-Drift column**: Cut list shows accumulated audio frame boundary drift per cut, calculated during preview (first audio track only)
-- **TTESInfo**: Parses per-track `audio_N_trimmed_ms` and `audio_N_first_pts` from `.info` files
+- **TTESInfo**: Parses per-track `audio_N_trimmed_ms`, `audio_N_first_pts` and `audio_N_start_offset_ms` from `.info` files; `effectiveAudioDelayMs()` = user delay + start offset is what the audio cut and the drift preview use (spin box and project file keep the user's value)
 - **Persistence**: Delay stored in `.ttcut` project file XML (`<Delay>` element, optional)
 
 Key classes:
@@ -236,8 +236,8 @@ Demux tool for H.264/H.265 TS files:
 - Demuxes TS to elementary streams (similar to ProjectX for MPEG-2)
 - Multi-core optimized (parallel audio/video demuxing)
 - Generates .info file with frame rate, resolution, audio tracks
-- Audio trim at start for A/V offset correction
-- Audio padding at end (ProjectX-style, concat stream-copy) — preserves per-frame AC3 acmod changes
+- Audio placed on the picture timeline by the slot rule (`plan_audio_slots` + `ttcut-audiofix -p`): every audio frame goes to the picture its PTS names, from the original TS; frames without a picture are dropped, missing ones become silence, head and tail included. Frame copy, no re-encode — preserves per-frame AC3 acmod changes. Needs the `ttcut-audiofix` that ships with it (`-p` mode)
+- Per-track `audio_N_start_offset_ms` in the .info: the remainder below one audio frame, added to the track delay by TTCut-ng at cut time
 - Duration mismatch detection and reporting in .info file
 - VDR marks support (loads .marks file)
 - Automatic filler NALU stripping for H.264/H.265 (via ffmpeg `filter_units` bitstream filter)
