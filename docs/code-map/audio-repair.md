@@ -1,5 +1,5 @@
 ---
-base_commit: ba694a59cee91d9db6c102527d72970c0328f4ed
+base_commit: f77658eb3ecb7bae56a15fff01f08bd83cacf622
 last_verified: 2026-10-10
 sources:
   - data/ttaudioanomalyscantask.h
