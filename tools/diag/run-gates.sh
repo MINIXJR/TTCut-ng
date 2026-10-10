@@ -89,6 +89,9 @@ AC3FIX="$ROOT/tools/ttcut-ac3fix/ttcut-ac3fix"
 
 # ---- table: name | tier | timeout s | cmake targets (- = none) ---------------
 # The gate function is gate_<name>; W (work dir) is set and current when it runs.
+# One gate per program: where a program is run in several ways the gate is
+# "cases <limit> <case>...", the cases are functions case_<name> further down,
+# and the gate's time limit is the cases' limits added up.
 GATES='
 displayordermap        unit  120  test_displayordermap
 bitstream              unit  120  test_bitstream
@@ -113,16 +116,14 @@ ac3_reencode           unit  300  test_ac3_reencode
 framerate_assumed      unit  120  test_h26x_framerate
 framerate_hint         unit  120  test_framerate_hint
 subtitle_core          unit  60   test_subtitle_core
-log_levels             unit  60   test_logging
-log_file_off           unit  60   test_logging
-log_libav_mpv          unit  60   test_logging
-log_rotation           unit  60   test_logging
+logging                unit  240  test_logging
 log_app_file_off       tux   300  -
 log_qdebug_context     tux   300  -
 acm_cut_isolated       tux   300  -
 navigator_refresh      tux   300  test_navigator_refresh
 mpeg2_framerate_cut    tux   600  -
 diag_target_complete   unit  60   -
+cases_verdict          unit  60   -
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
 window_geometry        unit  120  test_window_geometry
 container_sync         unit  120  test_container_sync
@@ -139,9 +140,7 @@ aspect_hint            unit  300  test_aspect_hint
 preview_clip_index     unit  300  test_preview_clip_index
 preview_window_in_cut  unit  300  test_preview_window_in_cut
 aspect_autocut         unit  300  -
-exit_cancel            tux   300  test_exit_cancel
-exit_discard           tux   300  test_exit_cancel
-exit_savefail          tux   300  test_exit_cancel
+exit_cancel            tux   900  test_exit_cancel
 pool_abort             unit  120  test_pool_abort
 abort_after_finish     unit  120  test_abort_after_finish
 cutlist_minsize        unit  120  test_cutlist_minsize
@@ -160,8 +159,7 @@ vdr_example_names      unit  120  -
 ocr_glyphs_selftest    unit  60   -
 ffmpeg_edge_packets    unit  120  -
 audiofix_log_text      unit  60   -
-audiofix_edge_ac3      unit  120  -
-audiofix_edge_mp2      unit  120  -
+audiofix_edge          unit  240  -
 audiofix_assemble      unit  120  -
 ac3fix_contract        unit  120  -
 screenshots_script     unit  60   -
@@ -199,44 +197,25 @@ preview_drift_rows     tux   600  test_preview_drift_rows
 repair_window_edge     tux   600  test_repair_window_edge
 marker_delete_repair   tux   600  test_marker_delete_repair
 audio_order_reset      tux   600  test_audio_order_reset
-anomaly_trigger_video  tux   600  test_auto_anomaly_scan_trigger
-anomaly_trigger_project tux  600  test_auto_anomaly_scan_trigger
-anomaly_trigger_abort  tux   600  test_auto_anomaly_scan_trigger
+anomaly_trigger        tux   1800 test_auto_anomaly_scan_trigger
 cut_outcome            tux   600  test_cut_outcome
 partial_track          tux   600  test_partial_track
-project_roundtrip_264  tux   600  test_project_roundtrip
-project_roundtrip_m2v  tux   600  test_project_roundtrip
-project_marker_dropped tux   600  test_project_roundtrip
+project_roundtrip      tux   1800 test_project_roundtrip
 quality_check          tux   900  -
 open_track_failure     tux   600  test_open_track_failure
 extra_index_rank       tux   300  test_extra_index_rank
 stale_abort            tux   600  test_stale_abort
 audiocut_abort         tux   300  test_audiocut_abort
-audioonlycut_none      tux   600  test_audioonlycut_abort
-audioonlycut_audio     tux   600  test_audioonlycut_abort
-audioonlycut_mux       tux   600  test_audioonlycut_abort
-h26xcut_none           tux   900  test_h26xcut_abort
-h26xcut_video          tux   900  test_h26xcut_abort
-h26xcut_audio          tux   900  test_h26xcut_abort
-h26xcut_mux            tux   900  test_h26xcut_abort
+audioonlycut_abort     tux   1800 test_audioonlycut_abort
+h26xcut_abort          tux   3600 test_h26xcut_abort
 mkvmux_abort           tux   300  test_mkvmux_abort
 mkvmux_inputs          tux   300  test_mkvmux_inputs
 mka_interleave         tux   300  test_mka_interleave
-mpeg2cut_none          tux   900  test_mpeg2cut_abort
-mpeg2cut_audio         tux   900  test_mpeg2cut_abort
-mpeg2cut_video         tux   900  test_mpeg2cut_abort
-mpeg2cut_mux           tux   900  test_mpeg2cut_abort
+mpeg2cut_abort         tux   3600 test_mpeg2cut_abort
 cutsequence_abort      tux   900  test_cutsequence_abort
-previewcut_none        tux   600  test_previewcut_abort
-previewcut_video       tux   600  test_previewcut_abort
-previewcut_audio       tux   600  test_previewcut_abort
-previewcut_fail        tux   600  test_previewcut_abort
-previewcut_muxfail     tux   600  test_previewcut_abort
-previewcut_muxfail_mpeg2 tux 600  test_previewcut_abort
-preview_clip_h264      tux   600  test_preview_clip
-preview_clip_mpeg2     tux   600  test_preview_clip
-smartcut_abort_h264    tux   600  test_smartcut_abort
-smartcut_abort_hevc    tux   600  test_smartcut_abort
+previewcut_abort       tux   3600 test_previewcut_abort
+preview_clip           tux   1200 test_preview_clip
+smartcut_abort         tux   1200 test_smartcut_abort
 encode_tempdir         tux   900  test_mpeg2cut_abort
 pool_crossthread       san   900  -
 task_cleanup_order     san   600  -
@@ -245,6 +224,35 @@ task_cleanup_order     san   600  -
 # ---- helpers for the gate functions -----------------------------------------
 need() { local f; for f in "$@"; do [ -e "$f" ] || { echo "SKIP: missing $f"; exit 77; }; done; }
 need_bin() { local b="$D/$1"; [ -x "$b" ] || { echo "SKIP: not built: $b"; exit 77; }; }
+
+# cases <limit s> <case>...: one gate for several cases of one program. A
+# case is a function case_<name>; it runs as a gate does - a process, a work
+# directory with home and settings of its own ($W/<name>), its own time limit.
+# Every case runs, whatever the ones before it did. The gate's exit status:
+# 124 when a case ran out of time, else 1 when one failed, else 77 when one
+# missed a prerequisite, else 0. The log holds a line "=== case <name>:
+# <verdict>" per case.
+cases() {
+  local secs=$1 c rc cw failed=0 skipped=0 timedout=0
+  shift
+  for c in "$@"; do
+    cw="$W/$c"; mkdir -p "$cw/xdg-config" "$cw/xdg-cache" "$cw/home"
+    echo "=== case $c"
+    W="$cw" HOME="$cw/home" XDG_CONFIG_HOME="$cw/xdg-config" XDG_CACHE_HOME="$cw/xdg-cache" \
+      timeout -k 10 "$secs" "$D/run-gates.sh" --exec-case "$c"   # not $0: the gate runs in its work directory
+    rc=$?
+    case $rc in
+      0)       echo "=== case $c: PASS" ;;
+      77)      echo "=== case $c: SKIP"; skipped=1 ;;
+      124|137) echo "=== case $c: TIMEOUT"; timedout=1 ;;
+      *)       echo "=== case $c: FAIL (rc=$rc)"; failed=1 ;;
+    esac
+  done
+  [ $timedout -eq 1 ] && return 124
+  [ $failed -eq 1 ] && return 1
+  [ $skipped -eq 1 ] && return 77
+  return 0
+}
 
 # stereo + 5.1 + stereo at one frame size plus four junk bytes; the recipe of
 # gate_ac3fix.sh, kept identical so both see the same acmod switches.
@@ -333,6 +341,32 @@ PRJ
 }
 
 # ---- tier unit ---------------------------------------------------------------
+# cases() itself: what a gate made of several cases reports. Four cases made
+# for this - one passes, one fails, one misses a prerequisite, one runs out
+# of time.
+case_verdict_pass() { : > "$W/ran"; }
+case_verdict_fail() { : > "$W/ran"; exit 3; }
+case_verdict_skip() { need "$W/does-not-exist"; }
+case_verdict_slow() { sleep 30; }
+gate_cases_verdict() {
+  local rc=0 got
+  expect() {   # <expected exit status> <what> <case>...
+    local want=$1 what=$2; shift 2
+    rm -f "$W"/verdict_*/ran
+    ( cases 2 "$@" ) > "$W/out.log" 2>&1; got=$?
+    if [ "$got" -eq "$want" ]; then echo "PASS: $what -> $got"; else echo "FAIL: $what -> $got, expected $want"; cat "$W/out.log"; rc=1; fi
+  }
+  expect 0   "all cases pass" verdict_pass
+  expect 1   "one case fails" verdict_fail verdict_pass
+  [ -e "$W/verdict_pass/ran" ] && echo "PASS: the case behind a failed one still runs" || { echo "FAIL: the case behind a failed one did not run"; rc=1; }
+  grep -q "^=== case verdict_fail: FAIL (rc=3)" "$W/out.log" && grep -q "^=== case verdict_pass: PASS" "$W/out.log" \
+    && echo "PASS: the log names each case with its verdict" || { echo "FAIL: verdict lines missing"; cat "$W/out.log"; rc=1; }
+  expect 77  "one case misses a prerequisite, none fails" verdict_pass verdict_skip
+  expect 1   "a failure outranks a missing prerequisite" verdict_skip verdict_fail
+  expect 124 "one case runs out of time" verdict_slow verdict_pass
+  [ -e "$W/verdict_pass/ran" ] && echo "PASS: the case behind a timed-out one still runs" || { echo "FAIL: the case behind a timed-out one did not run"; rc=1; }
+  return $rc
+}
 gate_displayordermap()       { "$D/test_displayordermap"; }
 gate_bitstream()             { "$D/test_bitstream"; }
 gate_sps_basics_epb()        { "$D/test_sps_basics_epb"; }
@@ -409,9 +443,10 @@ gate_track_language()      { "$D/test_track_language"; }
 gate_project_missing_video() { "$D/test_project_missing_video" "$W"; }
 gate_cut_range_check() { "$D/test_cut_range_check" "$W"; }
 gate_cut_job_ownership() { "$D/test_cut_job_ownership" "$W"; }
-gate_exit_cancel()           { need "$V264"; "$D/test_exit_cancel" "$V264" cancel; }
-gate_exit_discard()          { need "$V264"; "$D/test_exit_cancel" "$V264" discard; }
-gate_exit_savefail()         { need "$V264"; "$D/test_exit_cancel" "$V264" savefail; }
+gate_exit_cancel() { cases 300 exit_cancel exit_discard exit_savefail; }
+case_exit_cancel()           { need "$V264"; "$D/test_exit_cancel" "$V264" cancel; }
+case_exit_discard()          { need "$V264"; "$D/test_exit_cancel" "$V264" discard; }
+case_exit_savefail()         { need "$V264"; "$D/test_exit_cancel" "$V264" savefail; }
 gate_pool_abort()            { "$D/test_pool_abort"; }
 gate_abort_after_finish()    { "$D/test_abort_after_finish"; }
 gate_cutlist_minsize()       { "$D/test_cutlist_minsize"; }
@@ -434,8 +469,9 @@ gate_ocr_glyphs_selftest() {
 }
 gate_ffmpeg_edge_packets()   { need "$DEMUX"; "$D/gate_ffmpeg_edge_packets.sh" "$DEMUX"; }
 gate_audiofix_log_text()     { need "$DEMUX"; "$D/gate_audiofix_log_text.sh" "$DEMUX"; }
-gate_audiofix_edge_ac3()     { need "$AUDIOFIX" "$A264"; "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$A264" 768; }
-gate_audiofix_edge_mp2()     { need "$AUDIOFIX" "$MP2";  "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$MP2" 576; }
+gate_audiofix_edge() { cases 120 audiofix_edge_ac3 audiofix_edge_mp2; }
+case_audiofix_edge_ac3()     { need "$AUDIOFIX" "$A264"; "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$A264" 768; }
+case_audiofix_edge_mp2()     { need "$AUDIOFIX" "$MP2";  "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$MP2" 576; }
 gate_audiofix_assemble()     { need "$AUDIOFIX"; "$D/gate_audiofix_assemble.sh" "$AUDIOFIX"; }
 # tools/ttcut-screenshots.sh must fail when the application run fails or
 # leaves no image (audit run 20, T5); it used to report "0 updated" with exit
@@ -488,7 +524,8 @@ gate_framerate_assumed() { need "$TD/novui.264" "$TD/novui.265"
 # SRT parser, time lookup and cut (audit run 14): .srt files written by the harness.
 gate_subtitle_core()     { "$D/test_subtitle_core" "$W"; }
 # Logger (audit run 15, docs/code-map/logging.md). FATAL must also reach stderr.
-gate_log_levels() {
+gate_logging() { cases 60 log_levels log_file_off log_libav_mpv log_rotation; }
+case_log_levels() {
   "$D/test_logging" levels "$W/levels.log" 2>"$W/stderr" || exit 1
   grep -q "MARK-FATAL" "$W/stderr" || { echo "FAIL: the FATAL line did not reach stderr"; exit 1; }
   echo "PASS: the FATAL line reached stderr"
@@ -506,15 +543,15 @@ log_left_alone() {   # $1 = log file, $2 = what ran
   fi
   echo "PASS: $2 left the log alone"
 }
-gate_log_file_off() {
+case_log_file_off() {
   log_settings_file_off
   "$D/test_logging" fileoff || exit 1
   log_left_alone "$XDG_CACHE_HOME/ttcut-ng/logfile.log" "loading the settings (log file off)"
 }
-gate_log_libav_mpv()    { "$D/test_logging" mpv "$W/mpv.log"; }
+case_log_libav_mpv()    { "$D/test_logging" mpv "$W/mpv.log"; }
 # Two rotations without gzip on the PATH: every session must survive, as a
 # valid .gz, and no .uncompressed fallback may appear.
-gate_log_rotation() {
+case_log_rotation() {
   local L="$W/r/logfile.log" f
   mkdir -p "$W/r" "$W/nobin"
   echo "MARK-SESSION-A" > "$L"; echo "MARK-SESSION-B" > "$L.1"
@@ -808,15 +845,17 @@ gate_repair_window_edge() { need "$TESTDATA/tux_test.264"; "$D/test_repair_windo
 gate_marker_delete_repair() { need "$TESTDATA/tux_test.264"; "$D/test_marker_delete_repair" "$W"; }
 gate_audio_order_reset()   { need "$M2V" "$MP2" "$SRT"; make_two_track_project "$W/roundtrip.ttcut"
                              "$D/test_audio_order_reset" "$W/roundtrip.ttcut" "$SRT" "$W"; }
-gate_anomaly_trigger_video()   { need "$V264"; "$D/test_auto_anomaly_scan_trigger" video "$V264" "$W"; }
-gate_anomaly_trigger_project() { need "$PRJ264"; cp "$PRJ264" "$W/p.ttcut"; "$D/test_auto_anomaly_scan_trigger" project-clean "$W/p.ttcut" "$W"; }
-gate_anomaly_trigger_abort()   { need "$V264"; "$D/test_auto_anomaly_scan_trigger" project-abort-then-video "$V264" "$W"; }
+gate_anomaly_trigger() { cases 600 anomaly_trigger_video anomaly_trigger_project anomaly_trigger_abort; }
+case_anomaly_trigger_video()   { need "$V264"; "$D/test_auto_anomaly_scan_trigger" video "$V264" "$W"; }
+case_anomaly_trigger_project() { need "$PRJ264"; cp "$PRJ264" "$W/p.ttcut"; "$D/test_auto_anomaly_scan_trigger" project-clean "$W/p.ttcut" "$W"; }
+case_anomaly_trigger_abort()   { need "$V264"; "$D/test_auto_anomaly_scan_trigger" project-abort-then-video "$V264" "$W"; }
 gate_cut_outcome()   { need "$V264" "$A264"; "$D/test_cut_outcome" "$V264" "$A264" "$W"; }
 gate_partial_track() { need "$V264" "$A264"; "$D/test_partial_track" "$V264" "$A264" "$W"; }
-gate_project_roundtrip_264() { need "$PRJ264"; "$D/test_project_roundtrip" "$PRJ264" "$W" rt264; }
+gate_project_roundtrip() { cases 600 project_roundtrip_264 project_roundtrip_m2v project_marker_dropped; }
+case_project_roundtrip_264() { need "$PRJ264"; "$D/test_project_roundtrip" "$PRJ264" "$W" rt264; }
 # A project written while TTCut-ng still kept the old marker list: it loads
 # without a word about the <Marker> element, and the saved project has none.
-gate_project_marker_dropped() {
+case_project_marker_dropped() {
   need "$V264" "$A264"
   ttcut_project_xml "$V264" "$A264" deu 100:599 \
     | sed 's#</Cut>#</Cut><Marker><Order>0</Order><MarkerPos>150</MarkerPos><MarkerType>1</MarkerType></Marker>#' \
@@ -832,7 +871,7 @@ gate_project_marker_dropped() {
   echo "PASS: a <Marker> project loads silently and is saved without it"
 }
 gate_quality_check()      { need "$V264" "$A264"; "$D/gate_quality_check.sh" "$V264" "$A264" "$W"; }
-gate_project_roundtrip_m2v() { need "$M2V" "$MP2"; make_two_track_project "$W/rt-two-track.ttcut"
+case_project_roundtrip_m2v() { need "$M2V" "$MP2"; make_two_track_project "$W/rt-two-track.ttcut"
                                "$D/test_project_roundtrip" "$W/rt-two-track.ttcut" "$W" rtm2v; }
 gate_open_track_failure()  { need "$M2V" "$MP2"; "$D/test_open_track_failure" "$M2V" "$MP2" "$W"; }
 gate_extra_index_rank()    { need "$M2VFP"; "$D/test_extra_index_rank" "$M2VFP" 4; }
@@ -840,35 +879,41 @@ gate_stale_abort()   { need "$M2V" "$MP2"; "$D/test_stale_abort" "$M2V" "$MP2" "
 # The abort matrix, phase by phase (same invocations as gate_refactor_identity.sh's
 # harness suite). Several of these write into a fixed CLAUDE_TMP/cut-abort path.
 gate_audiocut_abort()    { need "$A264"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_audiocut_abort" "$A264"; }
-gate_audioonlycut_none()  { need "$V264" "$A264"; "$D/test_audioonlycut_abort" "$V264" "$A264" "$W" none; }
-gate_audioonlycut_audio() { need "$V264" "$A264"; "$D/test_audioonlycut_abort" "$V264" "$A264" "$W" audio; }
-gate_audioonlycut_mux()   { need "$V264" "$A264"; "$D/test_audioonlycut_abort" "$V264" "$A264" "$W" mux; }
-gate_h26xcut_none()  { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" none; }
-gate_h26xcut_video() { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" video; }
-gate_h26xcut_audio() { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" audio; }
-gate_h26xcut_mux()   { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" mux; }
+gate_audioonlycut_abort() { cases 600 audioonlycut_none audioonlycut_audio audioonlycut_mux; }
+case_audioonlycut_none()  { need "$V264" "$A264"; "$D/test_audioonlycut_abort" "$V264" "$A264" "$W" none; }
+case_audioonlycut_audio() { need "$V264" "$A264"; "$D/test_audioonlycut_abort" "$V264" "$A264" "$W" audio; }
+case_audioonlycut_mux()   { need "$V264" "$A264"; "$D/test_audioonlycut_abort" "$V264" "$A264" "$W" mux; }
+gate_h26xcut_abort() { cases 900 h26xcut_none h26xcut_video h26xcut_audio h26xcut_mux; }
+case_h26xcut_none()  { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" none; }
+case_h26xcut_video() { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" video; }
+case_h26xcut_audio() { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" audio; }
+case_h26xcut_mux()   { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" mux; }
 gate_mkvmux_abort()  { need "$V264" "$A264"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_mkvmux_abort" "$V264" "$A264" 50; }
 gate_mkvmux_inputs() { need "$V264" "$A264"; "$D/test_mkvmux_inputs" "$V264" "$A264" 50 "$W"; }
 gate_mka_interleave() { need "$A264"; "$D/test_mka_interleave" "$A264" "$W"; }
-gate_mpeg2cut_none()  { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" none; }
-gate_mpeg2cut_audio() { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" audio; }
-gate_mpeg2cut_video() { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" video; }
-gate_mpeg2cut_mux()   { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" mux; }
+gate_mpeg2cut_abort() { cases 900 mpeg2cut_none mpeg2cut_audio mpeg2cut_video mpeg2cut_mux; }
+case_mpeg2cut_none()  { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" none; }
+case_mpeg2cut_audio() { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" audio; }
+case_mpeg2cut_video() { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" video; }
+case_mpeg2cut_mux()   { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" mux; }
 gate_cutsequence_abort() { need "$V264" "$A264" "$M2V" "$MP2"; "$D/test_cutsequence_abort" "$V264" "$A264" "$M2V" "$MP2" "$W"; }
-gate_previewcut_none()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" none; }
-gate_previewcut_video() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" video; }
+gate_previewcut_abort() { cases 600 previewcut_none previewcut_video previewcut_audio previewcut_fail previewcut_muxfail previewcut_muxfail_mpeg2; }
+case_previewcut_none()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" none; }
+case_previewcut_video() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" video; }
 # Holds the preview dialog's single-clip rebuild against the clip the preview
 # TASK produced for the same cut - the two must not drift apart. Both codec
 # branches, because they share the fragments but not the audio cut.
-gate_preview_clip_h264()  { need "$V264"; make_noise_ac3 "$W/noise.ac3" || exit 1
+gate_preview_clip() { cases 600 preview_clip_h264 preview_clip_mpeg2; }
+case_preview_clip_h264()  { need "$V264"; make_noise_ac3 "$W/noise.ac3" || exit 1
   "$D/test_preview_clip" "$V264" "$W/noise.ac3" "$W"; }
-gate_preview_clip_mpeg2() { need "$M2V" "$MP2";   "$D/test_preview_clip" "$M2V" "$MP2" "$W"; }
-gate_previewcut_audio() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" audio; }
-gate_previewcut_fail()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" fail; }
-gate_previewcut_muxfail() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" muxfail; }
-gate_previewcut_muxfail_mpeg2() { need "$M2V" "$MP2"; "$D/test_previewcut_abort" "$M2V" "$MP2" "$W" muxfail; }
-gate_smartcut_abort_h264() { need "$V264"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_smartcut_abort" "$V264" 50; }
-gate_smartcut_abort_hevc() { need "$H265"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_smartcut_abort" "$H265" 50; }
+case_preview_clip_mpeg2() { need "$M2V" "$MP2";   "$D/test_preview_clip" "$M2V" "$MP2" "$W"; }
+case_previewcut_audio() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" audio; }
+case_previewcut_fail()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" fail; }
+case_previewcut_muxfail() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" muxfail; }
+case_previewcut_muxfail_mpeg2() { need "$M2V" "$MP2"; "$D/test_previewcut_abort" "$M2V" "$MP2" "$W" muxfail; }
+gate_smartcut_abort() { cases 600 smartcut_abort_h264 smartcut_abort_hevc; }
+case_smartcut_abort_h264() { need "$V264"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_smartcut_abort" "$V264" 50; }
+case_smartcut_abort_hevc() { need "$H265"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_smartcut_abort" "$H265" 50; }
 gate_encode_tempdir() { need "$M2V" "$MP2"; "$D/gate_encode_tempdir.sh"; }
 
 # ---- tier san ----------------------------------------------------------------
@@ -893,10 +938,10 @@ gate_task_cleanup_order() {
 # ---- runner ------------------------------------------------------------------
 table() { echo "$GATES" | awk 'NF==4'; }
 
-if [ "${1:-}" = --exec ]; then          # child: one gate, environment already set
+if [ "${1:-}" = --exec ] || [ "${1:-}" = --exec-case ]; then   # child: one gate, or one case of a gate; environment already set
   cd "$W" || exit 1
   exec < /dev/null   # a gate must never read the runner's stdin (ffmpeg would take table lines as commands)
-  "gate_$2"
+  if [ "$1" = --exec ]; then "gate_$2"; else "case_$2"; fi
   exit $?
 fi
 
@@ -967,7 +1012,7 @@ while read -r name tier secs targets; do
   esac
   printf '%-8s %-24s %7ss' "$v" "$name" "$dt"
   case $v in
-    SKIP) printf '  %s' "$(head -n1 "$RUN/$name.log")" ;;
+    SKIP) printf '  %s' "$(grep -m1 -v '^=== ' "$RUN/$name.log")" ;;   # the reason; "===" lines are a gate's case headers
     FAIL|TIMEOUT) printf '  rc=%s  %s' "$rc" "$RUN/$name.log" ;;
   esac
   echo

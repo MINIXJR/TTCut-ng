@@ -204,11 +204,12 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
   (standing rule: a genuine error never cleans up).
 - **Mux script:** `#!/bin/sh` on line 1, one `mplex -f<n>` line per item of
   the session's MPEG-2 mux list. Gate `mux_script`.
-- **Gates:** `mkvmux_abort`, `h26xcut_mux`, `mpeg2cut_mux`,
-  `audioonlycut_mux` (cancel paths), `mpeg2order`, `partial_track`,
-  `mkv_framerate`, `mkvmux_inputs`, `mka_interleave`, `mplex_target`,
-  `chapter_file`, `mux_script`, `previewcut_muxfail(_mpeg2)`,
-  `preview_clip_*`. What a finished container holds is checked for track
+- **Gates:** `mkvmux_abort`, the `mux` cases of `h26xcut_abort`,
+  `mpeg2cut_abort` and `audioonlycut_abort` (cancel paths), `mpeg2order`,
+  `partial_track`, `mkv_framerate`, `mkvmux_inputs`, `mka_interleave`,
+  `mplex_target`, `chapter_file`, `mux_script`, the cases
+  `previewcut_muxfail(_mpeg2)` of `previewcut_abort`, `preview_clip` and
+  `preview_clip_index`. What a finished container holds is checked for track
   count, interleaving, chapters and timestamps; languages and the A/V offset
   are not gated.
 

@@ -285,7 +285,7 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
     `data/ttpreviewclip.cpp`, die Ablaufsteuerung des Einzelclips als
     `ttRebuildMpeg2PreviewClip`/`ttRebuildSmartCutPreviewClip` daneben. Das war
     nötig, damit der Neubau ohne mpv und GL-Kontext läuft und damit prüfbar
-    wird: Gate `preview_clip_h264`/`preview_clip_mpeg2`
+    wird: Gate `preview_clip` (Fälle `preview_clip_h264`/`preview_clip_mpeg2`)
     (`tools/diag/test_preview_clip.cpp`) hält einen neu gebauten Clip gegen
     den, den die Task für denselben Schnitt erzeugt hat. Der Tonschnitt bleibt
     getrennt (Option A, `audio-cut-timing.md`) — **seit 2026-09-22 nicht mehr:
