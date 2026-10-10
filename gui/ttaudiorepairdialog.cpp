@@ -22,6 +22,10 @@ extern "C" {
 }
 
 #include <QCheckBox>
+#include <QComboBox>
+#include <QFileInfo>
+#include <QLocale>
+#include <QTime>
 #include <QSpinBox>
 #include <QLabel>
 #include <QPushButton>
@@ -42,6 +46,10 @@ namespace {
 // TTAudioRepairItem's header comment - used only where opening the audio
 // file is not worth it (see approxAc3RangeForMarker's doc comment).
 constexpr double kApproxFrameDurMs = 1536.0 * 1000.0 / 48000.0; // 32 ms
+
+// Below this match the fill view warns that the fill gains little (measured
+// 2026-10-09: under 0.80 it gains less than 6 dB in 94 % of the places).
+constexpr double kDonorFillHintMatch = 0.80;
 
 // Real per-file AC3 frame duration (ms), read from the container. Falls
 // back to the fixed 32 ms contract if the file cannot be probed - the
@@ -162,6 +170,8 @@ TTAudioRepairDialog::TTAudioRepairDialog(TTAVItem* avItem, const TTStreamPoint& 
 
   qint64 approxFrom = 0, approxTo = 0;
   approxAc3RangeForMarker(mPoint, frameRate, mExtraFrameIndices, approxFrom, approxTo);
+  mMarkerFrom = approxFrom;
+  mMarkerTo   = approxTo;
 
   // The marker names the planes to preset (TTStreamPoint::audioChannelMask):
   // C+LFE for a finding of the LFE search, every plane of its frames for an
@@ -193,6 +203,7 @@ TTAudioRepairDialog::TTAudioRepairDialog(TTAVItem* avItem, const TTStreamPoint& 
   const bool editing = mExistingRepairIndex >= 0;
   const TTAudioRepairItem existing = editing ? mAvItem->audioRepairList().at(mExistingRepairIndex) : TTAudioRepairItem();
   mFadeOut = editing ? existing.isFadeOut() : mPoint.audioAnomalyKind() == AudioAnomalyKind::LastingStop;
+  mDonorFill = editing ? existing.isDonorFill() : mPoint.audioAnomalyKind() == AudioAnomalyKind::Hole;
   mSamplesPerMs = qMax(1, qRound(TTAudioRepair::kAc3FrameSamples / mFrameDurationMs));
   bool stopFound = true;
   int  fadeLenMs = 20;
@@ -238,7 +249,26 @@ TTAudioRepairDialog::TTAudioRepairDialog(TTAVItem* avItem, const TTStreamPoint& 
 
   buildUi();
 
-  if (mFadeOut) {
+  if (mDonorFill) {
+    const QList<int> donors = mAvItem ? mAvItem->donorCandidateTracks(mTrackIndex) : QList<int>();
+    for (int track : donors)
+      mCmbDonor->addItem(tr("Track %1 - %2").arg(track + 1).arg(QFileInfo(mAvItem->audioStreamAt(track)->filePath()).fileName()), track);
+    // An enabled fill whose donor is still there is shown as stored; anything
+    // else is searched - with the fill's own donor when that still exists,
+    // else with the preset one.
+    const bool ownDonor = editing && existing.isDonorFill() && donors.contains(existing.donorTrack());
+    const bool stored   = ownDonor && existing.isEnabled();
+    const int  preset   = ownDonor ? existing.donorTrack() : (mAvItem ? mAvItem->presetDonorTrack(mTrackIndex) : -1);
+    mCmbDonor->setCurrentIndex(mCmbDonor->findData(preset));
+    if (stored) {
+      mFillItem = existing;
+      mFillFound = true;
+      showDonorFill();
+    } else {
+      searchDonorFill();
+    }
+    connect(mCmbDonor, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { searchDonorFill(); });
+  } else if (mFadeOut) {
     mShownFadeEndMs = qRound(mFadeEndSample / double(mSamplesPerMs));
     // Inside the marker's frames, so that the repair stays linked to its marker.
     const int lo = qMin(qRound(approxFrom * mFrameDurationMs), mShownFadeEndMs);
@@ -275,6 +305,7 @@ TTAudioRepairDialog::TTAudioRepairDialog(TTAVItem* avItem, const TTStreamPoint& 
       .arg(qRound(double(mPoint.duration()) * 1000.0))
       .arg(mPoint.description());
   if (mFadeOut) header += "\n" + tr("Repair: fade-out before the stop");
+  if (mDonorFill) header += "\n" + tr("Repair: fill the hole from a second track");
   mLblHeader->setText(header);
 
   // Final-review Critical 1: the player MUST be built here, not on the first
@@ -316,7 +347,25 @@ void TTAudioRepairDialog::buildUi()
   mLblHeader->setWordWrap(true);
   mMainLayout->addWidget(mLblHeader);
 
-  if (mFadeOut) {
+  if (mDonorFill) {
+    QGridLayout* fillLayout = new QGridLayout();
+    fillLayout->addWidget(new QLabel(tr("Donor track"), this), 0, 0);
+    mCmbDonor = new QComboBox(this);
+    fillLayout->addWidget(mCmbDonor, 0, 1);
+    fillLayout->addWidget(new QLabel(tr("Hole"), this), 1, 0);
+    mLblHole = new QLabel(this);
+    fillLayout->addWidget(mLblHole, 1, 1);
+    fillLayout->addWidget(new QLabel(tr("Offset"), this), 2, 0);
+    mLblShift = new QLabel(this);
+    fillLayout->addWidget(mLblShift, 2, 1);
+    fillLayout->addWidget(new QLabel(tr("Match"), this), 3, 0);
+    mLblMatch = new QLabel(this);
+    fillLayout->addWidget(mLblMatch, 3, 1);
+    mMainLayout->addLayout(fillLayout);
+    mLblFillMessage = new QLabel(this);
+    mLblFillMessage->setWordWrap(true);
+    mMainLayout->addWidget(mLblFillMessage);
+  } else if (mFadeOut) {
     QGridLayout* fadeLayout = new QGridLayout();
     fadeLayout->addWidget(new QLabel(tr("Fade-out ends at (ms)"), this), 0, 0);
     mSpinFadeEnd = new QSpinBox(this);
@@ -367,7 +416,8 @@ void TTAudioRepairDialog::buildUi()
 
   QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
   // Accepting changes nothing yet: the repair is noted for the cut.
-  buttons->button(QDialogButtonBox::Ok)->setText(tr("Plan repair"));
+  mBtnPlan = buttons->button(QDialogButtonBox::Ok);
+  mBtnPlan->setText(tr("Plan repair"));
   connect(buttons, &QDialogButtonBox::accepted, this, &TTAudioRepairDialog::accept);
   connect(buttons, &QDialogButtonBox::rejected, this, &TTAudioRepairDialog::reject);
   mMainLayout->addWidget(buttons);
@@ -398,11 +448,85 @@ quint8 TTAudioRepairDialog::currentChannelMask() const
 
 TTAudioRepairItem TTAudioRepairDialog::currentItem() const
 {
+  // Nothing found: the marker's frames, so that the original can be played.
+  if (mDonorFill)
+    return mFillFound ? mFillItem : TTAudioRepairItem(mTrackIndex, mMarkerFrom, mMarkerTo, 0);
   if (mFadeOut)
     return TTAudioRepair::makeFadeOutItem(mTrackIndex, mFadeMask, mFadeEndSample,
                                           mSpinFadeLen->value() * mSamplesPerMs, mSilenceSamples,
                                           mSamplesPerMs * 1000);
   return TTAudioRepairItem(mTrackIndex, currentFrameFrom(), currentFrameTo(), currentChannelMask());
+}
+
+QString TTAudioRepairDialog::donorFile() const
+{
+  const int donor = mFillFound ? mFillItem.donorTrack() : -1;
+  if (!mAvItem || donor < 0 || donor >= mAvItem->audioCount() || !mAvItem->audioStreamAt(donor)) return QString();
+  return mAvItem->audioStreamAt(donor)->filePath();
+}
+
+void TTAudioRepairDialog::searchDonorFill()
+{
+  mFillFound = false;
+  mFillMessage.clear();
+  const int donor = mCmbDonor->currentIndex() >= 0 ? mCmbDonor->currentData().toInt() : -1;
+  if (!mAvItem || donor < 0 || donor >= mAvItem->audioCount()) {
+    mFillMessage = tr("There is no suitable donor track.");
+    showDonorFill();
+    return;
+  }
+
+  QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+  const TTAudioRepair::DonorFillSearch found = TTAudioRepair::findDonorFill(
+      mAudioFile, mTrackIndex, mMarkerFrom, mMarkerTo, mAvItem->audioStreamAt(donor)->filePath(), donor,
+      mAvItem->expectedDonorShift(mTrackIndex, donor));
+  QGuiApplication::restoreOverrideCursor();
+
+  switch (found.status) {
+  case TTAudioRepair::DonorFillStatus::Found:
+    // Inside the marker's frames, so that the repair stays linked to its marker.
+    if (found.item.frameTo() < mMarkerFrom || found.item.frameFrom() > mMarkerTo) {
+      mFillMessage = tr("The hole lies next to the marker.");
+    } else {
+      mFillItem = found.item;
+      mFillFound = true;
+    }
+    break;
+  case TTAudioRepair::DonorFillStatus::NoHole:            mFillMessage = tr("No hole found."); break;
+  case TTAudioRepair::DonorFillStatus::NoSound:           mFillMessage = tr("There is no sound next to the hole to compare with."); break;
+  case TTAudioRepair::DonorFillStatus::FormatChange:      mFillMessage = tr("The audio format changes next to the hole."); break;
+  case TTAudioRepair::DonorFillStatus::UnsupportedLayout: mFillMessage = tr("This audio format cannot be filled."); break;
+  case TTAudioRepair::DonorFillStatus::DonorUnreadable:   mFillMessage = tr("The donor track cannot be read."); break;
+  case TTAudioRepair::DonorFillStatus::Error:             mFillMessage = found.error; break;   // the track's file error, as it is
+  }
+  if (!found.error.isEmpty())
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Donor-fill search on track %1 with donor track %2: %3").arg(mTrackIndex + 1).arg(donor + 1).arg(found.error));
+  showDonorFill();
+}
+
+void TTAudioRepairDialog::showDonorFill()
+{
+  if (mFillFound) {
+    const double rate = mSamplesPerMs * 1000.0;
+    const qint64 expected = mAvItem ? mAvItem->expectedDonorShift(mTrackIndex, mFillItem.donorTrack()) : 0;
+    const QLocale locale;
+    mLblHole->setText(QTime(0, 0).addMSecs(int(mFillItem.holeStart() * 1000.0 / rate)).toString("h:mm:ss.zzz") + ", "
+                      + locale.toString((mFillItem.holeEnd() - mFillItem.holeStart()) * 1000.0 / rate, 'f', 1) + tr(" ms"));
+    mLblShift->setText(locale.toString((mFillItem.donorShift() - expected) * 1000.0 / rate, 'f', 1) + tr(" ms"));
+    mLblMatch->setText(locale.toString(mFillItem.match(), 'f', 2));
+    const bool hint = mFillItem.match() < kDonorFillHintMatch;
+    mLblFillMessage->setText(hint ? tr("The donor track hardly matches here, the fill gains little.") : QString());
+    mLblFillMessage->setVisible(hint);
+  } else {
+    mLblHole->setText(QStringLiteral("-"));
+    mLblShift->setText(QStringLiteral("-"));
+    mLblMatch->setText(QStringLiteral("-"));
+    mLblFillMessage->setText(mFillMessage);
+    mLblFillMessage->setVisible(true);
+  }
+  mBtnPlan->setEnabled(mFillFound);
+  mBtnPlayRepaired->setEnabled(mFillFound);
 }
 
 void TTAudioRepairDialog::onMpvError(const QString& message)
@@ -514,7 +638,7 @@ QString TTAudioRepairDialog::writePreviewWindow(bool repaired, QString* error)
   TTAudioRepair::FrameTable table;
   if (repaired) {
     QString buildError;
-    table = TTAudioRepair::buildRepairTable(mAudioFile, item, /*targetAcmod=*/-1, &buildError);
+    table = TTAudioRepair::buildRepairTable(mAudioFile, item, /*targetAcmod=*/-1, &buildError, donorFile());
     if (!buildError.isEmpty()) {
       *error = buildError;
       return QString();
@@ -593,7 +717,9 @@ void TTAudioRepairDialog::accept()
   }
 
   const TTAudioRepairItem item = currentItem();
-  if (!mFadeOut) {
+  // Nothing to plan (the button is disabled then; a key press must not get through either).
+  if (mDonorFill && !mFillFound) return;
+  if (!mFadeOut && !mDonorFill) {
     if (item.frameTo() < item.frameFrom()) {
       QMessageBox::warning(this, tr("Audio repair"), tr("End must not be before start."));
       return; // keep the dialog open, AVItem stays untouched
@@ -611,7 +737,7 @@ void TTAudioRepairDialog::accept()
   // in the source layout.
   if (!mAudioFile.isEmpty()) {
     QString buildError;
-    TTAudioRepair::buildRepairTable(mAudioFile, item, /*targetAcmod=*/-1, &buildError);
+    TTAudioRepair::buildRepairTable(mAudioFile, item, /*targetAcmod=*/-1, &buildError, donorFile());
     if (!buildError.isEmpty()) {
       QMessageBox::warning(this, tr("Audio repair"),
                            tr("This repair cannot be applied:\n%1").arg(buildError));

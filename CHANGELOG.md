@@ -4,6 +4,21 @@ All notable changes to TTCut-ng are documented in this file.
 
 ## Unreleased
 
+### Added
+- **A hole in the sound can be filled from a second audio track.** The
+  anomaly scan reports short holes in the AC3 track ("Loch im Ton"); such a
+  marker now offers "Repair..." when the video has another two-channel
+  48 kHz track (MP2 or AC3 2.0). The dialog finds the hole, where the same
+  sound lies in the donor track and how loud it must be; the only thing to
+  choose is the donor track. In a 5.1 track the centre is filled from the
+  donor's mid, in a stereo track left from left and right from right, with
+  2 ms cross-fades; all other channels stay untouched. The dialog shows how
+  well the donor matches at that place and says so when the fill would gain
+  little. Measured on the two holes of one recording (17 ms each): the
+  program finds the same hole, shift and level as the reference measurement
+  to 3 samples. The repair is stored in the project file; when its donor
+  track is removed it is disabled, not dropped.
+
 ### Fixed
 - **Audio sits on the picture again after demuxing.** In the cut MKV the
   sound was off the picture compared with the original recording — measured

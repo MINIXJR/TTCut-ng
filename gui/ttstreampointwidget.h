@@ -12,6 +12,9 @@
 
 #include <QWidget>
 #include <QList>
+#include <QPointer>
+
+#include "../data/ttavlist.h"
 
 class QListView;
 class QMenu;
@@ -40,7 +43,12 @@ public:
   //! repair belongs to and whether one already covers a given marker.
   //! nullptr while no project is open, in which case those entries are
   //! omitted entirely.
-  void setAVItem(TTAVItem* avItem) { mpAvItem = avItem; }
+  void setAVItem(TTAVItem* avItem);
+
+  //! What a marker says about a repair that is not applied: that its donor
+  //! track is missing (a fill whose donor is no two-channel 48 kHz track of
+  //! the item), else that it no longer fits the audio file.
+  static QString disabledRepairSuffix(const TTAVItem* item, const TTAudioRepairItem& repair);
 
   //! Same list TTAVData::extraFrameIndices() exposes (MPEG-2 field-picture
   //! extras), injected alongside setAVItem() so the AudioAnomaly repair
@@ -65,6 +73,9 @@ private slots:
   void onItemDoubleClicked(const QModelIndex& index);
   void onContextMenu(const QPoint& pos);
   void onDeleteKey();
+  //! A track-list change disabled a repair (a fill whose donor was removed):
+  //! its marker says so instead of "(repair planned)".
+  void refreshRepairSuffixes();
 
 public:
   //! Texts of the actions the context menu offers for a row (harnesses).
@@ -95,7 +106,7 @@ private:
   QPushButton*        mBtnDeleteAll;
   QLabel*             mLblStatus;
   bool                mAnalysisRunning;
-  TTAVItem*           mpAvItem = nullptr;
+  QPointer<TTAVItem>  mpAvItem;   // null once the item is deleted
   QList<int>          mExtraFrameIndices;
 
   // Settings widgets

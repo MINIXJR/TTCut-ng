@@ -20,10 +20,43 @@
 #include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavstream.h"
 #include "../common/ttexception.h"
+#include "../avstream/ttac3audioheader.h"
+#include "../avstream/ttmpegaudioheader.h"
+#include "../avstream/ttesinfo.h"
+#include "../common/ttmessagelogger.h"
+#include "../extern/ttdonorfill.h"
+
+#include <QFileInfo>
+#include <QTime>
 
 #include <QList>
 #include <QDir>
 #include <QDebug>
+
+namespace {
+
+// What a donor fill can read: two channels at 48 kHz, MPEG layer II or AC3
+// 2.0. An MP2 track in dual-channel mode counts, deliberately (spec
+// 2026-10-10).
+bool isDonorCandidate(TTAudioStream* stream)
+{
+  TTAudioHeader* header = stream ? stream->headerAt(0) : nullptr;
+  if (!header || header->sampleRate() != 48000) return false;
+  if (const TTAC3AudioHeader* ac3 = dynamic_cast<const TTAC3AudioHeader*>(header))
+    return AC3AudioCodingMode[ac3->acmod & 7] == 2 && !ac3->lfeon;
+  if (const TTMpegAudioHeader* mpeg = dynamic_cast<const TTMpegAudioHeader*>(header))
+    return mpeg->layer == 2 && mpeg->mode != 3;       // header bits: layer 2 = II, mode 3 = one channel
+  return false;
+}
+
+// Samples the track holds, to one frame: from the start time of its last frame.
+qint64 trackSamples(TTAudioStream* stream)
+{
+  const qint64 perFrame = stream->streamType() == TTAVTypes::ac3_audio ? 1536 : 1152;
+  return qint64(QTime(0, 0).msecsTo(stream->streamLengthTime())) * 48 + 2 * perFrame;
+}
+
+} // namespace
 
 /* /////////////////////////////////////////////////////////////////////////////
  * TTAVItem
@@ -104,11 +137,17 @@ void TTAVItem::remapAudioRepairTracks(const std::function<int(int)>& newTrack)
   for (const TTAudioRepairItem& repair : mAudioRepairs) {
     const int track = newTrack(repair.trackIndex());
     if (track < 0) continue;
-    TTAudioRepairItem moved = repair;     // keeps method, fade values and the enabled flag
+    TTAudioRepairItem moved = repair;     // keeps method, values and the enabled flag
     moved.setTrackIndex(track);
+    if (moved.isDonorFill() && moved.donorTrack() >= 0 && !moved.donorIsSavedOrder()) {
+      const int donor = newTrack(moved.donorTrack());
+      moved.setDonorTrack(donor);
+      if (donor < 0) moved.setEnabled(false);   // the donor is gone: keep the repair, do not apply it
+    }
     updatedRepairs.append(moved);
   }
   mAudioRepairs = updatedRepairs;
+  emit audioRepairsChanged();
 }
 
 void TTAVItem::onSwapAudioItems(int oldIndex, int newIndex)
@@ -313,6 +352,78 @@ int TTAVItem::firstAc3TrackIndex() const
     if (candidate && candidate->streamType() == TTAVTypes::ac3_audio) return i;
   }
   return -1;
+}
+
+QList<int> TTAVItem::donorCandidateTracks(int repairedTrack) const
+{
+  QList<int> tracks;
+  if (repairedTrack < 0 || repairedTrack >= audioCount()) return tracks;
+  TTAudioStream* repaired = audioStreamAt(repairedTrack);
+  TTAudioHeader* header = repaired ? repaired->headerAt(0) : nullptr;
+  if (!header || header->sampleRate() != 48000) return tracks;
+  for (int i = 0; i < audioCount(); ++i)
+    if (i != repairedTrack && isDonorCandidate(audioStreamAt(i))) tracks.append(i);
+  return tracks;
+}
+
+int TTAVItem::presetDonorTrack(int repairedTrack) const
+{
+  const QList<int> candidates = donorCandidateTracks(repairedTrack);
+  if (candidates.isEmpty()) return -1;
+  const QString language = audioListItemAt(repairedTrack).getLanguage();
+  if (!language.isEmpty())
+    for (int track : candidates)
+      if (audioListItemAt(track).getLanguage() == language) return track;
+  return candidates.first();
+}
+
+qint64 TTAVItem::expectedDonorShift(int repairedTrack, int donorTrack) const
+{
+  if (!mpVideoStream || repairedTrack < 0 || repairedTrack >= audioCount()
+      || donorTrack < 0 || donorTrack >= audioCount()) return 0;
+  const TTESInfoTiming timing = TTESInfo::timingForVideo(mpVideoStream->filePath());
+  auto offsetMs = [&](int track) {
+    return timing.trackStartOffsetMs.value(QFileInfo(audioStreamAt(track)->filePath()).fileName(), 0);
+  };
+  // A positive offset: the track belongs later than its file plays it. A
+  // donor that belongs later carries the same sound earlier in its file.
+  return qint64(offsetMs(repairedTrack) - offsetMs(donorTrack)) * 48;
+}
+
+int TTAVItem::resolveLoadedDonorFills()
+{
+  int disabled = 0;
+  for (TTAudioRepairItem& repair : mAudioRepairs) {
+    if (!repair.isDonorFill() || !repair.donorIsSavedOrder()) continue;
+    repair.setDonorIsSavedOrder(false);
+
+    // The saved position is the <Order> the donor's track was loaded with.
+    const int savedOrder = repair.donorTrack();
+    int donor = -1;
+    for (int i = 0; i < audioCount() && donor < 0; ++i)
+      if (audioListItemAt(i).order() == savedOrder) donor = i;
+    repair.setDonorTrack(donor);
+
+    QString reason;
+    if (donor < 0) {
+      reason = QString("its donor track (saved at position %1) is not among the loaded tracks").arg(savedOrder + 1);
+    } else if (!donorCandidateTracks(repair.trackIndex()).contains(donor)) {
+      reason = QString("its donor track %1 is not a two-channel 48 kHz track of this video").arg(donor + 1);
+    } else if (repair.isEnabled()) {      // its values passed the load validation
+      const int crossFade = TTDonorFill::crossFadeSamples(48000);
+      const qint64 first = repair.holeStart() - crossFade + repair.donorShift();
+      const qint64 last  = repair.holeEnd() + crossFade + repair.donorShift();
+      if (first < 0 || last > trackSamples(audioStreamAt(donor)))
+        reason = QString("its values point outside the donor track %1").arg(donor + 1);
+    }
+    if (reason.isEmpty() || !repair.isEnabled()) continue;
+    repair.setEnabled(false);
+    ++disabled;
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Audio track %1: donor-fill repair %2-%3 is disabled: %4")
+            .arg(repair.trackIndex() + 1).arg(repair.frameFrom()).arg(repair.frameTo()).arg(reason));
+  }
+  return disabled;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

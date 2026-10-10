@@ -191,6 +191,7 @@ mpv_loadfile_args      tux   300  test_mpv_loadfile_args
 mpv_channels           unit  300  test_mpv_channels
 subtitle_delay         tux   600  test_subtitle_delay
 audiorepair_persist    tux   600  test_audiorepair_persist
+donorfill_app          tux   600  test_donorfill_app
 track_persist          tux   600  test_track_persist
 track_gui              tux   600  test_track_gui
 preview_drift_rows     tux   600  test_preview_drift_rows
@@ -797,6 +798,7 @@ gate_mpv_loadfile_args() { need "$V264" "$SRT"; mkdir -p "$W/kömma, tést"; cp 
                            "$D/test_mpv_loadfile_args" "$V264" "$W/kömma, tést/a,b_deu.srt"; }
 gate_subtitle_delay()      { need "$A264"; "$D/test_subtitle_delay" "$A264" "$W"; }
 gate_audiorepair_persist() { need "$TESTDATA/tux_test.ttcut"; "$D/test_audiorepair_persist" "$W"; }
+gate_donorfill_app() { need "$TESTDATA/tux_test.264"; "$D/test_donorfill_app" "$W"; }
 gate_track_persist()       { need "$TESTDATA/tux_test.264"; "$D/test_track_persist" "$W"; }
 gate_track_gui()           { need "$TESTDATA/tux_test.264"; "$D/test_track_gui" "$W"; }
 gate_preview_drift_rows() { need "$TESTDATA/tux_test.264"; "$D/test_preview_drift_rows" "$W"; }

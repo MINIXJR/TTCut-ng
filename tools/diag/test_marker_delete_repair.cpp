@@ -23,6 +23,9 @@
 //   usage: test_marker_delete_repair <workdir>
 //
 // Build via `cmake --build build --target test_marker_delete_repair`.
+#include <QProcess>
+#include <QFileInfo>
+#include "gui/ttaudiotreeview.h"
 #include <QAbstractButton>
 #include <QApplication>
 #include <QDir>
@@ -275,6 +278,92 @@ int main(int argc, char** argv)
             "7: the dialog has no \"Go to frame\" button: " + dialogButtons.join(" | "));
     }
     menuDriver.stop();
+
+    // 8. With a second, two-channel track a hole offers the fill; a fill
+    // whose donor is removed is marked, can be removed and - without any
+    // donor left - not edited.
+    const QString donor = QStringLiteral("/usr/local/src/CLAUDE_TMP/TTCut-ng/donorfill_sample/donor51_300.mp2");
+    if (!QFileInfo::exists(donor))
+      QProcess::execute(QStringLiteral("/usr/local/src/TTCut-ng/tools/diag/make_donorfill_sample.sh"),
+                        {QFileInfo(donor).absolutePath()});
+    const QString project8 = dir.absoluteFilePath("fill.ttcut");
+    {
+      QFile f8(project8);
+      if (!f8.open(QIODevice::WriteOnly | QIODevice::Truncate)) { check(false, "8: write project"); return 1; }
+      QTextStream o5(&f8);
+      // A fill of 400 samples in AC3 frame 300 (samples 461000..461400, inside
+      // the donor's 20 s), donor at list position 1.
+      o5 << "<!DOCTYPE TTCut-Projectfile>\n<TTCut-Projectfile>\n <Version>1.0</Version>\n <Video>\n  <Order>0</Order>\n"
+         << "  <Name>" << dir.absoluteFilePath("rep.264") << "</Name>\n"
+         << "  <Audio><Order>0</Order><Name>" << dir.absoluteFilePath("rep.ac3") << "</Name>\n"
+         << "   <Repair><FrameFrom>300</FrameFrom><FrameTo>300</FrameTo><Channels>3</Channels><Method>donor-fill</Method>"
+            "<Donor>1</Donor><HoleStart>461000</HoleStart><HoleEnd>461400</HoleEnd><DonorShift>0</DonorShift>"
+            "<Gain>1</Gain><Gain>1</Gain><Match>0.97</Match></Repair>\n"
+         << "  </Audio>\n  <Audio><Order>1</Order><Name>" << donor << "</Name></Audio>\n </Video>\n"
+         << " <StreamPoint><Frame>800</Frame><Type>AudioAnomaly</Type><Description>hole (repair planned)</Description>"
+            "<Confidence>0.90</Confidence><Duration>0.10</Duration><AudioFrameFrom>299</AudioFrameFrom>"
+            "<AudioFrameTo>301</AudioFrameTo><AnomalyKind>Hole</AnomalyKind></StreamPoint>\n"
+         << " <StreamPoint><Frame>300</Frame><Type>AudioAnomaly</Type><Description>hole</Description>"
+            "<Confidence>0.90</Confidence><Duration>0.10</Duration><AudioFrameFrom>475</AudioFrameFrom>"
+            "<AudioFrameTo>477</AudioFrameTo><AnomalyKind>Hole</AnomalyKind></StreamPoint>\n"
+         << "</TTCut-Projectfile>\n";
+    }
+    window.openProjectFile(project8);
+    pump(5000);
+    check(model->rowCount() == 2, QString("8: two hole markers loaded (got %1)").arg(model->rowCount()));
+    check(offers(300, "Repair..."), "8: a hole with a donor track: the fill is offered");
+    check(offers(800, "Edit repair...") && offers(800, "Remove repair"), "8: a hole with a fill: edit and remove");
+    check(model->pointAt(rowAt(800)).description() == "hole (repair planned)", "8: the fill loaded enabled, the marker text is unchanged");
+    auto* audioView = window.findChild<TTAudioTreeView*>();
+    check(audioView != nullptr, "8: audio list found");
+    if (audioView) {
+      emit audioView->removeItem(1);                        // the donor
+      pump(300);
+      const QString text = model->pointAt(rowAt(800)).description();
+      check(text == "hole (repair DISABLED - its donor track is missing)",
+            "8: removing the donor says on the marker that the donor track is missing: " + text);
+      check(!offers(800, "Edit repair...") && offers(800, "Remove repair"), "8: without a donor the fill can be removed, not edited");
+      check(!offers(300, "Repair..."), "8: without a donor a hole offers no repair");
+    }
+
+    // 8b. The same when a project is loaded: a fill whose donor is not among
+    // the tracks says so on its marker; one whose values do not fit its
+    // frame range keeps the text of a repair that no longer fits the file.
+    const QString project8b = dir.absoluteFilePath("fill_load.ttcut");
+    {
+      QFile f8b(project8b);
+      if (!f8b.open(QIODevice::WriteOnly | QIODevice::Truncate)) { check(false, "8b: write project"); return 1; }
+      QTextStream o8(&f8b);
+      auto fill = [&](int from, int to, qint64 holeStart, int donorOrder) {
+        o8 << "   <Repair><FrameFrom>" << from << "</FrameFrom><FrameTo>" << to << "</FrameTo><Channels>3</Channels>"
+              "<Method>donor-fill</Method><Donor>" << donorOrder << "</Donor><HoleStart>" << holeStart << "</HoleStart>"
+              "<HoleEnd>" << holeStart + 400 << "</HoleEnd><DonorShift>0</DonorShift><Gain>1</Gain><Gain>1</Gain>"
+              "<Match>0.97</Match></Repair>\n";
+      };
+      auto holeMarker = [&](int frame, int from) {
+        o8 << " <StreamPoint><Frame>" << frame << "</Frame><Type>AudioAnomaly</Type><Description>hole (repair planned)"
+              "</Description><Confidence>0.90</Confidence><Duration>0.10</Duration><AudioFrameFrom>" << from
+           << "</AudioFrameFrom><AudioFrameTo>" << from + 2 << "</AudioFrameTo><AnomalyKind>Hole</AnomalyKind></StreamPoint>\n";
+      };
+      o8 << "<!DOCTYPE TTCut-Projectfile>\n<TTCut-Projectfile>\n <Version>1.0</Version>\n <Video>\n  <Order>0</Order>\n"
+         << "  <Name>" << dir.absoluteFilePath("rep.264") << "</Name>\n"
+         << "  <Audio><Order>0</Order><Name>" << dir.absoluteFilePath("rep.ac3") << "</Name>\n";
+      fill(300, 300, 461000, 5);       // donor order 5: no such track
+      fill(475, 480, 730000, 1);       // the values give frame 475 alone
+      o8 << "  </Audio>\n  <Audio><Order>1</Order><Name>" << donor << "</Name></Audio>\n </Video>\n";
+      holeMarker(800, 299);
+      holeMarker(300, 475);
+      o8 << "</TTCut-Projectfile>\n";
+    }
+    window.openProjectFile(project8b);
+    pump(5000);
+    check(model->rowCount() == 2, QString("8b: two markers loaded (got %1)").arg(model->rowCount()));
+    if (model->rowCount() == 2) {
+      check(model->pointAt(rowAt(800)).description() == "hole (repair DISABLED - its donor track is missing)",
+            "8b: a loaded fill without its donor says so: " + model->pointAt(rowAt(800)).description());
+      check(model->pointAt(rowAt(300)).description() == "hole (repair DISABLED - it no longer fits the audio file)",
+            "8b: a loaded fill with unfitting values keeps the other text: " + model->pointAt(rowAt(300)).description());
+    }
   }
 
   printf("%s (%d failure%s)\n", gFailures ? "FAIL" : "PASS", gFailures, gFailures == 1 ? "" : "s");

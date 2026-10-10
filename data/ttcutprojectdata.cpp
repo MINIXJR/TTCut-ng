@@ -27,6 +27,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QVector>
 
 namespace {
 // Validate a file-path read from a .ttcut project. Project files may carry
@@ -311,6 +312,11 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
       qint64  fadeEnd = 0;
       int     fadeLength = 0;
       int     silence = 0;
+      int     donor = -1;
+      qint64  holeStart = 0, holeEnd = 0, donorShift = 0;
+      QVector<double> gains;
+      double  match = 0.0;
+      int     fillValues = 0;      // of Donor, HoleStart, HoleEnd, DonorShift, Match: how many were there
       for (int r = 0; r < repairNodes.size(); r++) {
         QDomElement relem = repairNodes.at(r).toElement();
         if (relem.isNull()) continue;
@@ -321,6 +327,12 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
         else if (relem.tagName() == "FadeEnd")    fadeEnd = relem.text().toLongLong();
         else if (relem.tagName() == "FadeLength") fadeLength = relem.text().toInt();
         else if (relem.tagName() == "Silence")    silence = relem.text().toInt();
+        else if (relem.tagName() == "Donor")      { donor = relem.text().toInt(); ++fillValues; }
+        else if (relem.tagName() == "HoleStart")  { holeStart = relem.text().toLongLong(); ++fillValues; }
+        else if (relem.tagName() == "HoleEnd")    { holeEnd = relem.text().toLongLong(); ++fillValues; }
+        else if (relem.tagName() == "DonorShift") { donorShift = relem.text().toLongLong(); ++fillValues; }
+        else if (relem.tagName() == "Match")      { match = relem.text().toDouble(); ++fillValues; }
+        else if (relem.tagName() == "Gain")       gains.append(relem.text().toDouble());
       }
       // trackIndex = order: the visible <Order> position this Audio section
       // was saved at, which is exactly the position sortByProjectOrder()
@@ -328,6 +340,18 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
       // TTAVData::onOpenAudioFinished).
       TTAudioRepairItem repair(order, frameFrom, frameTo, channelMask, method);
       if (repair.isFadeOut()) repair.setFadeOut(fadeEnd, fadeLength, silence);
+      if (method == QLatin1String(TTAudioRepairItem::kMethodDonorFill)) {
+        repair.setDonorFill(donor, holeStart, holeEnd, donorShift, gains, match);
+        // <Donor> is the donor's saved list position; which track that is
+        // shows only when all tracks are loaded (one may fail to open).
+        repair.setDonorIsSavedOrder(true);
+        // A value that was not in the file must not pass as 0: no gains
+        // is a count the validation below refuses.
+        if (fillValues != 5) {
+          repair.setDonorFill(donor, holeStart, holeEnd, donorShift, QVector<double>(), match);
+          repair.setDonorIsSavedOrder(true);
+        }
+      }
       repairs.append(repair);
     }
   }
@@ -363,7 +387,8 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
       // The method is evaluated: a repair this build does not know, or a
       // fade-out whose three values are missing or do not fit its frame
       // range, is never applied as something else.
-      if (!repair.isFadeOut() && repair.method() != QLatin1String(TTAudioRepairItem::kMethodSilenceFade)) {
+      if (!repair.isFadeOut() && !repair.isDonorFill()
+          && repair.method() != QLatin1String(TTAudioRepairItem::kMethodSilenceFade)) {
         disableRepair(repair, QString("repair %1-%2 on '%3' has the unknown method '%4' - disabling this "
                                       "repair entry instead of applying it as something else")
                                   .arg(repair.frameFrom()).arg(repair.frameTo()).arg(name, repair.method()));
@@ -379,6 +404,17 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
           disableRepair(repair, QString("fade-out repair %1-%2 on '%3' has missing values or values that do not "
                                         "fit its frame range - disabling this repair entry")
                                     .arg(repair.frameFrom()).arg(repair.frameTo()).arg(name));
+          continue;
+        }
+      }
+      if (repair.isDonorFill()) {
+        // 48 kHz as for the fade-out. Whether the donor is among the tracks
+        // is known only once they are loaded
+        // (TTAVItem::resolveLoadedDonorFills at the end of loading).
+        const QString problem = TTAudioRepair::donorFillProblem(repair, 48000);
+        if (!problem.isEmpty()) {
+          disableRepair(repair, QString("donor-fill repair %1-%2 on '%3': %4 - disabling this repair entry")
+                                    .arg(repair.frameFrom()).arg(repair.frameTo()).arg(name, problem));
           continue;
         }
       }
@@ -551,6 +587,17 @@ QDomElement TTCutProjectData::writeRepairSection(QDomElement& parent, const TTAu
     addTextElement(repairElem, "FadeEnd", QString::number(repair.fadeEnd()));
     addTextElement(repairElem, "FadeLength", QString::number(repair.fadeLength()));
     addTextElement(repairElem, "Silence", QString::number(repair.silenceLength()));
+  }
+
+  // A donor fill: the donor's list position and its values, in samples.
+  if (repair.isDonorFill()) {
+    addTextElement(repairElem, "Donor", QString::number(repair.donorTrack()));
+    addTextElement(repairElem, "HoleStart", QString::number(repair.holeStart()));
+    addTextElement(repairElem, "HoleEnd", QString::number(repair.holeEnd()));
+    addTextElement(repairElem, "DonorShift", QString::number(repair.donorShift()));
+    for (double gain : repair.gains())
+      addTextElement(repairElem, "Gain", QString::number(gain, 'g', 8));
+    addTextElement(repairElem, "Match", QString::number(repair.match(), 'g', 6));
   }
 
   return repairElem;

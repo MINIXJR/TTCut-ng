@@ -133,11 +133,14 @@ bool TTStreamPoint::stripSuffixVariant(QString& desc, const QStringList& variant
 
 QStringList TTStreamPoint::repairDisabledSuffixVariants()
 {
-  // Source EN string (TTCutMainWindow::onStreamPointsLoaded()) plus every
-  // shipped translation (trans/ttcut-ng_de_DE.ts, context TTCutMainWindow).
+  // The two source EN strings (TTStreamPointWidget::disabledRepairSuffix())
+  // plus every shipped translation (trans/ttcut-ng_de_DE.ts, context
+  // TTStreamPointWidget).
   static const QStringList variants = {
     QStringLiteral(" (repair DISABLED - it no longer fits the audio file)"),
-    QStringLiteral(" (Reparatur ABGESCHALTET – sie passt nicht mehr zur Tondatei)")
+    QStringLiteral(" (Reparatur ABGESCHALTET – sie passt nicht mehr zur Tondatei)"),
+    QStringLiteral(" (repair DISABLED - its donor track is missing)"),
+    QStringLiteral(" (Reparatur ABGESCHALTET – die Spenderspur fehlt)")
   };
   return variants;
 }

@@ -1373,7 +1373,6 @@ void TTCutMainWindow::onStreamPointsLoaded(const QList<TTStreamPoint>& points)
       double fps = mpCurrentAVDataItem->videoStream()
                      ? mpCurrentAVDataItem->videoStream()->frameRate() : 25.0;
       const QList<int> extras = mpAVData->extraFrameIndices();
-      const QString disabled = tr(" (repair DISABLED - it no longer fits the audio file)");
 
       for (TTStreamPoint& pt : annotated) {
         if (pt.type() != StreamPointType::AudioAnomaly) continue;
@@ -1392,7 +1391,7 @@ void TTCutMainWindow::onStreamPointsLoaded(const QList<TTStreamPoint>& points)
           // marker reloaded from a project last annotated in a different UI
           // language already carries it, just spelled differently.
           if (!TTStreamPoint::hasSuffixVariant(desc, TTStreamPoint::repairDisabledSuffixVariants()))
-            desc += disabled;
+            desc += TTStreamPointWidget::disabledRepairSuffix(mpCurrentAVDataItem, r);
           pt.setDescription(desc);
           markedDisabled++;
           break;

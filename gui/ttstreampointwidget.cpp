@@ -215,11 +215,17 @@ void TTStreamPointWidget::buildContextMenu(QMenu& menu, const QModelIndex& index
         // An existing repair can always be edited and removed - the marker
         // is the only handle on it. A new one is not offered for every kind
         // of anomaly marker (TTStreamPoint::offersNewAudioRepair).
+        // A hole is filled from a second track: that repair needs a donor
+        // candidate, to plan it and to edit it.
+        const bool donorThere = !mpAvItem->donorCandidateTracks(acts.repairTrackIndex).isEmpty();
         if (acts.repairIndex >= 0) {
+          const bool fill = mpAvItem->audioRepairList().at(acts.repairIndex).isDonorFill();
           menu.addSeparator();
-          acts.actEditRepair = menu.addAction(tr("Edit repair..."));
+          if (!fill || donorThere)
+            acts.actEditRepair = menu.addAction(tr("Edit repair..."));
           acts.actRemoveRepair = menu.addAction(tr("Remove repair"));
-        } else if (point.offersNewAudioRepair()) {
+        } else if (point.offersNewAudioRepair()
+                   || (point.audioAnomalyKind() == AudioAnomalyKind::Hole && donorThere)) {
           menu.addSeparator();
           acts.actRepair = menu.addAction(tr("Repair..."));
         }
@@ -255,6 +261,8 @@ void TTStreamPointWidget::handleContextAction(const QAction* chosen, const QMode
     TTAudioRepairDialog dlg(mpAvItem, pt, acts.repairTrackIndex, mExtraFrameIndices, this);
     if (dlg.exec() == QDialog::Accepted) {
       QString desc = pt.description();
+      // A fill that was disabled and is planned anew is no longer disabled.
+      TTStreamPoint::stripSuffixVariant(desc, TTStreamPoint::repairDisabledSuffixVariants());
       // Check every known-language variant (residuals R6) - a marker
       // reloaded from a project saved in a different UI language already
       // carries a suffix tr() in THIS session would not recognize.
@@ -282,4 +290,34 @@ void TTStreamPointWidget::onDeleteKey()
   if (!index.isValid()) return;
 
   emit deleteRequested(index.row());
+}
+
+void TTStreamPointWidget::setAVItem(TTAVItem* avItem)
+{
+  if (mpAvItem == avItem) return;
+  if (mpAvItem) disconnect(mpAvItem, &TTAVItem::audioRepairsChanged, this, &TTStreamPointWidget::refreshRepairSuffixes);
+  mpAvItem = avItem;
+  if (mpAvItem) connect(mpAvItem, &TTAVItem::audioRepairsChanged, this, &TTStreamPointWidget::refreshRepairSuffixes);
+}
+
+void TTStreamPointWidget::refreshRepairSuffixes()
+{
+  if (!mpAvItem) return;
+  const QList<TTAudioRepairItem> repairs = mpAvItem->audioRepairList();
+  for (int row = 0; row < mModel->rowCount(); ++row) {
+    const TTStreamPoint point = mModel->pointAt(row);
+    const int index = TTAudioRepairDialog::repairIndexForMarker(mpAvItem, point, mExtraFrameIndices);
+    if (index < 0 || repairs.at(index).isEnabled()) continue;
+    QString desc = point.description();
+    if (TTStreamPoint::hasSuffixVariant(desc, TTStreamPoint::repairDisabledSuffixVariants())) continue;
+    TTStreamPoint::stripSuffixVariant(desc, TTStreamPoint::repairPlannedSuffixVariants());
+    mModel->setDescriptionAt(row, desc + disabledRepairSuffix(mpAvItem, repairs.at(index)));
+  }
+}
+
+QString TTStreamPointWidget::disabledRepairSuffix(const TTAVItem* item, const TTAudioRepairItem& repair)
+{
+  if (repair.isDonorFill() && (!item || !item->donorCandidateTracks(repair.trackIndex()).contains(repair.donorTrack())))
+    return tr(" (repair DISABLED - its donor track is missing)");
+  return tr(" (repair DISABLED - it no longer fits the audio file)");
 }
