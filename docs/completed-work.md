@@ -2739,7 +2739,8 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     without `map` put the centre's input on FR. ffmpeg's AC3 encoder smears
     the edges of a generated hole (289–478 of 816 samples are found).
   - **Harnesses:** `test_donorfill` (gate `donorfill`), `test_donorfill_app`
-    (`donorfill_app`), case 8 of `test_marker_delete_repair`.
+    (`donorfill_app`), case 8 of `test_marker_delete_repair`. The scripts
+    behind the measurements above: `tools/diag/donor-guard/`.
   - **Pictures of the repair dialog** (all three views) come from the
     screenshot script's second run: `tools/ttcut-screenshots.sh` generates
     a 5.1 track with a C+LFE burst, a stop and a hole plus an MP2 donor
