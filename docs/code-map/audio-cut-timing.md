@@ -331,6 +331,6 @@ flowchart TD
   und PAFF-Feldpaare ausdrücklich ausschließt); Neubau danach byte-gleich zur
   Task; Spur-Delay wirkt nachweislich auf beiden Seiten (auf Rauschmaterial
   gemessen — auf einem Dauerton nicht nachweisbar, siehe Pitfall).
-  Gate `preview_clip_h264`/`preview_clip_mpeg2` vergleicht seither Paketzahl,
+  Gate `preview_clip` (Fälle `preview_clip_h264`/`preview_clip_mpeg2`) vergleicht seither Paketzahl,
   Nutzdaten und die Kanalfolge je Rahmen.
 

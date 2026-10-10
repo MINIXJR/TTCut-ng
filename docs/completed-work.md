@@ -3690,6 +3690,27 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **Gate-Läufer: ein Gate je Programm** → **DONE (2026-10-10, branch
+  `chore/one-gate-per-program`)**. The gate table had grown to 150 rows; 36
+  of them were one of several ways to run the same program (the abort
+  matrices, `test_logging`, `test_project_roundtrip`, …). The user's
+  complaint was the length of the list („Die Länge der Liste, ein Gate je
+  Programm"), not the run time (about 400 s for all gates, most of it in
+  some 20 of them).
+  - **Now:** 126 rows. Eleven gates are `cases <limit> <case>…`: every
+    former gate of such a program is a function `case_<name>` and runs as
+    before — a process of its own with its own work directory, home,
+    settings and time limit. All cases run; the gate reports the worst
+    outcome and its log one `=== case <name>: <verdict>` line per case.
+  - **Kept apart on purpose:** `encode_tempdir` (a script of its own that
+    only uses `test_mpeg2cut_abort`), and `framerate_assumed` /
+    `h26x_framerate` (one program, but one runs without video material and
+    belongs to the quick tier).
+  - **Evidence:** gate `cases_verdict` (pass, fail, missing prerequisite,
+    timeout; the case behind a failed or timed-out one still runs) — it
+    failed first on a relative `$0` after the gate's `cd` into its work
+    directory. The eleven gates: 36 case verdicts, all PASS, as the 36
+    single gates before.
 - **`--auto-cut` meldete jeden Lauf mit Exit 0** → **ERLEDIGT
   (2026-09-23)**, Zweig `fix/autocut-exit-code` (Nebenbefund aus dem
   Projektlader-Fix, User: „Exit-Code als Nächstes separat").
