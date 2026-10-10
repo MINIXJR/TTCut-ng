@@ -262,6 +262,12 @@ public:
   const QString& screenshotProject() const { return mScreenshotProject; }
   void    setScreenshotProject(const QString& v);
 
+  // Which pictures a screenshot run takes: empty = the usual set,
+  // "repair" = only the audio repair dialog (--screenshot-set). Set by
+  // the command line for the run, never stored.
+  const QString& screenshotSet() const     { return mScreenshotSet; }
+  void    setScreenshotSet(const QString& v) { mScreenshotSet = v; }
+
   // ----- Detection Thresholds group (Task 11) -----------------------------
   // Twelve fields across two existing legacy persistence groups. Three
   // nav-threshold fields extend /Settings/Navigation (Tasks 4-5). Seven
@@ -496,6 +502,7 @@ private:
   int         mQuickJumpThumbHeight = kQuickJumpThumbHeightDefault;
   QString     mScreenshotDir;               // empty by default
   QString     mScreenshotProject;           // empty by default
+  QString     mScreenshotSet;               // empty = the usual set; not stored
 
   // ----- Detection Thresholds group (Task 11) ------------------------------
   // Defaults match common/ttcut.cpp lines 184-199 verbatim.

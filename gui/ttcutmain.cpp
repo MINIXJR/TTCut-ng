@@ -188,7 +188,11 @@ int main( int argc, char **argv )
     QCommandLineOption autoCutOpt("auto-cut",
         "Load --project, perform A/V cut, write MKV to <out>, and exit. "
         "For headless QC regression.", "out");
+    QCommandLineOption screenshotSetOpt("screenshot-set",
+        "With --screenshots: take only this set of pictures. \"repair\": the audio "
+        "repair dialog, once per kind of anomaly marker of the project.", "set");
     parser.addOption(screenshotOpt);
+    parser.addOption(screenshotSetOpt);
     parser.addOption(projectOpt);
     parser.addOption(autoCutOpt);
     parser.addPositionalArgument("file", "Video or project file to open.");
@@ -198,6 +202,7 @@ int main( int argc, char **argv )
     if (parser.isSet(screenshotOpt)) {
       TTSettings::instance()->setScreenshotDir(parser.value(screenshotOpt));
       TTSettings::instance()->setScreenshotProject(parser.value(projectOpt));
+      TTSettings::instance()->setScreenshotSet(parser.value(screenshotSetOpt));
       QTimer::singleShot(500, mainWnd, &TTCutMainWindow::runScreenshotMode);
     } else if (parser.isSet(autoCutOpt) && parser.isSet(projectOpt)) {
       const QString prj = parser.value(projectOpt);

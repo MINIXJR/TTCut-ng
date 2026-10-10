@@ -2740,8 +2740,16 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     the edges of a generated hole (289–478 of 816 samples are found).
   - **Harnesses:** `test_donorfill` (gate `donorfill`), `test_donorfill_app`
     (`donorfill_app`), case 8 of `test_marker_delete_repair`.
-  - **Open:** `TODO.md` — other layouts, stored repairs after a new demux,
-    pictures of the repair dialog in the wiki.
+  - **Pictures of the repair dialog** (all three views) come from the
+    screenshot script's second run: `tools/ttcut-screenshots.sh` generates
+    a 5.1 track with a C+LFE burst, a stop and a hole plus an MP2 donor
+    (the Tux tone carries none of it — the NAS file is silence and a tone
+    at −41 dBFS, the repository's a steady tone), and
+    `--screenshot-set repair` opens the dialog once per kind of marker.
+    With noise as the sound the scan did not report a 17 ms hole (ffmpeg's
+    AC3 encoder smears its edges); with a chord of sines it does. Gate
+    `screenshots_repair`.
+  - **Open:** `TODO.md` — other layouts, stored repairs after a new demux.
 - **Tonreparatur: Ausblenden vor dem Abbruch** → **DONE (2026-10-06, Zweig
   `feature/repair-fade-out`)**. Spec und Plan (nicht im Repo):
   `docs/superpowers/{specs,plans}/2026-10-05-audio-repair-fade-out*`.

@@ -979,11 +979,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   - **Stored repairs do not follow a new demux.** After a recording is
     demuxed again its frames can sit elsewhere; a stored repair is only
     checked for lying inside the file, not for still matching the sound.
-  - **The wiki has no pictures of the repair dialog** (mute, fade-out, fill).
-    The screenshot run cannot take them yet: it does not open that dialog,
-    and the Tux material has neither anomaly markers nor a second audio
-    track. Agreed with the user on 2026-10-10 as the next step after this
-    feature.
   - **The thresholds rest on that one recording:** the 45 dB on one heard hole
     (52 dB) against three not heard (31–41 dB); the 30 dB lie between a confirmed
     click (32.4 dB) and an inconspicuous gap between two sounds (29.3 dB).

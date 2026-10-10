@@ -1,0 +1,23 @@
+<!DOCTYPE TTCut-Projectfile>
+<TTCut-Projectfile>
+ <Version>1.0</Version>
+ <Video>
+  <Order>0</Order>
+  <Name>__VIDEO_PATH__</Name>
+  <Audio>
+   <Order>0</Order>
+   <Name>__AUDIO_PATH__</Name>
+   <Language>deu</Language>
+  </Audio>
+  <Audio>
+   <Order>1</Order>
+   <Name>__DONOR_PATH__</Name>
+   <Language>deu</Language>
+  </Audio>
+  <Cut>
+   <Order>0</Order>
+   <CutIn>100</CutIn>
+   <CutOut>2800</CutOut>
+  </Cut>
+ </Video>
+</TTCut-Projectfile>
