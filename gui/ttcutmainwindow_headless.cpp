@@ -27,6 +27,7 @@
 #include "ttgotoframedialog.h"
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
+#include "../data/ttstreampointmodel.h"
 #include "../avstream/ttavtypes.h"
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -151,6 +152,60 @@ void TTCutMainWindow::endAutoCut(int exitCode)
   QApplication::quit();
 }
 
+/*!
+ * Screenshot set "repair": the audio repair dialog once per kind of anomaly
+ * marker - mute (C+LFE burst), fade-out (lasting stop), fill (hole) - on the
+ * first marker of that kind. The markers are the scan's own: the analysis
+ * runs first. The project has to bring a track with all three (and a
+ * second, two-channel track for the fill); tools/ttcut-screenshots.sh
+ * generates one.
+ */
+bool TTCutMainWindow::captureRepairDialogs()
+{
+  // A no-op while the scan started after loading is still running.
+  onAnalyzeStreamPoints();
+  QElapsedTimer timer;
+  timer.start();
+  while (mStreamPointWorkersRunning > 0 && timer.elapsed() < 60000) {
+    QApplication::processEvents();
+    QThread::msleep(100);
+  }
+  QApplication::processEvents();
+
+  const int track = mpCurrentAVDataItem ? mpCurrentAVDataItem->firstAc3TrackIndex() : -1;
+  if (track < 0) {
+    qWarning("Screenshot set repair: the project has no AC3 track");
+    return false;
+  }
+
+  struct View { AudioAnomalyKind kind; const char* file; };
+  const View views[] = {
+    { AudioAnomalyKind::LfeBurst,    "ttcutng-repair-mute.png" },
+    { AudioAnomalyKind::LastingStop, "ttcutng-repair-fadeout.png" },
+    { AudioAnomalyKind::Hole,        "ttcutng-repair-fill.png" }
+  };
+  bool all = true;
+  for (const View& view : views) {
+    int row = -1;
+    for (int i = 0; i < mpStreamPointModel->rowCount() && row < 0; ++i) {
+      const TTStreamPoint point = mpStreamPointModel->pointAt(i);
+      if (point.type() == StreamPointType::AudioAnomaly && point.audioAnomalyKind() == view.kind) row = i;
+    }
+    if (row < 0) {
+      qWarning("Screenshot set repair: no marker for %s", view.file);
+      all = false;
+      continue;
+    }
+    TTAudioRepairDialog dlg(mpCurrentAVDataItem, mpStreamPointModel->pointAt(row), track,
+                            mpAVData->extraFrameIndices(), this);
+    dlg.show();
+    QApplication::processEvents();
+    saveWidgetScreenshot(&dlg, view.file, 0);
+    dlg.close();
+  }
+  return all;
+}
+
 void TTCutMainWindow::runScreenshotMode()
 {
   // One screenshot per page of a dialog: select(i) switches to page i.
@@ -193,6 +248,12 @@ void TTCutMainWindow::runScreenshotMode()
 
   if (TTSettings::instance()->logUI())
     qDebug() << "Screenshot mode: project loaded, avCount=" << mpAVData->avCount();
+
+  // "--screenshot-set repair": only the repair dialog, nothing of the usual set.
+  if (TTSettings::instance()->screenshotSet() == QLatin1String("repair")) {
+    QApplication::exit(captureRepairDialogs() ? 0 : 1);
+    return;
+  }
 
   // 1. Main window
   saveWidgetScreenshot(this, "ttcutng-main.png", 1200);

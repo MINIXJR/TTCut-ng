@@ -2689,6 +2689,67 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Tonanomalie: Loch aus zweiter Tonspur füllen** → **DONE (2026-10-10,
+  branch `feature/audio-repair-donor-fill`)**. Spec and plans (not in the
+  repo): `docs/superpowers/specs/2026-10-10-audio-repair-donor-fill-design.md`,
+  `docs/superpowers/plans/2026-10-10-audio-repair-donor-fill-{engine,app}.md`.
+  - **Occasion:** a "Loch im Ton" marker offered no repair — muting with a
+    short fade ends as hard as the hole. The holes of 02x06 are only in the
+    AC3 track; the MP2 track plays through.
+  - **User's verdicts (2026-10-10):** on hearing samples built through the
+    program path (±3 s, original and repaired, the 5.1 hole at 3099.8 s and
+    the stereo hole at 3468.3 s), first: „Wie gehabt, ich höre das Loch
+    nicht und die Reparatur macht es für mich nicht schlechter."; after
+    listening again several times: „Ja im Original gibt es einen kaum
+    wahrnehmbaren Knacks und repariert ist er weg." The guard threshold
+    could not be set by ear (2026-10-09, pretended 17 ms holes in the
+    centre: „Bei keiner Loch Variante kann ich das Loch wahrnehmen");
+    0.80 follows from a measurement instead and was agreed as „0,80 mit
+    dem Hinweis".
+  - **Rule for the hole** (`TTDonorFill::locateHole`): per filled plane the
+    block boundary with the largest drop, then the longest run of samples
+    at or below the level before − 30 dB; shorter than 2 ms or touching
+    the edge of the region (the marker's frames ± 1) is no hole. On the two
+    real holes: 16.83 ms (centre, −14 → −70 dBFS) and 17.42 ms (stereo,
+    −24 → −75 dBFS); at 20 dB the edges move by at most 6 samples, at 40 dB
+    the hole gets up to 1.7 ms shorter and falls apart in one channel.
+  - **Fit** (`fitDonor`): 150 ms before and behind the hole, 5 ms away from
+    its edges, every shift within ±50 ms of the one the `.info` start
+    offsets predict; best correlation wins, gain by least squares. Offsets
+    measured against the prediction on three recordings (slot-rule demux):
+    −8.6 ms (02x06), −19.5 / −8.6 ms (05x05), −19.5 ms (05x08). Recordings
+    demuxed before the slot rule are out of scope (user: „Alter
+    Demux-Output interessiert mich nicht.").
+  - **Guard:** 1658 pretended 17 ms holes — above match 0.80 the fill is
+    worse than the hole in ≤ 3 % of the places (then by ≤ 1.5 dB); below
+    0.80 it gains less than 6 dB in ≥ 94 %. The Hörfilm track (`mis`)
+    cannot be told from the right one by the match.
+  - **Program against the reference** (`gate_donorfill_real.sh`, 02x06):
+    5.1 hole 148791635..148792446 (reference ..638/..446), shift −413,
+    match 0.9986, gain 1.4601; stereo hole 166476750..166477586, shift
+    −413, match 0.9842, gains 0.9803 / 0.9786.
+  - **Generated files** (`make_donorfill_sample.sh`): fill 11.7–15.0 dB
+    closer to the sound without the hole than silence; a stereo fill taken
+    from the other channel −3 dB.
+  - **Pitfalls:** libavformat skips a first MP2 frame whose header differs
+    from the second — the donor reader takes frame positions from the byte
+    position (counting packets was off by 1152 samples: shift 525 → −627).
+    `aevalsrc`'s `random(idx)` gives every index the same sequence — the
+    first set of test files carried one noise in all channels; `join`
+    without `map` put the centre's input on FR. ffmpeg's AC3 encoder smears
+    the edges of a generated hole (289–478 of 816 samples are found).
+  - **Harnesses:** `test_donorfill` (gate `donorfill`), `test_donorfill_app`
+    (`donorfill_app`), case 8 of `test_marker_delete_repair`.
+  - **Pictures of the repair dialog** (all three views) come from the
+    screenshot script's second run: `tools/ttcut-screenshots.sh` generates
+    a 5.1 track with a C+LFE burst, a stop and a hole plus an MP2 donor
+    (the Tux tone carries none of it — the NAS file is silence and a tone
+    at −41 dBFS, the repository's a steady tone), and
+    `--screenshot-set repair` opens the dialog once per kind of marker.
+    With noise as the sound the scan did not report a 17 ms hole (ffmpeg's
+    AC3 encoder smears its edges); with a chord of sines it does. Gate
+    `screenshots_repair`.
+  - **Open:** `TODO.md` — other layouts, stored repairs after a new demux.
 - **Tonreparatur: Ausblenden vor dem Abbruch** → **DONE (2026-10-06, Zweig
   `feature/repair-fade-out`)**. Spec und Plan (nicht im Repo):
   `docs/superpowers/{specs,plans}/2026-10-05-audio-repair-fade-out*`.

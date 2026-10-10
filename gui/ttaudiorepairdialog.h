@@ -18,6 +18,7 @@
 #include "../extern/ttaudiorepairitem.h"
 
 class QCheckBox;
+class QComboBox;
 class QSpinBox;
 class QLabel;
 class QPushButton;
@@ -33,11 +34,13 @@ class TTMpvWrapper;
 // The widget that opens it jumps the main window to the marker's frame
 // first (TTStreamPointWidget::handleContextAction).
 //
-// Two views, by repair method: the stored method when a repair is edited,
+// Three views, by repair method: the stored method when a repair is edited,
 // else the marker's kind. "silence-fade": channel boxes and start/end of the
 // range. "fade-out" (a lasting stop): where the fade-out ends - found by
 // TTAudioRepair::findStop, adjustable inside the marker's frames - and how
-// long it is; it applies to every channel.
+// long it is; it applies to every channel. "donor-fill" (a hole): the donor
+// track is the only input; hole, offset and match are what
+// TTAudioRepair::findDonorFill found for it.
 //
 // Code-based (no .ui file) - deliberately sidesteps this project's AUTOUIC-
 // stash-race pitfall (docs/code-map note reference_autouic_stash_race.md).
@@ -111,6 +114,15 @@ public:
   QSpinBox* fadeEndSpinBoxForTest() const    { return mSpinFadeEnd; }
   QSpinBox* fadeLengthSpinBoxForTest() const { return mSpinFadeLen; }
   QLabel*   hintLabelForTest() const         { return mLblHint; }
+  // The fill view's fields; null in the other views.
+  QComboBox*   donorComboForTest() const         { return mCmbDonor; }
+  QLabel*      holeLabelForTest() const          { return mLblHole; }
+  QLabel*      shiftLabelForTest() const         { return mLblShift; }
+  QLabel*      matchLabelForTest() const         { return mLblMatch; }
+  QLabel*      fillMessageLabelForTest() const   { return mLblFillMessage; }
+  QPushButton* planButtonForTest() const         { return mBtnPlan; }
+  QPushButton* playRepairedButtonForTest() const { return mBtnPlayRepaired; }
+  TTAudioRepairItem currentItemForTest() const   { return currentItem(); }
   // Review fix 2 (round 2): drives playFile() directly, bypassing
   // writePreviewWindow()'s own file-existence pre-check, so a harness can
   // provoke a genuine mpv-level load failure (nonexistent/unreadable path)
@@ -174,6 +186,12 @@ private:
   //! error is shown instead. The two play buttons differ only in the flag.
   void playPreview(bool repaired);
   void playFile(const QString& path);
+  // Fill view: searches the fill for the chosen donor and shows it.
+  void searchDonorFill();
+  // Fill view: labels, hint or message, and the buttons from the state below.
+  void showDonorFill();
+  // File of the donor of the fill shown; empty when there is none.
+  QString donorFile() const;
 
   TTAVItem*     mAvItem;
   TTStreamPoint mPoint;
@@ -209,6 +227,15 @@ private:
   int           mShownFadeEndMs = 0;
   quint8        mFadeMask = 0;
 
+  // Fill view. mFillItem is what would be stored; mFillMessage says why
+  // nothing can be (then mFillFound is false).
+  bool              mDonorFill = false;
+  bool              mFillFound = false;
+  TTAudioRepairItem mFillItem;
+  QString           mFillMessage;
+  qint64            mMarkerFrom = 0;         // the marker's AC3 frames
+  qint64            mMarkerTo = 0;
+
   QLabel*      mLblHeader      = nullptr;
   QCheckBox*   mChkChannel[6]  = {};       // order: FL FR C LFE SL SR
   QSpinBox*    mSpinFrom       = nullptr;
@@ -216,6 +243,12 @@ private:
   QSpinBox*    mSpinFadeEnd    = nullptr;
   QSpinBox*    mSpinFadeLen    = nullptr;
   QLabel*      mLblHint        = nullptr;
+  QComboBox*   mCmbDonor       = nullptr;
+  QLabel*      mLblHole        = nullptr;
+  QLabel*      mLblShift       = nullptr;
+  QLabel*      mLblMatch       = nullptr;
+  QLabel*      mLblFillMessage = nullptr;
+  QPushButton* mBtnPlan        = nullptr;
   QPushButton* mBtnPlayOriginal = nullptr;
   QPushButton* mBtnPlayRepaired = nullptr;
   QVBoxLayout* mMainLayout      = nullptr;

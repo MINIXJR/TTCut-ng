@@ -80,9 +80,12 @@ public:
   AudioAnomalyKind audioAnomalyKind() const { return mAudioAnomalyKind; }
   // Whether a new repair is offered for this marker: muting for an LFE
   // finding (and for a marker without a kind, which was one), a fade-out for
-  // a lasting stop. Not for a hole (nothing built yet fills one) and not for
-  // a stop whose form was not recorded. A repair that already exists behind
-  // any marker stays editable and removable.
+  // a lasting stop. Not for a stop whose form was not recorded. A hole is
+  // filled from a second track; whether that is offered depends on the
+  // item's tracks and is decided where the menu is built
+  // (TTStreamPointWidget::buildContextMenu), so this says false for it. A
+  // repair that already exists behind any marker stays editable and
+  // removable.
   bool             offersNewAudioRepair() const
                      { return mType == StreamPointType::AudioAnomaly
                            && mAudioAnomalyKind != AudioAnomalyKind::AbruptStop
@@ -127,9 +130,10 @@ public:
   // Chop the first matching variant off desc; true when one was there.
   static bool stripSuffixVariant(QString& desc, const QStringList& variants);
 
-  // Same idea as repairPlannedSuffixVariants(), for the
-  // " (repair DISABLED - it no longer fits the audio file)" suffix
-  // TTCutMainWindow::onStreamPointsLoaded() appends. Without this, a project
+  // Same idea as repairPlannedSuffixVariants(), for the two
+  // " (repair DISABLED - ...)" suffixes of
+  // TTStreamPointWidget::disabledRepairSuffix(), which
+  // TTCutMainWindow::onStreamPointsLoaded() and the widget append. Without this, a project
   // reloaded in a different UI language than the one that last annotated it
   // would fail to recognize the stored suffix and append a SECOND one in
   // the new language on top of it.

@@ -69,6 +69,27 @@ class TTAVItem : public QObject
     //! belongs to without duplicating the lookup.
     int firstAc3TrackIndex() const;
 
+    //! Donor fill (spec 2026-10-10). The tracks a hole in `repairedTrack`
+    //! can be filled from: every other track with two channels at 48 kHz
+    //! (MP2, or AC3 2.0) - in list order, empty when the repaired track is
+    //! not 48 kHz itself.
+    QList<int> donorCandidateTracks(int repairedTrack) const;
+    //! The candidate the dialog presets: the first one with the repaired
+    //! track's language, else the first one; -1 without a candidate.
+    int presetDonorTrack(int repairedTrack) const;
+    //! Where the donor's sound is expected: donor position minus track
+    //! position in samples (48 kHz), from the start offsets the .info next
+    //! to the video carries for the two files. 0 without video or .info.
+    qint64 expectedDonorShift(int repairedTrack, int donorTrack) const;
+    //! The donor fills a project file brought along name their donor by the
+    //! list position saved with it. Once the item's tracks are loaded, give
+    //! each of them the position its donor has now - a track that failed to
+    //! open leaves a gap, the ones behind it move up - and disable those
+    //! whose donor is not there, is no candidate, or whose values point
+    //! outside it. Returns how many it disabled. A fill planned in this
+    //! session is not touched.
+    int resolveLoadedDonorFills();
+
     void appendAudioEntry(TTAudioStream* aStream, int order=-1);
 
     //! Planned audio repairs (silence/interpolate fixes for detected
@@ -131,7 +152,9 @@ class TTAVItem : public QObject
 
     //! Repairs are tagged with the track index of the file they belong to.
     //! Give every repair the track newTrack(oldTrack) - or drop it when that
-    //! returns -1 - after the audio list was shortened or reordered.
+    //! returns -1 - after the audio list was shortened or reordered. A donor
+    //! fill's donor is remapped the same way; a donor that is gone disables
+    //! the fill (it is kept: the marker is the handle to plan it anew).
     void remapAudioRepairTracks(const std::function<int(int)>& newTrack);
 
   public slots:
@@ -152,6 +175,9 @@ class TTAVItem : public QObject
     void audioItemUpdated(const TTAudioItem& cItem, const TTAudioItem& uItem);
     void audioOrderUpdated(const TTAudioItem& item, int order);
     void audioItemsSwapped(int oldIndex, int newIndex);
+    //! The repair list changed through a track-list change (not through
+    //! the repair dialog): tracks renumbered, a repair dropped or disabled.
+    void audioRepairsChanged();
     void subtitleItemAppended(const TTSubtitleItem& item);
     void subtitleItemRemoved(const TTSubtitleItem& item);
     void subtitleItemRemoved(int index);

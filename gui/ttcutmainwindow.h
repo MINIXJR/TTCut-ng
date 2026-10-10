@@ -239,6 +239,9 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     //! Headless modes: pump until the project load chain has run (or
     //! timeoutMs passed); true when a project is in.
     bool waitForProjectLoad(int timeoutMs);
+    //! Screenshot set "repair": the audio repair dialog, one picture per
+    //! view. False when the project yields no marker for one of them.
+    bool captureRepairDialogs();
     void closeProject();
     void navigationEnabled(bool enabled);
     void updateRecentFileActions();

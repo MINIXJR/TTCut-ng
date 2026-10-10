@@ -2,14 +2,20 @@
 #-----------------------------------------------------------------------------
 # Generate screenshots for TTCut-ng Wiki documentation
 #
-# Usage: tools/ttcut-screenshots.sh [output-dir]
+# Usage: tools/ttcut-screenshots.sh [--repair-only] [output-dir]
 #
 # Default output: /usr/local/src/TTCut-ng.wiki/images
+#
+# Two runs of the application: the usual pictures with the Tux test project,
+# then the audio repair dialog (one picture per view) with a second project
+# whose sound carries what the dialog repairs. --repair-only does only the
+# second run.
 #
 # Prerequisites: ffmpeg, built ttcut-ng binary in build/
 #
 # TTCUT_BINARY overrides the program to run (the gate uses that to check
-# what happens when the run fails).
+# what happens when the run fails). TTCUT_QPA_PLATFORM overrides the Qt
+# platform (default xcb; "offscreen" runs without a window).
 #-----------------------------------------------------------------------------
 
 set -euo pipefail
@@ -17,6 +23,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTDATA_DIR="$SCRIPT_DIR/testdata"
+REPAIR_ONLY=0
+if [[ "${1:-}" == "--repair-only" ]]; then
+    REPAIR_ONLY=1
+    shift
+fi
 OUTPUT_DIR="${1:-/usr/local/src/TTCut-ng.wiki/images}"
 
 # Paths for generated test media
@@ -26,6 +37,13 @@ PROJECT_FILE="$TESTDATA_DIR/tux_test.ttcut"
 SVG_FILE="$PROJECT_DIR/ui/pixmaps/Tux.svg"
 TEMPLATE_FILE="$SCRIPT_DIR/ttcut-test.ttcut"
 BINARY="${TTCUT_BINARY:-$PROJECT_DIR/build/ttcut-ng}"
+PLATFORM="${TTCUT_QPA_PLATFORM:-xcb}"
+
+# Paths for the repair dialog's pictures
+REPAIR_AUDIO="$TESTDATA_DIR/tux_repair.ac3"
+REPAIR_DONOR="$TESTDATA_DIR/tux_repair.mp2"
+REPAIR_PROJECT="$TESTDATA_DIR/tux_repair.ttcut"
+REPAIR_TEMPLATE="$SCRIPT_DIR/ttcut-repair-test.ttcut"
 
 #-----------------------------------------------------------------------------
 # Preflight checks
@@ -47,6 +65,11 @@ fi
 
 if [[ ! -f "$TEMPLATE_FILE" ]]; then
     echo "ERROR: Project template not found: $TEMPLATE_FILE"
+    exit 1
+fi
+
+if [[ ! -f "$REPAIR_TEMPLATE" ]]; then
+    echo "ERROR: Project template not found: $REPAIR_TEMPLATE"
     exit 1
 fi
 
@@ -180,24 +203,78 @@ else
 fi
 mkdir -p "$TMP_SCREENSHOTS"
 
-echo "Running TTCut-ng screenshot mode..."
-echo "  Temp:    $TMP_SCREENSHOTS"
-echo "  Output:  $OUTPUT_DIR"
-echo "  Project: $PROJECT_FILE"
-
+# run_app <what> <project> [further options]: one run of the application.
 # The run's own exit status decides, not that of a filter behind it: a run
 # that failed used to end as "0 updated, 0 unchanged" with exit code 0.
-APP_LOG="$TMP_SCREENSHOTS/run.log"
-APP_RC=0
-QT_QPA_PLATFORM=xcb "$BINARY" --screenshots "$TMP_SCREENSHOTS" --project "$PROJECT_FILE" \
-    > "$APP_LOG" 2>&1 || APP_RC=$?
-grep -E "Screenshot" "$APP_LOG" || true
-if [ "$APP_RC" -ne 0 ]; then
-    echo "ERROR: screenshot run failed (exit code $APP_RC). Last lines of its output:"
-    tail -n 20 "$APP_LOG"
-    rm -rf "$TMP_SCREENSHOTS"
-    exit 1
+run_app() {
+    local what=$1 project=$2
+    shift 2
+    local log="$TMP_SCREENSHOTS/run-$what.log" rc=0
+    echo "Running TTCut-ng screenshot mode ($what)..."
+    echo "  Temp:    $TMP_SCREENSHOTS"
+    echo "  Output:  $OUTPUT_DIR"
+    echo "  Project: $project"
+    QT_QPA_PLATFORM="$PLATFORM" "$BINARY" --screenshots "$TMP_SCREENSHOTS" --project "$project" "$@" \
+        > "$log" 2>&1 || rc=$?
+    grep -E "Screenshot" "$log" || true
+    if [ "$rc" -ne 0 ]; then
+        echo "ERROR: screenshot run failed (exit code $rc). Last lines of its output:"
+        tail -n 20 "$log"
+        rm -rf "$TMP_SCREENSHOTS"
+        exit 1
+    fi
+}
+
+# no_image_check: a run that left no picture is a failed run.
+no_image_check() {
+    if ! compgen -G "$TMP_SCREENSHOTS/ttcutng-*.png" > /dev/null; then
+        echo "ERROR: the screenshot run produced no image."
+        rm -rf "$TMP_SCREENSHOTS"
+        exit 1
+    fi
+}
+
+if [ "$REPAIR_ONLY" -eq 0 ]; then
+    run_app usual "$PROJECT_FILE"
+    no_image_check
 fi
+
+#-----------------------------------------------------------------------------
+# Sound for the pictures of the repair dialog
+#
+# The dialog repairs what the anomaly scan finds, and the Tux tone above has
+# none of it. A second 5.1 track - a chord in the centre, quiet tones around
+# it, a silent LFE - carries one of each kind:
+#    20.000 s  a square burst in the centre with a 60 Hz pulse in the LFE (0.2 s)
+#    50.003 s  the sound stops in mid-wave, back after 0.5 s
+#    80.000 s  a hole of 17 ms
+# An MP2 track with the stereo downmix of the undisturbed sound is the second
+# track a hole is filled from. Measured 2026-10-10: the scan reports the three
+# as "LFE", "stop" and "hole", the stop search and the fill search find them.
+#-----------------------------------------------------------------------------
+if [[ ! -f "$REPAIR_AUDIO" || ! -f "$REPAIR_DONOR" || "$0" -nt "$REPAIR_AUDIO" ]]; then
+    echo "Generating the sound for the repair dialog's pictures..."
+    BED="$TESTDATA_DIR/tux_repair_bed.wav"
+    CHORD="0.06*(sin(2*PI*277*t)+sin(2*PI*331*t)+sin(2*PI*419*t)+sin(2*PI*523*t)+sin(2*PI*659*t))"
+    ffmpeg -y -hide_banner -loglevel warning -f lavfi \
+        -i "aevalsrc=exprs=0.02*sin(2*PI*196*t)|0.02*sin(2*PI*247*t)|$CHORD|0|0.01*sin(2*PI*147*t)|0.01*sin(2*PI*165*t):channel_layout=5.1(side):sample_rate=48000:duration=120" \
+        -c:a pcm_f32le "$BED"
+    BURST="between(t\\,20\\,20.2)"
+    GAPS="(1-between(n\\,2400144\\,2424143)-between(n\\,3840000\\,3840815))"
+    ffmpeg -y -hide_banner -loglevel warning -i "$BED" \
+        -af "aeval=val(0)*$GAPS|val(1)*$GAPS|val(2)*$GAPS+0.6*sgn(sin(2*PI*900*t))*$BURST|0.5*sin(2*PI*60*t)*$BURST|val(4)*$GAPS|val(5)*$GAPS" \
+        -c:a ac3 -b:a 384k "$REPAIR_AUDIO"
+    ffmpeg -y -hide_banner -loglevel warning -i "$BED" \
+        -af "pan=stereo|c0=c0+0.707*c2|c1=c1+0.707*c2" -c:a mp2 -b:a 192k "$REPAIR_DONOR"
+    rm -f "$BED"
+fi
+
+sed -e "s|__VIDEO_PATH__|$VIDEO_FILE|g" \
+    -e "s|__AUDIO_PATH__|$REPAIR_AUDIO|g" \
+    -e "s|__DONOR_PATH__|$REPAIR_DONOR|g" \
+    "$REPAIR_TEMPLATE" > "$REPAIR_PROJECT"
+
+run_app repair "$REPAIR_PROJECT" --screenshot-set repair
 
 #-----------------------------------------------------------------------------
 # Compare and copy only changed screenshots

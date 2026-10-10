@@ -219,6 +219,7 @@ endfunction()
 
 set(AUDIOREPAIR_SRC
   ${ROOT}/extern/ttaudiorepair.cpp
+  ${ROOT}/extern/ttdonorfill.cpp
   ${AC3REENC_SRC})
 
 set(SILENCE_SRC
@@ -259,6 +260,7 @@ diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp ${ROOT}/
 diag_tool(test_bitstream          SOURCES ${ROOT}/avstream/ttbitstream.cpp ${ROOT}/avstream/ttannexb.cpp)
 diag_tool(test_sps_basics_epb     SOURCES ${NALU_FULL_SRC} ${BITSTREAM_SRC})
 diag_tool(test_audiorepair     AV SOURCES ${AUDIOREPAIR_SRC})
+diag_tool(test_donorfill       AV SOURCES ${AUDIOREPAIR_SRC})
 # Drives TTAVData::cutAudioTracks() with a real TTAVItem/TTAudioStream (the
 # cut-segment-boundary error path needs the actual per-track loop, not just
 # TTAudioCutter::cut in isolation), so it needs the whole core
@@ -407,6 +409,9 @@ target_link_libraries(test_audio_corruption_marker PRIVATE ttcut-core)
 # rationale as test_audiorepair_persist).
 diag_tool(test_repairdialog_model AV WIDGETS SOURCES)
 target_link_libraries(test_repairdialog_model PRIVATE ttcut-core)
+# The donor fill inside the application: item, cut, project file, dialog.
+diag_tool(test_donorfill_app AV WIDGETS SOURCES)
+target_link_libraries(test_donorfill_app PRIVATE ttcut-core)
 # Review fix 2 round 2: proves TTAudioRepairDialog's mpv-Play-button error-
 # popup gate across two real loads plus a provoked load failure. Needs a
 # real GL-capable platform for mpv's render context (same reason
@@ -522,11 +527,11 @@ add_custom_target(diag DEPENDS
   test_stilldisplay test_leadingclass test_h264_leading probe_copystart
   test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_bitstream test_sps_basics_epb test_h264_syntax_golden test_h264_truncated_slice test_h264_mmco_neutralize test_unrewritten_frames test_aspectdetect
   test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2 test_aspect_window
-  test_anomalyscan test_audio_corruption_marker
+  test_anomalyscan test_audio_corruption_marker test_donorfill
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_track_persist test_track_language test_track_gui test_preview_clip_index test_preview_window_in_cut test_preview_drift_rows test_repair_window_edge test_marker_delete_repair test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_aspect_hint test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
-  test_audiorepair_cut test_repairdialog_model test_audio_es_input
+  test_audiorepair_cut test_repairdialog_model test_audio_es_input test_donorfill_app
   test_frameindex_dump test_h26x_idr_before test_h26x_framerate test_framerate_hint test_mpeg2_decoder_contract test_subtitle_core test_logging test_navigator_refresh test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args
   test_mpv_channels test_mkvmux_inputs test_mkvmux test_mux_script test_partial_track

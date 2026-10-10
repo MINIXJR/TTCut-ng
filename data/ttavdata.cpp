@@ -1120,6 +1120,13 @@ void TTAVData::onThreadPoolExit()
   // its loading-order job moved to onOpenAudioFinished with dae43fed.
   for (int i = 0; i < mpAVList->count(); i++) {
     mpAVList->at(i)->setInitialAudioLoadDone();
+    // A donor fill from a project file names its donor by the list position
+    // saved with it; which track that is, and whether it fits, is known
+    // only now. This runs before onReadProjectFileFinished (connected to
+    // the same exit() later), so the markers restored there already see the
+    // result. Fills that are resolved, or were planned in this session, are
+    // left alone - this slot ends every pool run.
+    mpAVList->at(i)->resolveLoadedDonorFills();
   }
 
   // Tracks whose open task failed during this run (recordTrackOpenFailure):
@@ -3106,14 +3113,14 @@ QList<float> TTAVData::cutAudioTracks(
         if (item.trackIndex() != idx) continue;
         if (!item.isEnabled()) {
           // Disabled by the project-file load validation (range past the end
-          // of the audio file, unreadable file, malformed range). Skipping is
+          // of the audio file, unreadable file, malformed range), or a fill
+          // whose donor track is missing or was removed. Skipping is
           // right - the range cannot be applied - but it used to happen
           // without a single word anywhere, so a cut quietly produced audio
           // with the glitch still in it (final review I4).
           log->warningMsg(__FILE__, __LINE__,
-                QString("Audio track %1: repair %2-%3 is disabled (it did not pass the "
-                        "project-load validation, see the warning logged then) and is "
-                        "NOT applied to this cut")
+                QString("Audio track %1: repair %2-%3 is disabled (see the warning "
+                        "logged when it was disabled) and is NOT applied to this cut")
                     .arg(idx + 1).arg(item.frameFrom()).arg(item.frameTo()));
           ++repairsDisabled;
           continue;
@@ -3151,9 +3158,15 @@ QList<float> TTAVData::cutAudioTracks(
           break;
         }
 
+        // A donor fill reads its sound from a second track of this item.
+        QString donorFile;
+        if (item.isDonorFill() && item.donorTrack() >= 0 && item.donorTrack() < avItem->audioCount()
+            && avItem->audioStreamAt(item.donorTrack()))
+          donorFile = avItem->audioStreamAt(item.donorTrack())->filePath();
+
         QString itemErr;
         TTAudioRepair::FrameTable itemTable = TTAudioRepair::buildRepairTable(
-            stream->filePath(), item, targetAcmod, &itemErr);
+            stream->filePath(), item, targetAcmod, &itemErr, donorFile);
         if (!itemErr.isEmpty()) {
           repairFailed = true;
           repairFailMsg = itemErr;

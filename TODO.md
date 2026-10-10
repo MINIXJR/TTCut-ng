@@ -409,7 +409,12 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   übernimmt die gespeicherte `<Order>` ungeprüft als spätere Listenposition;
   ein Projekt mit nicht-fortlaufenden oder doppelten `<Order>`-Werten (von
   Hand editiert, nicht über die App gespeichert) kann eine Reparatur der
-  falschen Spur zuordnen, ohne Warnung.
+  falschen Spur zuordnen, ohne Warnung. Dieselbe Lücke entsteht ohne
+  Handarbeit, wenn beim Laden eine Tonspur mit kleinerer `<Order>` nicht
+  geöffnet werden kann: die Spuren dahinter rücken auf, `trackIndex()`
+  zeigt dann auf die falsche Position (Durchsicht 2026-10-10). Der
+  Spenderverweis einer Loch-Füllung wird dagegen über die gespeicherte
+  `<Order>` gesucht (`TTAVItem::resolveLoadedDonorFills`).
 - **Ersatzframe-Bau meldet OOM und Schreibfehler nicht getrennt** (M1/M2 aus
   dem Final-Review, bewusst offen gelassen). `TTAudioRepair::buildRepairTable()`
   baut die komplette Tabelle im Speicher (`QMap<qint64, QByteArray>`); bei sehr
@@ -968,9 +973,12 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   - **A lasting stop is repaired by a fade-out** (20 ms before the stop, all
     channels). Where it is placed and how long it is rest on one real stop and
     generated samples; the end of the fade-out can be moved by ear.
-  - **No repair for a hole.** Muting with a short fade ends as hard as the hole
-    itself (the user heard no difference). Filling it from the second audio track
-    is not built.
+  - **A hole is filled from a second audio track** (two channels, 48 kHz).
+    The rules rest on the two holes of one recording and on pretended holes;
+    other AC3 layouts than 3/2 and 2/0 are not filled.
+  - **Stored repairs do not follow a new demux.** After a recording is
+    demuxed again its frames can sit elsewhere; a stored repair is only
+    checked for lying inside the file, not for still matching the sound.
   - **The thresholds rest on that one recording:** the 45 dB on one heard hole
     (52 dB) against three not heard (31–41 dB); the 30 dB lie between a confirmed
     click (32.4 dB) and an inconspicuous gap between two sounds (29.3 dB).
