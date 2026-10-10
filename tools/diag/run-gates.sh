@@ -151,6 +151,7 @@ silence_unavailable    unit  120  test_silence_unavailable
 anomalyscan            unit  300  test_anomalyscan
 audiorepair            unit  300  test_audiorepair
 audiorepair_cut        unit  300  test_audiorepair_cut
+donorfill              unit  300  test_donorfill
 repairdialog_model     unit  300  test_repairdialog_model
 demux_framerate        unit  60   -
 demux_slotplan         unit  120  -
@@ -418,6 +419,7 @@ gate_silence_unavailable()   { "$D/test_silence_unavailable"; }
 gate_anomalyscan()           { "$D/test_anomalyscan"; }
 gate_audiorepair()           { "$D/test_audiorepair"; }
 gate_audiorepair_cut()       { "$D/test_audiorepair_cut"; }
+gate_donorfill()             { "$D/test_donorfill"; }
 gate_repairdialog_model()    { need "$TESTDATA/tux_test.264" "$TESTDATA/tux_test.ac3"; "$D/test_repairdialog_model"; }
 gate_demux_framerate()       { need "$DEMUX"; "$D/gate_demux_framerate.sh"; }
 gate_demux_slotplan()        { need "$DEMUX"; "$D/gate_demux_slotplan.sh"; }

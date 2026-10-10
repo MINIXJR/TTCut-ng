@@ -12,6 +12,10 @@
 // fadeOutGain instead: a fade to 0 that ends at an abrupt stop. Both methods
 // and the stop search (findStop) decode through the same walk, walkRange.
 //
+// The method "donor-fill" (spec 2026-10-10) cross-fades the filled channels
+// to the sound of a second track over a hole; the search for hole, shift and
+// gains is findDonorFill, the math is in ttdonorfill.cpp.
+//
 // Bitrate and frame size come from the repaired source frames themselves,
 // never hardcoded and never from the stream header: 384 kbit/s@48 kHz is
 // 1536 bytes/frame, 448 kbit/s is 1792, and one file can switch between
@@ -41,6 +45,7 @@
 // channel mask bit, or truncates a short swr conversion.
 #include "ttaudiorepair.h"
 #include "ttac3reencoder.h"
+#include "ttdonorfill.h"
 
 #include <QScopeGuard>
 
@@ -150,14 +155,58 @@ bool openFirstAudioStream(const QString& audioFile, AVFormatContext** fmtCtx, in
 
 namespace {
 
+// The sample rate of the file's first audio stream; 0 with *error set.
+int sampleRateOf(const QString& audioFile, QString* error)
+{
+    AVFormatContext* fmtCtx = nullptr;
+    int audioIdx = -1;
+    if (!openFirstAudioStream(audioFile, &fmtCtx, &audioIdx, error)) return 0;
+    const int rate = fmtCtx->streams[audioIdx]->codecpar->sample_rate;
+    avformat_close_input(&fmtCtx);
+    if (rate <= 0) { *error = QStringLiteral("invalid sample rate"); return 0; }
+    return rate;
+}
+
+// The planes a donor fill writes for this layout: left and right of a 2/0
+// stream, the centre of a 3/2 stream (with or without LFE). Empty: neither.
+QVector<int> donorFillPlanes(const AVChannelLayout& layout)
+{
+    if (layout.order != AV_CHANNEL_ORDER_NATIVE) return {};
+    if (layout.u.mask == AV_CH_LAYOUT_STEREO) return {0, 1};
+    const uint64_t mainChannels = layout.u.mask & ~uint64_t(AV_CH_LOW_FREQUENCY);
+    if (mainChannels != AV_CH_LAYOUT_5POINT0 && mainChannels != AV_CH_LAYOUT_5POINT0_BACK) return {};
+    const int centre = av_channel_layout_index_from_channel(&layout, AV_CHAN_FRONT_CENTER);
+    return centre >= 0 ? QVector<int>{centre} : QVector<int>{};
+}
+
+quint8 maskOfPlanes(const QVector<int>& planes)
+{
+    quint8 mask = 0;
+    for (int p : planes) mask |= quint8(1u << p);
+    return mask;
+}
+
+// The donor's sound per filled channel: its mid (L+R)/2 for the centre, L
+// and R for a stereo track.
+QVector<QVector<float>> donorSoundFor(quint8 channelMask, const TTDonorFill::Planes& donor)
+{
+    if (channelMask != kDonorFillMaskCentre) return donor;
+    QVector<float> mid(donor[0].size());
+    for (qsizetype i = 0; i < mid.size(); ++i) mid[i] = 0.5f * (donor[0][i] + donor[1][i]);
+    return {mid};
+}
+
 // Decodes frames frameFrom..frameTo (with warm-up before and one frame of
 // lookahead behind), hands the PCM of each to frameEdit and returns the
 // re-encoded frames. The range must be uniform in channel layout and frame
-// size (abort contract above).
+// size (abort contract above). *formatChanged is set when the walk fails
+// because channel layout or frame size change inside the range.
 FrameTable walkRange(const QString& audioFile, qint64 frameFrom, qint64 frameTo,
-                     int targetAcmod, const FrameEdit& frameEdit, QString* errorOut)
+                     int targetAcmod, const FrameEdit& frameEdit, QString* errorOut,
+                     bool* formatChanged = nullptr)
 {
     if (errorOut) errorOut->clear();
+    if (formatChanged) *formatChanged = false;
     auto fail = [&](const QString& msg) {
         if (errorOut) *errorOut = msg;
         return FrameTable();
@@ -209,6 +258,7 @@ FrameTable walkRange(const QString& audioFile, qint64 frameFrom, qint64 frameTo,
             av_channel_layout_copy(&sourceRefLayout, &frame->ch_layout);
         } else if (av_channel_layout_compare(&frame->ch_layout, &sourceRefLayout) != 0) {
             *error = QString("repair range spans a channel-mode change at frame %1").arg(frameIdx);
+            if (formatChanged) *formatChanged = true;
             return false;
         }
         return frameEdit(frameIdx, frame, cp->sample_rate, error);
@@ -261,6 +311,7 @@ FrameTable walkRange(const QString& audioFile, qint64 frameFrom, qint64 frameTo,
             const QString msg = QString("source frame size changed within the repair range at frame %1 "
                                         "(%2 vs %3 bytes) -- not a constant-bitrate region")
                                     .arg(frameIdx).arg(pkt->size).arg(sourceFrameSize);
+            if (formatChanged) *formatChanged = true;
             av_packet_unref(pkt);
             return fail(msg);
         }
@@ -302,6 +353,32 @@ FrameTable walkRange(const QString& audioFile, qint64 frameFrom, qint64 frameTo,
     return table;
 }
 
+// The PCM of frames first..last, decoded as buildRepairTable decodes them.
+struct Ac3Pcm {
+    TTDonorFill::Planes planes;     // every channel
+    QVector<int> fillPlanes;        // donorFillPlanes() of the layout
+    int rate = 0;
+};
+
+bool readAc3Planes(const QString& audioFile, qint64 first, qint64 last, Ac3Pcm* out, bool* formatChanged, QString* error)
+{
+    *out = Ac3Pcm();
+    const FrameEdit read = [&](qint64, AVFrame* f, int sampleRate, QString*) {
+        if (out->planes.isEmpty()) {
+            out->planes.resize(f->ch_layout.nb_channels);
+            out->fillPlanes = donorFillPlanes(f->ch_layout);
+            out->rate = sampleRate;
+        }
+        for (int ch = 0; ch < f->ch_layout.nb_channels && ch < out->planes.size(); ++ch) {
+            const float* d = reinterpret_cast<const float*>(f->extended_data[ch]);
+            for (int n = 0; n < f->nb_samples; ++n) out->planes[ch].append(d[n]);
+        }
+        return true;
+    };
+    walkRange(audioFile, first, last, -1, read, error, formatChanged);
+    return error->isEmpty();
+}
+
 } // namespace
 
 double fadeOutGain(qint64 pos, qint64 fadeEnd, int fadeLen, int silenceLen, int fadeInLen)
@@ -324,6 +401,49 @@ TTAudioRepairItem makeFadeOutItem(int track, quint8 channelMask, qint64 fadeEnd,
                            last / kAc3FrameSamples, channelMask);
     item.setFadeOut(fadeEnd, fadeLen, silenceLen);
     return item;
+}
+
+TTAudioRepairItem makeDonorFillItem(int track, quint8 channelMask, int donorTrack, qint64 holeStart, qint64 holeEnd,
+                                    qint64 donorShift, const QVector<double>& gains, double match, int sampleRate)
+{
+    const int crossFade = TTDonorFill::crossFadeSamples(sampleRate);
+    const qint64 first = holeStart - crossFade, last = holeEnd + crossFade - 1;
+    TTAudioRepairItem item(track, first >= 0 ? first / kAc3FrameSamples : -1, last / kAc3FrameSamples, channelMask);
+    item.setDonorFill(donorTrack, holeStart, holeEnd, donorShift, gains, match);
+    return item;
+}
+
+QString donorFillProblem(const TTAudioRepairItem& item, int sampleRate)
+{
+    if (!item.isDonorFill()) return QStringLiteral("not a donor-fill repair");
+    const quint8 mask = item.channelMask();
+    if (mask != kDonorFillMaskCentre && mask != kDonorFillMaskStereo)
+        return QString("donor fill: channel mask 0x%1 is neither the centre nor left+right").arg(mask, 0, 16);
+    const QVector<double> gains = item.gains();
+    if (gains.size() != (mask == kDonorFillMaskStereo ? 2 : 1))
+        return QString("donor fill: %1 gain value(s) for %2 filled channel(s)")
+            .arg(gains.size()).arg(mask == kDonorFillMaskStereo ? 2 : 1);
+    for (double g : gains)
+        if (!std::isfinite(g) || g < 0.0 || g > kDonorFillMaxGain)
+            return QString("donor fill: gain %1 is outside 0..%2").arg(g).arg(kDonorFillMaxGain);
+    // No track holds a week of samples: a position or shift beyond that is
+    // refused before anything is computed from it.
+    const qint64 limit = qint64(sampleRate > 0 ? sampleRate : 48000) * 86400 * 7;
+    if (item.holeStart() < 0 || item.holeStart() > limit || item.holeEnd() < 0 || item.holeEnd() > limit)
+        return QString("donor fill: a hole at samples %1-%2 is not possible").arg(item.holeStart()).arg(item.holeEnd());
+    if (item.donorShift() < -limit || item.donorShift() > limit)
+        return QString("donor fill: a shift of %1 samples is not possible").arg(item.donorShift());
+    // A hole is found inside five frames (the marker's three and one on each side).
+    if (item.holeEnd() <= item.holeStart() || item.holeEnd() - item.holeStart() > 5 * kAc3FrameSamples)
+        return QString("donor fill: a hole of %1 samples is not possible").arg(item.holeEnd() - item.holeStart());
+    const TTAudioRepairItem want = makeDonorFillItem(item.trackIndex(), mask, item.donorTrack(), item.holeStart(),
+                                                     item.holeEnd(), item.donorShift(), gains, item.match(), sampleRate);
+    if (want.frameFrom() < 0)
+        return QStringLiteral("donor fill: the hole lies before the beginning of the track");
+    if (want.frameFrom() != item.frameFrom() || want.frameTo() != item.frameTo())
+        return QString("donor-fill values do not fit the frame range %1-%2 (they need %3-%4)")
+            .arg(item.frameFrom()).arg(item.frameTo()).arg(want.frameFrom()).arg(want.frameTo());
+    return QString();
 }
 
 StopPlacement locateStop(const QVector<QVector<float>>& planes, qint64 firstPos,
@@ -382,13 +502,14 @@ StopPlacement locateStop(const QVector<QVector<float>>& planes, qint64 firstPos,
 }
 
 FrameTable buildRepairTable(const QString& audioFile, const TTAudioRepairItem& item,
-                            int targetAcmod, QString* errorOut)
+                            int targetAcmod, QString* errorOut, const QString& donorFile)
 {
     auto fail = [&](const QString& msg) { if (errorOut) *errorOut = msg; return FrameTable(); };
     if (errorOut) errorOut->clear();
 
     const bool fadeOut = item.isFadeOut();
-    if (!fadeOut && item.method() != QLatin1String(TTAudioRepairItem::kMethodSilenceFade))
+    const bool donorFill = item.isDonorFill();
+    if (!fadeOut && !donorFill && item.method() != QLatin1String(TTAudioRepairItem::kMethodSilenceFade))
         return fail(QString("unknown repair method '%1'").arg(item.method()));
     if (fadeOut) {
         if (item.fadeLength() <= 0 || item.silenceLength() <= 0)
@@ -397,8 +518,49 @@ FrameTable buildRepairTable(const QString& audioFile, const TTAudioRepairItem& i
             return fail(QStringLiteral("the fade-out would start before the beginning of the track"));
     }
 
+    // Donor fill: the donor's sound for the hole and its cross-fades, one
+    // vector per filled channel, read before the walk.
+    QVector<QVector<float>> donorSound;
+    const QVector<double> gains = item.gains();
+    int crossFade = 0, donorRate = 0;
+    if (donorFill) {
+        if (donorFile.isEmpty()) return fail(QStringLiteral("donor fill: no donor track given"));
+        QString rateError;
+        const int rate = sampleRateOf(audioFile, &rateError);
+        if (rate <= 0) return fail(rateError);
+        const QString problem = donorFillProblem(item, rate);
+        if (!problem.isEmpty()) return fail(problem);
+        crossFade = TTDonorFill::crossFadeSamples(rate);
+        const TTDonorFill::DonorPcm donor = TTDonorFill::readDonorRange(
+            donorFile, item.holeStart() - crossFade + item.donorShift(),
+            item.holeEnd() - item.holeStart() + 2 * crossFade);
+        if (!donor.ok) return fail(QString("donor fill: %1").arg(donor.error));
+        donorRate = donor.sampleRate;
+        donorSound = donorSoundFor(item.channelMask(), donor.planes);
+    }
+
     const FrameEdit edit = [&](qint64 frameIdx, AVFrame* frame, int sampleRate, QString* error) {
         const int fadeLen = fadeLenSamples(sampleRate);
+        if (donorFill) {
+            const QVector<int> planes = donorFillPlanes(frame->ch_layout);
+            if (frameIdx == item.frameFrom()) {
+                if (planes.isEmpty() || maskOfPlanes(planes) != item.channelMask()) {
+                    *error = QString("donor fill: channel mask 0x%1 does not fit the channel layout at frame %2")
+                                 .arg(item.channelMask(), 0, 16).arg(frameIdx);
+                    return false;
+                }
+                if (sampleRate != donorRate) {
+                    *error = QString("donor fill: the donor's sample rate %1 differs from the track's %2")
+                                 .arg(donorRate).arg(sampleRate);
+                    return false;
+                }
+            }
+            for (int k = 0; k < planes.size() && k < donorSound.size(); ++k)
+                TTDonorFill::applyDonor(reinterpret_cast<float*>(frame->extended_data[planes[k]]), frame->nb_samples,
+                                        frameIdx * kAc3FrameSamples, donorSound[k], item.holeStart() - crossFade,
+                                        item.holeStart(), item.holeEnd(), crossFade, gains[k]);
+            return true;
+        }
         if (fadeOut) {
             if (frameIdx == item.frameFrom()) {
                 const TTAudioRepairItem want = makeFadeOutItem(item.trackIndex(), item.channelMask(), item.fadeEnd(),
@@ -465,6 +627,69 @@ StopPlacement findStop(const QString& audioFile, qint64 frameFrom, qint64 frameT
     if (!err.isEmpty()) { if (errorOut) *errorOut = err; return StopPlacement(); }
     return locateStop(planes, first * kAc3FrameSamples, frameFrom * kAc3FrameSamples,
                       (frameTo + 1) * kAc3FrameSamples, rate);
+}
+
+DonorFillSearch findDonorFill(const QString& audioFile, int track, qint64 frameFrom, qint64 frameTo,
+                              const QString& donorFile, int donorTrack, qint64 expectedShift)
+{
+    DonorFillSearch r;
+    auto done = [&](DonorFillStatus status, const QString& detail = QString()) {
+        r.status = status;
+        r.error = detail;
+        return r;
+    };
+    if (frameFrom < 0 || frameTo < frameFrom) return done(DonorFillStatus::Error, QStringLiteral("invalid frame range"));
+
+    // 1. The hole: in the marker's frames and one frame on each side. The
+    //    planes reach one frame further (the search looks four blocks back);
+    //    at the end of the track there may be fewer frames behind.
+    const qint64 first = qMax<qint64>(0, frameFrom - 2);
+    Ac3Pcm pcm;
+    QString err;
+    bool formatChanged = false;
+    qint64 last = -1;
+    for (qint64 tryLast = frameTo + 2; tryLast >= frameTo && last < 0; --tryLast) {
+        if (readAc3Planes(audioFile, first, tryLast, &pcm, &formatChanged, &err)) last = tryLast;
+        else if (formatChanged) return done(DonorFillStatus::FormatChange, err);
+    }
+    if (last < 0) return done(DonorFillStatus::Error, err);
+    if (pcm.fillPlanes.isEmpty()) return done(DonorFillStatus::UnsupportedLayout);
+
+    TTDonorFill::Planes target;
+    for (int p : pcm.fillPlanes) target.append(pcm.planes[p]);
+    const TTDonorFill::HolePlacement hole = TTDonorFill::locateHole(
+        target, first * kAc3FrameSamples,
+        qMax(first, frameFrom - 1) * kAc3FrameSamples, qMin(last + 1, frameTo + 2) * kAc3FrameSamples, pcm.rate);
+    if (!hole.found) return done(DonorFillStatus::NoHole);
+
+    // 2. The sound next to the hole, in both tracks.
+    const int rate = pcm.rate;
+    const qint64 reach = TTDonorFill::guardSamples(rate) + TTDonorFill::compareSamples(rate);
+    const qint64 search = TTDonorFill::searchSamples(rate);
+    const qint64 cmpFrom = hole.start - reach, cmpTo = hole.end + reach;        // [cmpFrom, cmpTo)
+    if (cmpFrom < 0) return done(DonorFillStatus::NoSound, QStringLiteral("the hole lies too close to the start of the track"));
+    const qint64 cmpFirst = cmpFrom / kAc3FrameSamples, cmpLast = (cmpTo - 1) / kAc3FrameSamples;
+    Ac3Pcm wide;
+    if (!readAc3Planes(audioFile, cmpFirst, cmpLast, &wide, &formatChanged, &err))
+        return done(formatChanged ? DonorFillStatus::FormatChange : DonorFillStatus::NoSound, err);
+    target.clear();
+    for (int p : wide.fillPlanes) target.append(wide.planes[p]);
+    const quint8 mask = maskOfPlanes(wide.fillPlanes);
+
+    const qint64 donorFrom = cmpFrom + expectedShift - search;
+    const TTDonorFill::DonorPcm donor = TTDonorFill::readDonorRange(donorFile, donorFrom, cmpTo - cmpFrom + 2 * search);
+    if (!donor.ok) return done(donor.noSound ? DonorFillStatus::NoSound : DonorFillStatus::DonorUnreadable, donor.error);
+    if (donor.sampleRate != rate)
+        return done(DonorFillStatus::Error, QString("the donor's sample rate %1 differs from the track's %2").arg(donor.sampleRate).arg(rate));
+
+    // 3. Shift and gains.
+    const TTDonorFill::DonorFit fit = TTDonorFill::fitDonor(target, cmpFirst * kAc3FrameSamples,
+                                                            donorSoundFor(mask, donor.planes), donorFrom,
+                                                            hole.start, hole.end, expectedShift, rate);
+    if (!fit.valid) return done(DonorFillStatus::NoSound, QStringLiteral("too little sound next to the hole"));
+
+    r.item = makeDonorFillItem(track, mask, donorTrack, hole.start, hole.end, fit.shift, fit.gains, fit.match, rate);
+    return done(DonorFillStatus::Found);
 }
 
 } // namespace TTAudioRepair

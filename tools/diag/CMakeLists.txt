@@ -219,6 +219,7 @@ endfunction()
 
 set(AUDIOREPAIR_SRC
   ${ROOT}/extern/ttaudiorepair.cpp
+  ${ROOT}/extern/ttdonorfill.cpp
   ${AC3REENC_SRC})
 
 set(SILENCE_SRC
@@ -259,6 +260,7 @@ diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp ${ROOT}/
 diag_tool(test_bitstream          SOURCES ${ROOT}/avstream/ttbitstream.cpp ${ROOT}/avstream/ttannexb.cpp)
 diag_tool(test_sps_basics_epb     SOURCES ${NALU_FULL_SRC} ${BITSTREAM_SRC})
 diag_tool(test_audiorepair     AV SOURCES ${AUDIOREPAIR_SRC})
+diag_tool(test_donorfill       AV SOURCES ${AUDIOREPAIR_SRC})
 # Drives TTAVData::cutAudioTracks() with a real TTAVItem/TTAudioStream (the
 # cut-segment-boundary error path needs the actual per-track loop, not just
 # TTAudioCutter::cut in isolation), so it needs the whole core
@@ -522,7 +524,7 @@ add_custom_target(diag DEPENDS
   test_stilldisplay test_leadingclass test_h264_leading probe_copystart
   test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_bitstream test_sps_basics_epb test_h264_syntax_golden test_h264_truncated_slice test_h264_mmco_neutralize test_unrewritten_frames test_aspectdetect
   test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2 test_aspect_window
-  test_anomalyscan test_audio_corruption_marker
+  test_anomalyscan test_audio_corruption_marker test_donorfill
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_track_persist test_track_language test_track_gui test_preview_clip_index test_preview_window_in_cut test_preview_drift_rows test_repair_window_edge test_marker_delete_repair test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_aspect_hint test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
