@@ -559,6 +559,62 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
       sind drei; `tools/diag/test_pillarbox.cpp`: Kopf nennt
       `TTStreamPointVideoWorker::isPillarboxFrame`, das es im Programm
       nicht mehr gibt (`classifyAspectSample`).
+  - **Aus der zweiten Stufe (21 Karten), von mir nachgelesen:**
+    - **Zeitsprung-Worker werden nie gelöscht.** `TTThreadTask` setzt
+      `setAutoDelete(false)`, `TTQuickJumpDialog` verbindet kein
+      `deleteLater` und löscht `mCurrentWorker` nicht, der Pool nimmt die
+      Aufgabe nur aus seiner Liste: ein `TTQuickJumpWorker` je Seite,
+      Größenänderung und Intervallwechsel bleibt liegen.
+    - **Ein wartender Zeitsprung-Worker wird nicht abgebrochen.**
+      `abortCurrentWorker` ruft `onUserAbort()` nur bei `isRunning()`; ein
+      eingereihter, noch nicht gestarteter Worker ist vom Modell getrennt,
+      dekodiert seine Seite aber trotzdem.
+    - **„Set Cut-In/Cut-Out“ am Marker prüft die Schnittregel nicht.**
+      `onStreamPointSetCutIn` springt (`onGotoFrame`) und ruft
+      `navigation->onSetCutIn()` direkt; die Regel `isCutInPoint` /
+      `isCutOutPoint` schaltet nur die Knöpfe, der Slot prüft sie nicht.
+    - **Duplizieren eines Schnitts ohne Fangnetz.** `onEntryDuplicate` →
+      `TTAVData::copyCutEntry` → `appendCutEntry`, das bei einer Ablehnung
+      eine Ausnahme wirft; anders als `onAppendCutEntry` fängt hier niemand.
+    - **Versatz-Spalte nach abgebrochener Vorschau.** `onCutPreview`
+      verbindet `cutAudioDriftCalculated`, nur `onCutPreviewFinished`
+      trennt es; nach einer abgebrochenen oder gescheiterten Vorschau
+      bleibt die Verbindung bis zur nächsten Vorschau, und
+      `onAudioOnlyCutFinished` sendet das Signal ohne Bedingung.
+    - **Fester Entwicklerpfad im ausgelieferten `ttcut-demux`.** Findet es
+      `ttcut-ocr-glyphs` nicht neben sich, sucht es zuerst unter
+      `/usr/local/src/TTCut-ng/tools/ttcut-demux/` und erst danach unter
+      `/usr/share/ttcut-ng/`.
+    - Veraltete Kommentare: `common/ttsettings.cpp`, `load()` („The Muxer
+      block below still reads that key“ — `Muxer\OutputContainer` liest
+      niemand mehr); `common/ttmessagelogger.cpp` („dreimal mit "" aufruft“
+      — `load()` ruft `configure` einmal); `gui/ttcuttreeview.cpp` über
+      `currentCutIndex` („Creates the cut list from current selection“);
+      `tools/ttcut-quality-check/ttcut-quality-check.py` (Klick = „spike“,
+      der Code nimmt den Betrag; `total_aus` „carried along so the caller
+      can refuse the list“, niemand liest es).
+  - **Aus der zweiten Stufe, nur von den Agenten gelesen (von mir nicht
+    nachgelesen):**
+    - Abbruch während eines Projektladens: `TTOpenVideoTask::onUserAbort`
+      löscht `mpAVItem`, wenn es nicht in der Liste ist, während
+      `mPendingVideoItems` den Zeiger noch hält und
+      `endAbortedProjectLoad` `qDeleteAll(mPendingVideoItems)` ruft —
+      mögliches doppeltes Löschen.
+    - Vorschau über zwei Videos: `TTCutPreviewTask::operation` richtet die
+      gemeinsame Smart-Cut-Engine am Eintrag 0 der Auftragsliste ein; eine
+      Liste, die zwei Videos umfasst, schnitte die Clips des zweiten aus
+      der Engine des ersten.
+    - Logo-Auswahl 4×4: `TTMPEG2Window2` sendet `logoROISelected` ab 4×4
+      Pixeln, `TTLogoDetector::hasROI()` verlangt Breite > 4 — der Status
+      meldete dann „Logo profile created“ ohne brauchbares Profil.
+    - SRT mit UTF-8-BOM: die Karte `subtitle-core` nennt „reads fine“
+      (gemessen); nach dem Code würde die erste Indexzeile zu 0 und die
+      zweite eine Warnung „missing subtitle“ auslösen. Kein Gate-Fall.
+    - Esc im Vorschau-Dialog beendet ihn womöglich über `reject()` ohne
+      `closeEvent` → `cleanUp` (Vermutung, Qt-Verhalten).
+    - `tools/burst-analysis/` (README und Kopf von `burst_analysis.py`):
+      `scan` bilde das Fenster des Detektors nach — `cmd_scan` nimmt ein
+      vereinfachtes Fenster.
 - **Neu kodierte AC3-Rahmen: was offen bleibt** (2026-10-02; die drei
   gemessenen Abweichungen — Kopffelder, Kompression, 256 Samples Versatz —
   sind behoben, siehe `docs/completed-work.md`).
