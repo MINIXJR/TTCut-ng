@@ -20,6 +20,14 @@ All notable changes to TTCut-ng are documented in this file.
   track is removed it is disabled, not dropped.
 
 ### Fixed
+- **A planned audio repair stays with its track when another track of the
+  project cannot be opened.** A project remembers each repair under the
+  position of its audio track. When a track in front of it was missing at
+  load time, the tracks behind moved up and the repair pointed at the next
+  track: the repaired track was cut without its repair, and the repair was
+  applied to the track behind it — or the cut failed when that track had
+  fewer channels. Saving the project then stored the repair under the wrong
+  track. The repair now follows its own track.
 - **Audio sits on the picture again after demuxing.** In the cut MKV the
   sound was off the picture compared with the original recording — measured
   end to end (original TS → `ttcut-demux` → cut → MKV): +100 to +464 ms on

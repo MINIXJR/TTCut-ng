@@ -872,10 +872,10 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
 
   // Apply saved repair items from project file if available. Unlike
   // language/delay these aren't stored per-audio-item, so they don't need
-  // the append-position idx above: TTAudioRepairItem::trackIndex() already
-  // holds the visible <Order> position from the project file, and that is
-  // exactly the position this track ends up at once sortByProjectOrder()
-  // runs below.
+  // the append-position idx above: TTAudioRepairItem::trackIndex() holds
+  // the track's <Order> from the project file until
+  // TTAVItem::resolveLoadedRepairs() (onThreadPoolExit) turns it into the
+  // position the track ends up at.
   if (mPendingAudioRepairs.contains(key)) {
     const QList<TTAudioRepairItem> repairs = mPendingAudioRepairs.take(key);
     for (const TTAudioRepairItem& repair : repairs) {
@@ -1120,13 +1120,14 @@ void TTAVData::onThreadPoolExit()
   // its loading-order job moved to onOpenAudioFinished with dae43fed.
   for (int i = 0; i < mpAVList->count(); i++) {
     mpAVList->at(i)->setInitialAudioLoadDone();
-    // A donor fill from a project file names its donor by the list position
-    // saved with it; which track that is, and whether it fits, is known
-    // only now. This runs before onReadProjectFileFinished (connected to
-    // the same exit() later), so the markers restored there already see the
-    // result. Fills that are resolved, or were planned in this session, are
-    // left alone - this slot ends every pool run.
-    mpAVList->at(i)->resolveLoadedDonorFills();
+    // A repair from a project file names its track, and a donor fill its
+    // donor, by the <Order> saved with it; which track that is, and whether
+    // the donor fits, is known only now. This runs before
+    // onReadProjectFileFinished (connected to the same exit() later), so
+    // the markers restored there already see the result. Repairs that are
+    // resolved, or were planned in this session, are left alone - this slot
+    // ends every pool run.
+    mpAVList->at(i)->resolveLoadedRepairs();
   }
 
   // Tracks whose open task failed during this run (recordTrackOpenFailure):

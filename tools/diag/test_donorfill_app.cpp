@@ -140,14 +140,41 @@ static void testItem()
     loaded->appendAudioRepair(fromProject(fillA(1, 5000000)));        // past the donor's end
     loaded->appendAudioRepair(fromProject(fillA(1, -400000)));        // before the donor's start
     loaded->appendAudioRepair(fillA(1, 5000000));                     // planned in this session: not this check's
-    check(loaded->resolveLoadedDonorFills() == 5, "load check: five of the six loaded fills are disabled");
+    check(loaded->resolveLoadedRepairs() == 5, "load check: five of the six loaded fills are disabled");
     r = loaded->audioRepairList();
     check(r.size() == 7 && r[0].isEnabled() && !r[1].isEnabled() && !r[2].isEnabled() && !r[3].isEnabled()
           && !r[4].isEnabled() && !r[5].isEnabled(), "load check: all kept, of the loaded ones only the sound one enabled");
     check(r.size() == 7 && r[3].donorTrack() == -1 && r[0].donorTrack() == 1 && !r[0].donorIsSavedOrder(),
           "load check: a donor that is not there becomes -1, the others are list positions now");
     check(r.size() == 7 && r[6].isEnabled(), "load check: a fill planned in this session is left alone");
-    check(loaded->resolveLoadedDonorFills() == 0, "load check: a second run disables nothing more");
+    check(loaded->resolveLoadedRepairs() == 0, "load check: a second run disables nothing more");
+
+    // A track-list change while a loaded repair still names its track by
+    // the saved <Order>: the order stays with its track, so a removal or a
+    // swap must not shift it like a list position.
+    auto savedFor = [](int order) { TTAudioRepairItem x(order, 100, 110, 0x04); x.setTrackIsSavedOrder(true); return x; };
+    TTAVItem* early = itemOf({fx("mono.ac3"), fx("hole51.ac3"), fx("donor51_300.mp2")});   // orders 0 1 2
+    early->appendAudioRepair(savedFor(1));               // saved for hole51.ac3
+    early->onRemoveAudioItem(0);                         // hole51.ac3 moves up to position 0
+    early->resolveLoadedRepairs();
+    r = early->audioRepairList();
+    check(r.size() == 1 && r[0].trackIndex() == 0 && !r[0].trackIsSavedOrder(),
+          QString("saved order: a removal in front of the track before it is resolved (repairs %1, track %2)")
+              .arg(r.size()).arg(r.value(0).trackIndex()));
+    TTAVItem* swapped = itemOf({fx("mono.ac3"), fx("hole51.ac3")});                         // orders 0 1
+    swapped->appendAudioRepair(savedFor(1));
+    swapped->onSwapAudioItems(0, 1);                     // hole51.ac3 now at position 0
+    swapped->resolveLoadedRepairs();
+    r = swapped->audioRepairList();
+    check(r.size() == 1 && r[0].trackIndex() == 0,
+          QString("saved order: a swap before it is resolved (repairs %1, track %2)").arg(r.size()).arg(r.value(0).trackIndex()));
+    TTAVItem* removed = itemOf({fx("hole51.ac3"), fx("mono.ac3")});                         // orders 0 1
+    removed->appendAudioRepair(savedFor(0));
+    removed->onRemoveAudioItem(0);                       // the repaired track itself; mono.ac3 moves to position 0
+    removed->resolveLoadedRepairs();
+    check(removed->audioRepairList().isEmpty(),
+          QString("saved order: the repair of a track removed before it is resolved goes with it (repairs %1)")
+              .arg(removed->audioRepairList().size()));
 }
 
 // Centre plane (index 2) of an AC3 file, decoded without dynamic range
@@ -371,6 +398,60 @@ static void testProject(const QString& workDir)
             if (x.frameFrom() == 200)
                 check(x.isEnabled() && x.donorTrack() == 1,
                       QString("gap: a fill whose donor moved up follows it (enabled %1, donor %2)").arg(x.isEnabled()).arg(x.donorTrack()));
+        }
+    }
+
+    // The same gap in front of the repaired track: a repair is saved under
+    // its track's <Order>, so it has to follow that track to the position it
+    // moves up to. Measured 2026-10-11 through --auto-cut: the track's own
+    // repair was not applied, the track behind it got it instead.
+    {
+        const QString path = QDir(workDir).absoluteFilePath("repair_gap.ttcut");
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            QTextStream out(&f);
+            out << "<!DOCTYPE TTCut-Projectfile>\n<TTCut-Projectfile>\n <Version>1.0</Version>\n <Video>\n  <Order>0</Order>\n"
+                   "  <Name>" << kVideoFile << "</Name>\n"
+                   "  <Audio>\n   <Order>0</Order>\n   <Name>" << kDir << "/does-not-exist.mp2</Name>\n  </Audio>\n"
+                   "  <Audio>\n   <Order>1</Order>\n   <Name>" << fx("hole51.ac3") << "</Name>\n"
+                   "   <Repair><FrameFrom>100</FrameFrom><FrameTo>110</FrameTo><Channels>4</Channels><Method>silence-fade</Method></Repair>\n"
+                << fillXml(200, 200, "<Donor>2</Donor>" + v.arg(307500).arg(307900).arg(925))
+                << "  </Audio>\n"
+                   "  <Audio>\n   <Order>2</Order>\n   <Name>" << fx("donor51_700.mp2") << "</Name>\n  </Audio>\n"
+                   " </Video>\n</TTCut-Projectfile>\n";
+            f.close();
+        }
+        auto onTrack0 = [](const QList<TTAudioRepairItem>& list) {
+            QStringList tracks;
+            bool all = list.size() == 2;
+            for (const TTAudioRepairItem& x : list) { tracks << QString::number(x.trackIndex()); all = all && x.trackIndex() == 0; }
+            return qMakePair(all, tracks.join(","));
+        };
+        // Saved again, the repairs stay with their track. Each TTAVData in a
+        // scope of its own: the "Tracks not opened" box of the first is a
+        // pending timer that would open inside the second load's event loop.
+        const QString resaved = QDir(workDir).absoluteFilePath("repair_gap_saved.ttcut");
+        bool saved = false;
+        {
+            TTAVData gapData;
+            TTAVItem* gapItem = loadProject(gapData, path);
+            check(gapItem && gapItem->audioCount() == 2 && gapItem->audioStreamAt(0)->filePath() == fx("hole51.ac3"),
+                  "repair gap: the repaired track moves up to position 0");
+            const QList<TTAudioRepairItem> g = gapItem ? gapItem->audioRepairList() : QList<TTAudioRepairItem>();
+            check(onTrack0(g).first, QString("repair gap: both repairs follow their track to position 0 (tracks %1)").arg(onTrack0(g).second));
+            for (const TTAudioRepairItem& x : g)
+                if (x.isDonorFill())
+                    check(x.isEnabled() && x.donorTrack() == 1,
+                          QString("repair gap: the fill finds its donor from the track's new position (enabled %1, donor %2)")
+                              .arg(x.isEnabled()).arg(x.donorTrack()));
+            if (gapItem) { gapData.writeProjectFile(QFileInfo(resaved), {}, TTLogoProjectData()); saved = true; }
+        }
+        {
+            TTAVData againData;
+            TTAVItem* againItem = saved ? loadProject(againData, resaved) : nullptr;
+            const QList<TTAudioRepairItem> a = againItem ? againItem->audioRepairList() : QList<TTAudioRepairItem>();
+            check(againItem && againItem->audioStreamAt(0)->filePath() == fx("hole51.ac3") && onTrack0(a).first,
+                  QString("repair gap: saved and loaded again, both repairs are on the repaired track (tracks %1)").arg(onTrack0(a).second));
         }
     }
 }

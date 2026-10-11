@@ -81,14 +81,15 @@ class TTAVItem : public QObject
     //! position in samples (48 kHz), from the start offsets the .info next
     //! to the video carries for the two files. 0 without video or .info.
     qint64 expectedDonorShift(int repairedTrack, int donorTrack) const;
-    //! The donor fills a project file brought along name their donor by the
-    //! list position saved with it. Once the item's tracks are loaded, give
-    //! each of them the position its donor has now - a track that failed to
-    //! open leaves a gap, the ones behind it move up - and disable those
-    //! whose donor is not there, is no candidate, or whose values point
-    //! outside it. Returns how many it disabled. A fill planned in this
-    //! session is not touched.
-    int resolveLoadedDonorFills();
+    //! The repairs a project file brought along name their track, and a
+    //! donor fill its donor, by the <Order> saved with it. Once the item's
+    //! tracks are loaded, give each the position that track has now - a
+    //! track that failed to open leaves a gap, the ones behind it move up.
+    //! A repair whose own track is not in the list goes, as with a removed
+    //! track. A fill whose donor is not there, is no candidate, or whose
+    //! values point outside it is disabled; returns how many fills that
+    //! were. A repair planned in this session is not touched.
+    int resolveLoadedRepairs();
 
     void appendAudioEntry(TTAudioStream* aStream, int order=-1);
 

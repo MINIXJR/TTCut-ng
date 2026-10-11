@@ -334,11 +334,12 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
         else if (relem.tagName() == "Match")      { match = relem.text().toDouble(); ++fillValues; }
         else if (relem.tagName() == "Gain")       gains.append(relem.text().toDouble());
       }
-      // trackIndex = order: the visible <Order> position this Audio section
-      // was saved at, which is exactly the position sortByProjectOrder()
-      // restores the track to once loading finishes (see the comment in
-      // TTAVData::onOpenAudioFinished).
+      // trackIndex = order: the <Order> this Audio section was saved with.
+      // That is the track's list position only when every track in front
+      // of it opens - TTAVItem::resolveLoadedRepairs() turns it into the
+      // position once the tracks are loaded.
       TTAudioRepairItem repair(order, frameFrom, frameTo, channelMask, method);
+      repair.setTrackIsSavedOrder(true);
       if (repair.isFadeOut()) repair.setFadeOut(fadeEnd, fadeLength, silence);
       if (method == QLatin1String(TTAudioRepairItem::kMethodDonorFill)) {
         repair.setDonorFill(donor, holeStart, holeEnd, donorShift, gains, match);
@@ -410,7 +411,7 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
       if (repair.isDonorFill()) {
         // 48 kHz as for the fade-out. Whether the donor is among the tracks
         // is known only once they are loaded
-        // (TTAVItem::resolveLoadedDonorFills at the end of loading).
+        // (TTAVItem::resolveLoadedRepairs at the end of loading).
         const QString problem = TTAudioRepair::donorFillProblem(repair, 48000);
         if (!problem.isEmpty()) {
           disableRepair(repair, QString("donor-fill repair %1-%2 on '%3': %4 - disabling this repair entry")

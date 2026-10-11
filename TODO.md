@@ -403,18 +403,17 @@ Aus `docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`
 (Nicht-Ziele) und den Task-Reviews des Vorhabens. Nichts davon blockiert
 v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
-- **Lückenhafte `<Order>`-Werte in handbearbeiteten Projektdateien sind bei
+- **Doppelte `<Order>`-Werte in handbearbeiteten Projektdateien sind bei
   der Repair-Spur-Zuordnung unvalidiert** (Task-3-Review-Befund, hierher
-  verschoben statt in Task 8 mitgelöst): `TTAudioRepairItem::trackIndex()`
-  übernimmt die gespeicherte `<Order>` ungeprüft als spätere Listenposition;
-  ein Projekt mit nicht-fortlaufenden oder doppelten `<Order>`-Werten (von
-  Hand editiert, nicht über die App gespeichert) kann eine Reparatur der
-  falschen Spur zuordnen, ohne Warnung. Dieselbe Lücke entsteht ohne
-  Handarbeit, wenn beim Laden eine Tonspur mit kleinerer `<Order>` nicht
-  geöffnet werden kann: die Spuren dahinter rücken auf, `trackIndex()`
-  zeigt dann auf die falsche Position (Durchsicht 2026-10-10). Der
-  Spenderverweis einer Loch-Füllung wird dagegen über die gespeicherte
-  `<Order>` gesucht (`TTAVItem::resolveLoadedDonorFills`).
+  verschoben statt in Task 8 mitgelöst): tragen zwei `<Audio>`-Abschnitte
+  eines Videos dieselbe `<Order>` (von Hand editiert, nicht über die App
+  gespeichert), sucht `TTAVItem::resolveLoadedRepairs` die Spur einer
+  Reparatur über diese Zahl und nimmt die erste Spur, die sie trägt; die
+  geparkten Werte (Sprache, Delay, Reparaturen) liegen zudem je
+  `(Video, Order)` und überschreiben sich. Nur gelesen, nicht gemessen.
+  Lücken in den `<Order>`-Werten und eine Spur, die sich nicht öffnen
+  lässt, sind seit 2026-10-11 behoben (`docs/completed-work.md`,
+  „Reparatur folgt ihrer Spur beim Laden").
 - **Ersatzframe-Bau meldet OOM und Schreibfehler nicht getrennt** (M1/M2 aus
   dem Final-Review, bewusst offen gelassen). `TTAudioRepair::buildRepairTable()`
   baut die komplette Tabelle im Speicher (`QMap<qint64, QByteArray>`); bei sehr
