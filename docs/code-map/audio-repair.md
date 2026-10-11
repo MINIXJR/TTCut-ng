@@ -1,6 +1,6 @@
 ---
-base_commit: f77658eb3ecb7bae56a15fff01f08bd83cacf622
-last_verified: 2026-10-10
+base_commit: ceadf8817524dbb08b40f436cebd99fc930205dd
+last_verified: 2026-10-11
 sources:
   - data/ttaudioanomalyscantask.h
   - data/ttaudioanomalyscantask.cpp
@@ -135,7 +135,7 @@ flowchart TD
 | `DLG` → `ITEM` | `accept` (the button reads “Plan repair”): in the silence view it rejects end < start and an empty channel mask; in the fill view it does nothing without a fill; then, in every view, it builds the table once in the source layout (`targetAcmod = -1`, like the audition) and rejects any build error with the message, the dialog staying open (channel-layout or frame-size change inside the range, a channel the track does not have, range past the file end, a fade-out that would start before the track). Only then it removes the edited repair (if any) and appends `currentItem()`. The cut's target layout is unknown here; mixed target layouts are caught only at cut time (`ITEM` → `CUT`). |
 | `ITEM` → `PROJ` | Save: `<Repair>` (FrameFrom, FrameTo, Channels, Method; for `fade-out` also FadeEnd, FadeLength, Silence in samples; for `donor-fill` Donor — the donor's list position —, HoleStart, HoleEnd, DonorShift in samples, one Gain per filled channel, Match) under the `<Audio>` section whose position equals `trackIndex()`; the enabled flag is not written. Markers go to the stream-point section with `AudioFrameFrom`/`AudioFrameTo` and, when known, `AudioChannels` (read back only in 1…0x3F, anything else stays “unknown”) and `AnomalyKind` (`LfeBurst` / `LastingStop` / `Hole` / legacy `AbruptStop`; any other text reads as unknown). |
 | `PROJ` → `PEND` | `parseAudioSection` builds items with `trackIndex = <Order>`, then validates. The method first: an unknown method, or a `fade-out` whose three values are missing or do not give its frame range (`makeFadeOutItem` at 48 kHz), is disabled — never applied as something else; so is a `donor-fill` with a value missing or with values `donorFillProblem` refuses (mask neither 0x04 nor 0x03, number or range of the gains, a hole position or shift beyond a week of samples, empty or over-long hole, values not giving its frame range at 48 kHz). Then: negative/reversed range, unknown AC3 frame size (`ac3FrameByteSize`) or `(frameTo + 1) · frameBytes > file size` → `setEnabled(false)` with a warning; never dropped. Parked by `(TTAVItem*, order)` via `setPendingAudioRepairs`. |
-| `PEND` → `ITEM` | `onOpenAudioFinished` appends the parked repairs when the track with that order arrives; their `trackIndex` is the position the track reaches after `sortByProjectOrder`. A fill's `donorTrack` holds the donor's saved `<Order>` until loading ends (`donorIsSavedOrder`): `TTAVData::onThreadPoolExit` (before the markers are restored) runs `TTAVItem::resolveLoadedDonorFills`, which gives each loaded fill the list position of the track with that order — a track that failed to open leaves a gap, the ones behind it move up — and disables those whose donor is not loaded (`donorTrack` −1), is no candidate of its track, or whose values point outside the donor track. Every later pool run finds nothing left to resolve; a fill planned in the dialog is never touched by it. |
+| `PEND` → `ITEM` | `onOpenAudioFinished` appends the parked repairs when the track with that order arrives. Until loading ends their `trackIndex` holds the track's saved `<Order>` (`trackIsSavedOrder`), and a fill's `donorTrack` the donor's (`donorIsSavedOrder`): `TTAVData::onThreadPoolExit` (before the markers are restored) runs `TTAVItem::resolveLoadedRepairs`, which gives each loaded repair, and then each loaded fill's donor, the list position of the track with that order — a track that failed to open leaves a gap, the ones behind it move up. A repair whose own track is not in the list goes (as with a removed track); it disables the fills whose donor is not loaded (`donorTrack` −1), is no candidate of its track, or whose values point outside the donor track. Every later pool run finds nothing left to resolve; a repair planned in the dialog is never touched by it. |
 | `PROJ` → `ANNO` / `ITEM` → `ANNO` | `onStreamPointsLoaded`: every `AudioAnomaly` marker whose approximate AC3 range overlaps a **disabled** repair gets a “(repair DISABLED …)” suffix instead of “planned”. Which one, `TTStreamPointWidget::disabledRepairSuffix` decides: “its donor track is missing” for a fill whose donor is no candidate of its track, else “it no longer fits the audio file”. |
 | `ANNO` → `PTS` | The restored markers, annotated, go into the model in one `addPoints` call (the project path; a scan's markers take `onPointsDetected`). |
 | `ITEM` -.-> `WID` | `remapAudioRepairTracks` (track removed or swapped) emits `audioRepairsChanged`; `TTStreamPointWidget::refreshRepairSuffixes` gives every marker whose repair is disabled the suffix of `disabledRepairSuffix` (here: “its donor track is missing”) instead of “planned”. The widget holds its item in a `QPointer` — the main window resets it only after the item is deleted. |
@@ -202,12 +202,14 @@ flowchart TD
 - **Track index = visible list position.** Kept right by
   `remapAudioRepairTracks` on remove and swap (it copies the item and sets
   the track, so method, values and the enabled flag survive); on load
-  by parking under `<Order>` — the repair's own `trackIndex` is that number
-  taken as a position, so a track of lower order that fails to open moves
-  the repair to the wrong position (TODO); a fill's donor is looked up by
-  order instead. A fill's donor reference is remapped the same
-  way; a donor that is removed leaves the fill in the list, disabled, with
-  `donorTrack()` −1. Hand-edited `<Order>` gaps are unvalidated (TODO).
+  by parking under `<Order>` and looking the track with that order up once
+  all tracks are in (`resolveLoadedRepairs`), the repaired track like a
+  fill's donor. Until then the number is an order, not a position, and
+  `remapAudioRepairTracks` leaves it alone. A fill's donor reference is
+  remapped the same way; a donor that is removed leaves the fill in the
+  list, disabled, with `donorTrack()` −1. A gap in the saved `<Order>`
+  values resolves the same way; an `<Order>` used twice in one video
+  (hand-edited) is unvalidated (TODO).
 - **Markers are display only** (spec: “Wahrheit ist die Repair-Liste”). The
   marker ↔ repair link is range overlap on the first AC3 track, computed
   anew each time (`repairIndexForMarker`); there is no other UI for the

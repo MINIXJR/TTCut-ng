@@ -2689,6 +2689,41 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Reparatur folgt ihrer Spur beim Laden** → **DONE (2026-10-11, branch
+  `fix/repair-track-after-missing-track`)**.
+  - **Defect:** a repair is saved under its track's `<Order>` and was taken
+    as a list position after loading. A track of lower order that cannot be
+    opened lets the ones behind it move up; the repair then pointed one
+    position too far (found in the review of 2026-10-10).
+  - **Measured through the program** (`tools/diag/acm-cut.sh`, Tux material,
+    track of order 0 missing, a `silence-fade` repair on the 5.1 track of
+    order 1): with all tracks present "Audio track 2: repairs applied: 1
+    (frames replaced: 8)". With the track missing the repaired track went
+    through untouched; a stereo AC3 track behind it: "Audio repair failed
+    for track 2: channel mask 0xc references channel(s) beyond the stream's
+    2 channel(s)", the cut failed without an MKV; a 5.1 track behind it:
+    the repair was applied to that track without a message. Saving such a
+    project wrote the repairs under the wrong track
+    (`test_donorfill_app`, red before the fix).
+  - **Fix:** a loaded repair carries `trackIsSavedOrder`;
+    `TTAVItem::resolveLoadedRepairs` (formerly `resolveLoadedDonorFills`)
+    looks the track with that order up when the tracks are loaded, before
+    it resolves the donors. `remapAudioRepairTracks` leaves an unresolved
+    order alone (a removal or swap inside the load window shifted it like a
+    position). A repair whose own track is not in the list goes, as with a
+    removed track.
+  - **After the fix**, the same three cuts: "Audio track 1: repairs
+    applied: 1 (frames replaced: 8)" on the repaired track in both cases,
+    its audio payload equal to the repaired track of the run with all
+    tracks, the track behind it unchanged; both cuts complete.
+  - **Harness:** `test_donorfill_app` (gate `donorfill_app`), cases
+    "repair gap" and "saved order". A pitfall met on the way: a second
+    `TTAVData` load while the first object lives opens the first one's
+    pending "Tracks not opened" box inside the second load's event loop —
+    offscreen that waits forever (backtrace: `QDialog::exec()` under
+    `loadProject`); each load of a test gets a scope of its own.
+  - **Open:** `TODO.md` — an `<Order>` used twice in a hand-edited project.
+
 - **Tonanomalie: Loch aus zweiter Tonspur füllen** → **DONE (2026-10-10,
   branch `feature/audio-repair-donor-fill`)**. Spec and plans (not in the
   repo): `docs/superpowers/specs/2026-10-10-audio-repair-donor-fill-design.md`,

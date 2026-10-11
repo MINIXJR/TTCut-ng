@@ -403,18 +403,17 @@ Aus `docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`
 (Nicht-Ziele) und den Task-Reviews des Vorhabens. Nichts davon blockiert
 v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
-- **Lückenhafte `<Order>`-Werte in handbearbeiteten Projektdateien sind bei
+- **Doppelte `<Order>`-Werte in handbearbeiteten Projektdateien sind bei
   der Repair-Spur-Zuordnung unvalidiert** (Task-3-Review-Befund, hierher
-  verschoben statt in Task 8 mitgelöst): `TTAudioRepairItem::trackIndex()`
-  übernimmt die gespeicherte `<Order>` ungeprüft als spätere Listenposition;
-  ein Projekt mit nicht-fortlaufenden oder doppelten `<Order>`-Werten (von
-  Hand editiert, nicht über die App gespeichert) kann eine Reparatur der
-  falschen Spur zuordnen, ohne Warnung. Dieselbe Lücke entsteht ohne
-  Handarbeit, wenn beim Laden eine Tonspur mit kleinerer `<Order>` nicht
-  geöffnet werden kann: die Spuren dahinter rücken auf, `trackIndex()`
-  zeigt dann auf die falsche Position (Durchsicht 2026-10-10). Der
-  Spenderverweis einer Loch-Füllung wird dagegen über die gespeicherte
-  `<Order>` gesucht (`TTAVItem::resolveLoadedDonorFills`).
+  verschoben statt in Task 8 mitgelöst): tragen zwei `<Audio>`-Abschnitte
+  eines Videos dieselbe `<Order>` (von Hand editiert, nicht über die App
+  gespeichert), sucht `TTAVItem::resolveLoadedRepairs` die Spur einer
+  Reparatur über diese Zahl und nimmt die erste Spur, die sie trägt; die
+  geparkten Werte (Sprache, Delay, Reparaturen) liegen zudem je
+  `(Video, Order)` und überschreiben sich. Nur gelesen, nicht gemessen.
+  Lücken in den `<Order>`-Werten und eine Spur, die sich nicht öffnen
+  lässt, sind seit 2026-10-11 behoben (`docs/completed-work.md`,
+  „Reparatur folgt ihrer Spur beim Laden").
 - **Ersatzframe-Bau meldet OOM und Schreibfehler nicht getrennt** (M1/M2 aus
   dem Final-Review, bewusst offen gelassen). `TTAudioRepair::buildRepairTable()`
   baut die komplette Tabelle im Speicher (`QMap<qint64, QByteArray>`); bei sehr
@@ -822,6 +821,22 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   kodiert, ist nicht geklärt. Vorschlag bei Bedarf: sequentiell nur ohne
   Halbbild-Paar im Bereich (`extraIndices()`); Sonde dafür lag in
   `CLAUDE_TMP/TTCut-ng/run13/` (`probe_mpeg2_decoder seek`).
+
+- **Gate `encode_tempdir` schlägt unter CPU-Last gelegentlich fehl**
+  (gefunden 2026-10-11 im vollen Gate-Lauf: 1 von 12 Läufen mit
+  „mplexabort: expected exactly one Canceled, got 0“). Gemessen: das Gate
+  allein achtmal hintereinander 0 von 96; dieselben vier Instanzen von
+  `test_mpeg2cut_abort … mplexabort` je Runde, dazu eine Endlosschleife je
+  Kern (32): master `eef95d35` 2 von 48, der Stand danach 4 von 72 — der
+  Fehlschlag ist also älter als jede Änderung dieses Tages. In einem
+  Fehllauf (master) wird der Abbruch an der mplex-Zeile „New sequence
+  commences...“ scharf, als die `.mpg` schon ihre Endgröße hat
+  (61143040 B); der Abbruch wird zugestellt, der Schnitt endet trotzdem mit
+  `Exit` statt `Canceled`, die `.mpg` bleibt liegen. **Nicht untersucht:**
+  ob mplex in dem Augenblick schon beendet war (dann schärft das Harness
+  unter Last zu spät, und der Lauf ist der Fall „Abbruch nach dem Ende“)
+  oder ob ein Abbruch im letzten Augenblick eines laufenden mplex verloren
+  geht.
 
 - **`_parse_fraction` in `ttcut-demux`: Zahl ohne `/`** (gefunden 2026-09-27,
   Abschluss-Review `fix/frame-rate-source`): Der Kommentar verspricht „a plain

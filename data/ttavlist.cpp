@@ -135,10 +135,16 @@ void TTAVItem::remapAudioRepairTracks(const std::function<int(int)>& newTrack)
 {
   QList<TTAudioRepairItem> updatedRepairs;
   for (const TTAudioRepairItem& repair : mAudioRepairs) {
-    const int track = newTrack(repair.trackIndex());
-    if (track < 0) continue;
     TTAudioRepairItem moved = repair;     // keeps method, values and the enabled flag
-    moved.setTrackIndex(track);
+    // A loaded repair that still names its track by the saved <Order> is
+    // not a list position yet: the order stays with its track, and
+    // resolveLoadedRepairs() looks it up (or drops the repair of a track
+    // that is gone by then).
+    if (!repair.trackIsSavedOrder()) {
+      const int track = newTrack(repair.trackIndex());
+      if (track < 0) continue;
+      moved.setTrackIndex(track);
+    }
     if (moved.isDonorFill() && moved.donorTrack() >= 0 && !moved.donorIsSavedOrder()) {
       const int donor = newTrack(moved.donorTrack());
       moved.setDonorTrack(donor);
@@ -390,8 +396,34 @@ qint64 TTAVItem::expectedDonorShift(int repairedTrack, int donorTrack) const
   return qint64(offsetMs(repairedTrack) - offsetMs(donorTrack)) * 48;
 }
 
-int TTAVItem::resolveLoadedDonorFills()
+int TTAVItem::resolveLoadedRepairs()
 {
+  // The track a project file loaded with this <Order>, -1 if none did.
+  auto trackOfSavedOrder = [this](int savedOrder) {
+    for (int i = 0; i < audioCount(); ++i)
+      if (audioListItemAt(i).order() == savedOrder) return i;
+    return -1;
+  };
+
+  // The repaired track first: the donor check below starts from it.
+  QList<TTAudioRepairItem> kept;
+  for (TTAudioRepairItem repair : mAudioRepairs) {
+    if (repair.trackIsSavedOrder()) {
+      const int track = trackOfSavedOrder(repair.trackIndex());
+      if (track < 0) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("Repair %1-%2: its audio track (saved at position %3) is not among the loaded tracks - "
+                    "the repair goes with it")
+                .arg(repair.frameFrom()).arg(repair.frameTo()).arg(repair.trackIndex() + 1));
+        continue;
+      }
+      repair.setTrackIndex(track);
+      repair.setTrackIsSavedOrder(false);
+    }
+    kept.append(repair);
+  }
+  mAudioRepairs = kept;
+
   int disabled = 0;
   for (TTAudioRepairItem& repair : mAudioRepairs) {
     if (!repair.isDonorFill() || !repair.donorIsSavedOrder()) continue;
@@ -399,9 +431,7 @@ int TTAVItem::resolveLoadedDonorFills()
 
     // The saved position is the <Order> the donor's track was loaded with.
     const int savedOrder = repair.donorTrack();
-    int donor = -1;
-    for (int i = 0; i < audioCount() && donor < 0; ++i)
-      if (audioListItemAt(i).order() == savedOrder) donor = i;
+    const int donor = trackOfSavedOrder(savedOrder);
     repair.setDonorTrack(donor);
 
     QString reason;

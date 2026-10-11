@@ -30,6 +30,12 @@ public:
   bool    isEnabled()   const { return mEnabled; }
   void    setEnabled(bool e)       { mEnabled = e; }
   void    setTrackIndex(int track) { mTrack = track; }
+  // True while trackIndex() still holds the <Order> a project file saved
+  // for the repaired track instead of a list position: the tracks are still
+  // being loaded, and one that fails to open lets the ones behind it move
+  // up. Resolved once, by TTAVItem::resolveLoadedRepairs().
+  bool    trackIsSavedOrder() const { return mTrackIsSavedOrder; }
+  void    setTrackIsSavedOrder(bool saved) { mTrackIsSavedOrder = saved; }
 
   // Method "fade-out": all channels fade to 0 before an abrupt stop. Values
   // in samples of the track: the gain reaches 0 at fadeEnd after fadeLength
@@ -57,7 +63,7 @@ public:
   void    setDonorTrack(int track) { mDonorTrack = track; }
   // True while donorTrack() still holds the <Order> a project file saved
   // for the donor instead of a list position: the tracks are still being
-  // loaded. Resolved once, by TTAVItem::resolveLoadedDonorFills().
+  // loaded. Resolved once, by TTAVItem::resolveLoadedRepairs().
   bool    donorIsSavedOrder() const { return mDonorIsSavedOrder; }
   void    setDonorIsSavedOrder(bool saved) { mDonorIsSavedOrder = saved; }
   qint64  holeStart()   const { return mHoleStart; }
@@ -75,6 +81,7 @@ public:
 
 private:
   int     mTrack = 0;
+  bool    mTrackIsSavedOrder = false;
   qint64  mFrameFrom = 0;
   qint64  mFrameTo = 0;
   quint8  mChannelMask = 0;
