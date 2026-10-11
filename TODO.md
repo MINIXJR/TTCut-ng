@@ -512,6 +512,53 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
     demselben Ton.
 ## Low Priority
 
+- **Lesebefunde der vollen Kartenprüfung (2026-10-11)** — beim Lesen der
+  Karten gegen den Code aufgefallen. **Alle nur gelesen, keiner gemessen**;
+  vor einer Änderung zuerst nachstellen.
+  - **Projekt speichern ohne Endung.** `TTCutMainWindow::onFileSave` baut
+    das `QFileInfo` für `writeProjectFile`, bevor `.ttcut` an
+    `projectFileName` gehängt wird. Ein im Dialog ohne Endung eingegebener
+    Name würde demnach ohne Endung geschrieben, während Titel und
+    `projectFileName` die Endung tragen. Offen, ob der Dateidialog die
+    Endung vorher selbst ergänzt.
+  - **Fenster ohne Schutz im Lauf ohne Oberfläche.**
+    `TTAVData::showImportAsStreamPointsWarning` ruft `msgBox.exec()` ohne
+    Abfrage von `mNonInteractive`; aufgerufen aus
+    `showExtraFrameClusterDialog` und der Integritätswarnung beim Öffnen.
+  - **Sequenzkopf hinter einem ganz neu kodierten MPEG-2-Abschnitt.** Liegt
+    das nächste I-Bild hinter dem Schnittende, kodiert
+    `TTMpeg2VideoStream::getCutStartObject` den ganzen Abschnitt neu und
+    ruft danach trotzdem `checkIFrameSequence(iFramePos, …)`, das einen
+    Sequenzkopf in die Ausgabe kopieren kann, obwohl `cut()` den Transfer
+    überspringt.
+  - **Signal ohne Empfänger.** `TTCutFrameNavigation::setCutIn` wird
+    gesendet (`onSetCutIn`), aber nirgends verbunden — Kandidat für den
+    nächsten Dead-Code-Lauf.
+  - **Veraltete Quellkommentare** (der Code daneben ist richtig):
+    - `data/ttcutvideotask.cpp`, `data/ttcutpreviewtask.cpp`:
+      `TTException(caller, line, msg)` „logs at fatal level … →
+      `log->fatalMsg()`“, mit Zeilennummern — es ist `errorMsg`.
+    - `data/ttcutpreviewtask.cpp`, `createH264PreviewClip`: „this engine is
+      never published to `mpActiveSmartCut`“ — sie wird um den Aufruf von
+      `smartCutFrames()` herum veröffentlicht, nur `initialize()` läuft
+      unveröffentlicht.
+    - `data/ttaudioanomalyscantask.cpp`: nennt
+      `emitCluster`/`emitGapCluster` in `ttavdata.cpp`, die es nicht mehr
+      gibt.
+    - `avstream/tth26xvideostream.cpp`, `createHeaderList`:
+      `TTThreadTask::onStatusReport()` teile durch `mTotalSteps` — das Feld
+      wird nirgends gelesen.
+    - `common/ttprogressestimator.cpp`, `update()`: „empty calibKey
+      (video)“ — die Videostufen haben inzwischen einen Schlüssel.
+    - `avstream/ttnaluparser.h`, `TTAccessUnit::index`: „display order
+      based on POC“ — der Parser setzt die Dekodierreihenfolge.
+    - `data/ttcutvideotask.cpp`, `tools/diag/test_stale_abort.cpp`:
+      „ttmpeg2videostream.cpp:121, 244, 568“ — Zeilennummern, die nicht
+      mehr stimmen müssen.
+    - `tools/diag/test_abort_after_finish.cpp`: Kopf sagt „Two cases“, es
+      sind drei; `tools/diag/test_pillarbox.cpp`: Kopf nennt
+      `TTStreamPointVideoWorker::isPillarboxFrame`, das es im Programm
+      nicht mehr gibt (`classifyAspectSample`).
 - **Neu kodierte AC3-Rahmen: was offen bleibt** (2026-10-02; die drei
   gemessenen Abweichungen — Kopffelder, Kompression, 256 Samples Versatz —
   sind behoben, siehe `docs/completed-work.md`).

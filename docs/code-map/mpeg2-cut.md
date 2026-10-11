@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: 17201fe393526f3a3f5a7229d4daa5aa0aafd682
 last_verified: 2026-10-11
 sources:
   - avstream/ttmpeg2videostream.cpp
@@ -30,6 +30,12 @@ sources:
   - gui/ttcutframenavigation.cpp
   - common/ttsettings.h
   - tools/diag/test_mpeg2_cutout.cpp
+  - mpeg2decoder/ttmpeg2decoder.cpp
+  - common/ttthreadtaskpool.cpp
+  - extern/ttmkvmergeprovider.cpp
+  - avstream/ttesinfo.cpp
+  - gui/ttcutmainwindow.cpp
+  - gui/ttcutmainwindow_headless.cpp
 ---
 
 # Code Map: MPEG-2 Cut
@@ -92,22 +98,24 @@ flowchart TD
 | `TTVideoIndexList::headerListIndex(pos)` → caller | The **bitstream (decode-order)** position of the picture displayed at `pos`. This is the display→decode bridge, the MPEG-2 analogue of `TTDisplayOrderMap`. |
 | `cut()` → `getCutStartObject()` | Runs **before** the stream copy. If the cut-in is not an I-frame it calls `encodePart()`, which writes the re-encoded head **directly into the target buffer**. Output byte order is therefore: head re-encode → (optional) injected sequence header → stream copy → tail re-encode. |
 | `getCutStartObject()` → `encodePart()` | Encodes `[cutIn .. nextI-1]`, clamped to `cutOut` when the next I-frame lies beyond the segment. Then sets `cutInIndex = iFramePos` — the copy starts at the I-frame, not at the user's cut-in. |
-| `checkIFrameSequence()` → target buffer | Copies raw bytes `[sequence_header .. gop_header-1]` when the I-frame's GOP is not preceded by a sequence header. Throws if neither a sequence header nor a GOP header can be found. |
+| `checkIFrameSequence()` → target buffer | Looks at the header two positions before the I-frame's picture header (`headerListIndex(iFramePos) - 2`, clamped to 0). If that is a sequence header, it is the start object and nothing is written. Otherwise it scans **forward** (`getNextHeader`) from that position for the next sequence header, copies the raw bytes `[sequence_header .. header-after-it - 1]` into the target and returns the header after the sequence header as the start object. Throws `TTArgumentException` when no sequence header is found; `headerAt()` throws `TTIndexOutOfRangeException` first when nothing follows the sequence header, so the `"No GOP Header …"` branch behind it is not reached. |
 | `getCutEndObject()` → `endObject` | Walks **backwards over display positions** to the last I/P frame (`ipFramePos`), then extends `endObject` forward over the B-frames that follow that I/P **in the header list (bitstream order)**. Two different index domains in one function — see pitfalls. |
 | `getCutEndObject()` → `cutParams->cutOutIndex` | Always `ipFramePos` (the last I/P at or before the cut-out in display order). A conditional overwrite with `cutOutPos` was the B-frame cut-out defect — removed in `3b087ae`, see below. |
 | `cut()` → `encodePart()` (tail) | Fires only when `cutOutPos > cutParams->getCutOutIndex()`. Re-encodes `[cutOutIndex+1 .. cutOutPos]` to deliver the frames the stream copy could not. |
-| `transferCutObjects()` → target buffer | Copies bytes from `startObject->headerOffset()` up to `endObject`, in 256 KiB chunks, patching headers **in the buffer** as they pass. A 12-byte watermark guards against a header straddling the chunk boundary; an end-of-stream guard prevents an infinite `seekBackward` loop when the remainder already fits. |
-| `TTFileBuffer::directWrite()` → callers (`transferCutObjects()`, `checkIFrameSequence()`'s `copySegment()`, `TTCutParameter`'s sequence-end-code write) | Since 2026-08 (in `base_commit`): throws `TTIOException` when `QIODevice::write()` returns anything other than the full requested length — a short write or `-1`. Every caller here runs inside a task that catches `TTException`, so the cut now fails loudly. |
-| `transferCutObjects()` → `rewriteGOP()` | Rewrites the GOP time code from `cr->getNumPicturesWritten()` (the *output* frame counter, not the source position) and forces `closed_gop` when the first picture of that GOP has `temporal_reference != 0`. |
+| `transferCutObjects()` → target buffer | Copies bytes from `startObject->headerOffset()` through `endObject` (`getByteCount()` runs to the offset of the header after `endObject`, or to the stream size), in 256 KiB chunks, patching headers **in the buffer** as they pass. A 12-byte watermark guards against a header straddling the chunk boundary; an end-of-stream guard prevents an infinite `seekBackward` loop when the remainder already fits. |
+| `TTFileBuffer::directWrite()` → callers (`transferCutObjects()`, `checkIFrameSequence()`'s `copySegment()`, `TTCutParameter`'s sequence-end-code write) | Throws `TTIOException` when `QIODevice::write()` returns anything other than the full requested length — a short write or `-1`. Every caller here runs inside a task that catches `TTException` (`TTThreadTask::run()`), so the cut fails loudly. |
+| `transferCutObjects()` → `rewriteGOP()` | Rewrites the GOP time code from `cr->getNumPicturesWritten()` (the *output* frame counter, not the source position) and sets the `closed_gop` bit when `closeNextGOP` is still set (`close_gop` OR `gop->closed_gop`; an already closed source GOP stays closed). `closeNextGOP` is a local of `transferCutObjects()`: true on entry, cleared by the first GOP whose first picture has `temporal_reference == 0` or by the first group of dropped orphaned B-frames. |
 | `transferCutObjects()` → `rewriteTempRefData()` | Subtracts `tempRefDelta` from `temporal_reference` and rewrites the 10-bit field in place, re-packing `picture_coding_type` and 3 bits of `vbv_delay` in the same two bytes. |
 | `transferCutObjects()` → `removeOrphanedBFrames()` | Pushes a `TTBreakObject` (stop/restart offsets) so B-frames whose references were cut away are skipped by advancing `bufferStartOffset` past them. `sequence_end_code` is elided the same way. |
-| `encodePart()` → `TTTranscodeProvider` | Encoder parameters (size, aspect, bitrate) come from the **sequence header at `current_index`**, the fps from `frameRate()` — the **first** sequence header, all eight `frame_rate_code`s since 2026-09-24 (before, everything but 24/25/30 fps read as 25) —, interlace/TFF from the picture header; none from the segment being encoded. The encoder's GOP size follows the fps: 15, 18 above 28 fps, 30 above 48 fps. |
-| `encodePart()` → temp files | Every call creates its own `QTemporaryDir` (`ttcut-encode-XXXXXX`) below `TTSettings::tempDirPath()` and writes `encode.avi`/`encode.m2v` there. Until 2026-08-12 both names sat directly in the shared directory and the cleanup deleted every `encode.*` it found — a concurrent instance's files included. Reading back a foreign file yielded a header list without a sequence header and killed the process; `tools/diag/gate_encode_tempdir.sh` is the gate for it. |
+| `encodePart()` → `TTTranscodeProvider` | Encoder parameters (size, aspect, bitrate) come from the **sequence header at `current_index`**, the fps from `frameRate()` — the **first** sequence header, all eight `frame_rate_code`s (`TTSequenceHeader::frameRateValue()`) —, interlace/TFF from the picture header; none from the segment being encoded. The encoder's GOP size follows the fps: 15, 18 above 28 fps, 30 above 48 fps. |
+| `TTTranscodeProvider::encodeFrames()` → `TTMpeg2Decoder` / libavcodec `mpeg2video` | A `TTMpeg2Decoder` is built on the **source** stream's `filePath()`, `indexList()` and `headerList()` and opened with `decodeFirstMPEG2Frame(formatYV12)`. For each position `start..end` (display positions into the display-sorted index list) `moveToFrameIndex()` decodes the frame, whose YV12 planes are handed to the encoder zero-copy (the `AVFrame` points into the decoder's buffers). A frame the decoder cannot deliver is logged and skipped. Quality is qscale mode (`global_quality = FF_QP2LAMBDA * encoderCrf()`); the source bitrate is only an `rc_max_rate` cap. Returns true only when at least one packet came out and packets received >= frames sent. |
+| `encodeFrames()` → `encode.m2v` | Every packet the encoder returns (during the loop and after the flush) is appended to `<mpeg2FileInfo path>.m2v`, i.e. `encode.m2v`; a failed or short write stops the encode, and the return value is then still decided by the same packet-count test. |
+| `encodePart()` → temp files | Every call creates its own `QTemporaryDir` (`ttcut-encode-XXXXXX`) below `TTSettings::tempDirPath()`; `encode.m2v` is written there. (`encode.avi` is set in the encode parameters via `setAVIFileInfo()`, but no code writes or reads it.) The directory goes away when the call leaves scope, so concurrent instances cannot touch each other's files; `tools/diag/gate_encode_tempdir.sh` is the gate for it. |
 | `encodePart()` → `cut()` (recursion) | The re-encoded `encode.m2v` is reopened as a fresh `TTMpeg2VideoStream`, display-sorted, and **cut again** with `cut(0, end-start)`. Termination relies on the encoder emitting an I-frame at position 0 (`max_b_frames = 0`), so `getCutStartObject` finds `pictureCodingType(0) == 1` and does not recurse further. |
 | `TTCutParameter::numPicturesWritten` | Accumulates across **all** cuts of a session (`firstCall()` once, `lastCall()` once, one `TTCutParameter` for the whole cut list). Feeds the rewritten GOP time codes, which is why it must count output frames. |
-| `TTThreadTaskPool::exit` → `TTAVData::onCutFinished()` → `emit cutFinished()` | The MPEG-2 cut ends in a **slot**, not synchronously like `doH264Cut()`/`doAudioOnlyCut()`. The slot muxes and then announces the finished cut; the signal drives both the GUI completion dialog and `QApplication::quit()` under `--auto-cut`. Until `9da00f13` the `emit` was missing entirely, so MPEG-2 cuts showed no completion dialog and a headless run never terminated. Emitted **regardless of mux success** — a failure sets `TTAVData::mLastCutError`, which the dialog reads to show a warning instead of a success message. The video-stream metadata the mux step reads (frame rate, PAFF state, codec, via `runList->at(0)`) comes from `mpRunningCutList` — the list `onDoCut()` was actually called with — not `mpCutList`; the two differ for any caller that hands in its own list (e.g. the diagnostic harnesses), and reading `mpCutList->at(0)` when it is empty would be an out-of-range `QList::at()` (`Q_ASSERT`-abort in debug, UB in release). An empty `runList` at this point is now a reported failure (`finishMpeg2Cut()` with a logged message), not a crash. |
-| `TTAVData::onDoCut()` (sync phase) → `finishCutOperation(CutOutcome::Failed, …)` | Audio and subtitle tracks are cut **synchronously, before the pool starts** (`mSyncPhaseAbort`; full sync-phase/abort architecture is `progress-reporting.md`'s territory). `onDoCut()` now counts the `ok` callbacks `cutAudioTracks()` fires against `avItem->audioCount()`; if fewer tracks succeeded than exist, it aborts with `CutOutcome::Failed` and a `"Only %1 of %2 audio track(s)…"` message **before the pool (and therefore the MPEG-2 video engine) ever runs** — the already-cut track files are left on disk for a retry. This check sits after the pre-existing sync-phase-cancel branch, so a genuine user cancel during this phase still reports `Cancelled`, not `Failed`. |
-| `TTAVData::onCutAborted()` → `finishCutOperation(...)` | Both a user Cancel and a mid-pool failure end the pool with `aborted()`, so this one slot must tell them apart: it now reports `CutOutcome::Failed` when `TTThreadTaskPool::lastFailureMessage()` is non-empty, `Cancelled` otherwise. |
+| `TTThreadTaskPool::exit` → `TTAVData::onCutFinished()` → `finishMpeg2Cut()` → `finishCutOperation()` → `emit cutFinished()` | The MPEG-2 cut ends in a **slot**, not synchronously like `doH264Cut()`/`doAudioOnlyCut()`. `onCutFinished()` muxes by `workingOutputContainer()`: the mplex and Elementary branches run inline and call `finishMpeg2Cut()` at the end of the slot; the MKV branch starts the mux as a **second pool run** (`TTMuxTask`) and `onMpeg2MuxFinished()` calls `finishMpeg2Cut()`. `finishMpeg2Cut()` closes the operation: `Success` when `mLastCutError` is empty, `Failed` otherwise, and `finishCutOperation()` emits `cutFinished()` for both (never for `Cancelled`). The signal drives the GUI completion dialog (`TTCutMainWindow::onCutFinished()`) and, under `--auto-cut`, the exit-code decision plus `QApplication::quit()` (`endAutoCut()`). It is emitted **regardless of mux success** — a failure sets `TTAVData::mLastCutError`, which the dialog reads to show a warning instead of a success message and `--auto-cut` turns into exit code 1. In the MKV branch, the video-stream metadata the mux step reads (frame rate, PAFF state, codec, via `runList->at(0)` and `TTMkvMergeProvider::videoOptionsFor()`) comes from `mpRunningCutList` — the list `onDoCut()` was actually called with — not `mpCutList`; the two differ for any caller that hands in its own list (e.g. the diagnostic harnesses). An empty `runList` at that point is a reported failure (`mLastCutError` set, `finishMpeg2Cut()`), not a crash. |
+| `TTAVData::onDoCut()` (sync phase) → `finishCutOperation(CutOutcome::Failed, …)` | Audio and subtitle tracks are cut **synchronously, before the pool starts** (`mSyncPhaseAbort`; full sync-phase/abort architecture is `progress-reporting.md`'s territory). `onDoCut()` counts the `ok` callbacks `cutAudioTracks()` fires against `avItem->audioCount()`; if fewer tracks succeeded than exist, it aborts with `CutOutcome::Failed` and a `"Only %1 of %2 audio track(s)…"` message **before the pool (and therefore the MPEG-2 video engine) ever runs** — the already-cut track files are left on disk for a retry. This check sits after the pre-existing sync-phase-cancel branch, so a genuine user cancel during this phase still reports `Cancelled`, not `Failed`. |
+| `TTAVData::onCutAborted()` → `finishCutOperation(...)` | Both a user Cancel and a mid-pool failure end the pool with `aborted()`, so this one slot must tell them apart: it reports `CutOutcome::Failed` when `TTThreadTaskPool::lastFailureMessage()` is non-empty, `Cancelled` otherwise. |
 
 ## Variant matrix — cut-in / cut-out frame type
 
@@ -149,8 +157,8 @@ pixel-identically, and the audio cut-time correction subtracts them.
   made `createHeaderList()` re-read that byte forever, one leaked header object
   per turn.
 
-  Termination is therefore the caller's: `createHeaderList()` loops on
-  `atEnd()`, and every `readHeader()` reports a short read as `false` so the
+  Termination is therefore the caller's: `createHeaderListFromMpeg2()` (called by
+  `createHeaderList()`) loops on `atEnd()`, and every `readHeader()` reports a short read as `false` so the
   half-read object is deleted instead of entering the list with parsed stack
   garbage. A truncated *sequence extension* is the one exception — the header
   itself was read in full, so it keeps its defaults and returns `true`.
@@ -168,7 +176,7 @@ pixel-identically, and the audio cut-time correction subtracts them.
   `[cutIn..cutOut]` segment is re-encoded and the **last header** is returned
   so `cut()` skips the transfer. Otherwise `encodeEnd` would become -2 and
   `encodePart` threw an uncaught exception (SIGABRT). Repro:
-  `test_mpeg2_cutout TEST.m2v 73470 73474`.
+  `test_mpeg2_cutout TEST.m2v 73470 73474 <out.m2v>`.
 
 - **`TTVideoIndexList` (MPEG-2)** — display-sorted after `sortDisplayOrder()`.
   `pictureCodingType(pos)` is the type of the frame *displayed* at `pos`;
@@ -248,12 +256,12 @@ pixel-identically, and the audio cut-time correction subtracts them.
   still-image display (`gui/ttcurrentframe.cpp`), never by the video cut path.
 
   **Consumer preference flipped (`b69dfcf`, `fc2a573`, 2026-07-12).** `TTAVData`'s
-  `loadExtraFrameIndices()` now prefers this parser list (`extraIndices()`) over the
-  `.info` candidate list for audio time correction — `.info` is
-  tried first and the parser list was only a fallback when `.info` was empty. (The
+  `loadExtraFrameIndices()` prefers this parser list (`extraIndices()`) over the
+  `.info` candidate list (`es_doubled_pts_aus`) for audio time correction; the
+  `.info` list is the MPEG-2 fallback only when the parser found no field pairs. (The
   `.info` key itself changed with `ea08e20f`: the legacy `es_extra_frames` is no
   longer parsed, its successors are `es_total_aus` + `es_doubled_pts_aus`.) Because
-  `extraIndices()` is populated by the (async) header-list build and is still empty
+  `extraIndices()` is populated by `createIndexList()` in the (async) open task and is still empty
   when `TTAVData::openAVStreams()` runs synchronously, the preference decision — and
   a new cluster-classification step (`showExtraFrameClusterDialog()`) that confirms a
   `.info` cluster as a real field-pair group when a parser `extraIndices()` position
@@ -303,9 +311,9 @@ pixel-identically, and the audio cut-time correction subtracts them.
   log an error and return silently on violation rather than corrupting the output.
 
 - **`mAbort` self-clears on the throw it causes.** `TTMpeg2VideoStream`'s three
-  abort-poll sites — `createIndexList()`, `createHeaderList()` (both reached
-  again on `encodePart()`'s recursive re-open of `encode.m2v`, see the
-  diagram), and `transferCutObjects()`'s main copy loop — each read `mAbort`,
+  abort-poll sites — `createIndexList()`, `createHeaderListFromMpeg2()` (called
+  by `createHeaderList()`; both reached again on `encodePart()`'s recursive
+  re-open of `encode.m2v`, see the diagram), and `transferCutObjects()`'s main copy loop — each read `mAbort`,
   reset it to `false`, and throw `TTAbortException` in the same `if`. The flag
   only disappears when a check is actually reached; a cancel that arrives
   after the stream has finished its current work is never polled and stays
@@ -331,13 +339,11 @@ pixel-identically, and the audio cut-time correction subtracts them.
   A future encoder change that emits a leading non-I picture would turn this into
   unbounded recursion. Nothing asserts the invariant.
 
-- **`encodePart()` temp files.** A hardcoded
-  basename `encode.*` directly in the shared `TTSettings::tempDirPath()`, cleaned
-  up by a glob that deleted every `encode.*` it found. Live, not latent: a second
+- **`encodePart()` temp files.** Each call gets its own `QTemporaryDir`
+  (`ttcut-encode-XXXXXX`) below `TTSettings::tempDirPath()`, so a second
   concurrent *process* (a second harness, a second TTCut-ng window) sharing the
-  same temp dir collided — not same-process threading, which the old wording
-  wrongly cited as the mitigation. Now each `encodePart()` call gets its own
-  `QTemporaryDir`; see the edge-table row above.
+  same temp dir cannot collide with it; the directory is removed when the call
+  leaves scope. See the edge-table row above.
 
 - **`firstSequenceHeader()` / `getSequenceHeader()` NULL-safety.**
   `TTVideoHeaderList::firstSequenceHeader()` checks the loop bound before

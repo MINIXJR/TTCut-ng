@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: 17201fe393526f3a3f5a7229d4daa5aa0aafd682
 last_verified: 2026-10-11
 sources:
   - data/ttanalysislog.cpp
@@ -33,11 +33,16 @@ sources:
   - extern/ttaudiorepairitem.h
   - gui/ttstreampointwidget.cpp
   - gui/ttcutmainwindow.cpp
+  - gui/ttcutmainwindow.h
+  - gui/ttprogressbar.cpp
+  - data/ttavdata.cpp
+  - data/ttavlist.cpp
   - gui/ttaudiorepairdialog.h
   - gui/ttaudiorepairdialog.cpp
   - common/ttthreadtaskpool.cpp
   - common/ttthreadtaskpool.h
   - common/ttthreadtask.cpp
+  - common/ttthreadtask.h
   - common/ttsettings.h
   - common/ttsettings.cpp
   - data/ttcutpreviewtask.cpp
@@ -94,10 +99,10 @@ werden:
   das **nicht** — sie senden ihr eigenes `progress(int)` alle ~20 Bilder in die
   Statuszeile und haben ihren Abbrechen-Knopf im Navigationsbereich; ein
   Fortschrittsdialog erscheint bei ihnen gar nicht, weil `TTProgressBar` erst
-  bei `Start` oder `Step` sichtbar wird.
+  bei `Start`, `Step` oder `AddProcessLine` sichtbar wird.
 - **Bildindex:** beide Ströme der Gleichbild-Suche übernehmen einen vorhandenen
-  Index über `TTH26xVideoStream::frameIndexBundle()` (`setFrameIndex` im
-  Aufrufer) und scannen nur, wenn
+  Index über `TTH26xVideoStream::frameIndexBundle()`
+  (`adoptOrBuildFrameIndex` in `openFFmpegWrapperFor()`) und scannen nur, wenn
   keiner da ist. Der Suchstrom tat das bis 2026-08-15 nicht und scannte immer —
   5553 ms von 11 464 ms Suchlaufzeit auf echtem Material, siehe
   `docs/completed-work.md`.
@@ -118,7 +123,7 @@ aus* (Kontrollfluss, keine Nutzdaten).
 ```mermaid
 flowchart TB
     subgraph SRC["Quellen (GUI-Thread, vor dem Start eingesammelt)"]
-        PREV["Vorschau-Wrapper<br/>frameIndex()"]
+        PREV["Vorschau-Wrapper<br/>frameIndexBundle()"]
         IDX["TTVideoIndexList<br/>Anzeige-Ordnung"]
     end
 
@@ -191,20 +196,20 @@ beibehalten.
 | Kante | Bedeutung | Fallstrick |
 |---|---|---|
 | `PREV → MW → Task` (`preBuiltFrameIndex`) | `TTFrameIndexBundle` des Vorschau-Wrappers: die `QList<TTFrameInfo>` **plus** `isPAFF`/`frameMbsOnlyFlag`/`log2MaxFrameNum` (Qt-COW, O(1)). Leer ⇒ jeder Sub-Dekoder lässt sich den Index von einem eigenen `TTFrameIndexer` bauen und installiert ihn per `setFrameIndex()`. | Bei H.26x ist die Liste die **einzige** Quelle für Anzeige↔Dekodier-Zuordnung. Ein Worker ohne Index gibt aus `decodeFrame()` leere `QImage` zurück — genau der zweite der beiden Ur-Defekte der Pillarbox-Erkennung. |
-| `IDX → collectNextBatch/collectSampleBatch` | Positionen stammen aus `moveToNextIndexPos`/`moveToPrevIndexPos`, also **Anzeige**-Positionen für alle Codecs. | Nicht in Dekodier-/AU-Indizes umrechnen. Die Kette (Positionsauswahl → `decodeFrame` → `found`/`pointsDetected` → `onVideoSliderChanged`) ist durchgehend anzeigeordnungs-konsistent. `TTStreamPointVideoWorker` zählt zwar `picture_start_code`-Header in Bitstrom-Reihenfolge, **schlägt die gemeldete Position aber in der anzeigesortierten Indexliste nach** (`displayPositionAfter`) — siehe die Zeile darunter. |
+| `IDX → collectNextBatch/collectSampleBatch` | Positionen stammen aus `moveToNextIndexPos`/`moveToPrevIndexPos`, also **Anzeige**-Positionen für alle Codecs. | Nicht in Dekodier-/AU-Indizes umrechnen. Die Ketten (gerichtete Suche: Positionsauswahl → `decodeFrame` → `found` → `onVideoSliderChanged`; Marker: Positionsauswahl → `pointsDetected` → Markerliste → `onStreamPointJump`) sind durchgehend anzeigeordnungs-konsistent. `TTStreamPointVideoWorker` zählt zwar `picture_start_code`-Header in Bitstrom-Reihenfolge, **schlägt die gemeldete Position aber in der anzeigesortierten Indexliste nach** (`displayPositionAfter`) — siehe die Zeile darunter. |
 | `VWORK → displayPositionAfter → IDX` | Der Bitstrom-Zähler wird über den Kopf-Index des ersten Bildes nach dem Sequenzkopf in einen Rang der anzeigesortierten `TTVideoIndexList` übersetzt. | War bis `2026-07-30` nicht vorhanden; der rohe Zähler landete als Markerposition in `onVideoSliderChanged`. Gemessen (`tools/diag/test_streampoint_order`): TELE5 576p25 alle 626 Sequenzköpfe um +2 daneben, Comedy Central 268 von 350 (überwiegend +3, bis +6); RTLZWEI fährt geschlossene GOPs und war zufällig richtig. **Nachrechnen (`base_number + temporal_reference`) genügt nicht** — Feldbild-Paare lassen Rang und `display_order`-Wert auseinanderlaufen (65 von 7507 bzw. 14 von 136319 Einträgen). Der lineare Suchlauf ist vertretbar, weil er nur bei einem echten Wechsel läuft. |
 | `setupWorkers → parallelMap` | N Wrapper mit `setAnalysisMode(true)` **und** `setSearchMode(true)`; `parallelMap` verteilt Index *i* fest auf Wrapper *i*. | `setSearchMode(true)` = direkter Keyframe-Sprung ohne DPB-Vorlauf. Gemessen 34 ms statt 111 ms je I-Frame (2026-07-29 auf `03x01_-_Drunter_und_drüber.264`, 720p50) — aber Open-GOP-B-Bilder unmittelbar nach dem Sprung sind dabei nicht garantiert korrekt. Für Stichproben-Analysen belanglos, für Standbildanzeige **nicht** (dort ist der Vorlauf Pflicht, siehe `frame-order.md`). |
-| `parallelMap` Worker-Zahl | `TTSettings::searchWorkerCount()`, 0 = automatisch (`idealThreadCount()/2`, gedeckelt 4), geklemmt auf [1, 16]. | MPEG-2 wird hart auf `mWorkerCount = 1` gesetzt — libmpeg2-Dekoder sind nicht mehrfach instanziierbar. Für MPEG-2 fällt `parallelMap` deshalb in den Inline-Zweig. |
-| `SETUP → WRAP` (`setCancelToken`, seit `f61baed4`) | Jeder Sub-Dekoder aus `setupWorkers()` und der eine Dekoder aus `openDecoder()` bekommen einen **Zeiger** auf das `std::atomic<bool> mIsAborted` der Aufgabe (nicht besessen, `nullptr` = kein Abbruch möglich). `TTFFmpegWrapper::isCancelled()` liest ihn relaxed, einmal je Skip-Schritt in `decodeFrame()`, `decodeFrameYUV()`, `isFrameBlack()` und `buildHistogram()`; bei gesetztem Flag kehrt der Aufruf leer bzw. `false` zurück — ohne Fehlerprotokoll und ohne den Nachbarversuch, ein Abbruch ist kein Fehlschlag. | Vorher pollte `TTSearchTask` das Flag nur **zwischen** den Stapeln: die Latenz eines Abbruchs war eine volle Dekodierung je Worker (gemessen 114/112 ms in `buildHistogram`/`isFrameBlack`, Bild trotzdem geliefert). Der Zeiger lebt so lange wie die Aufgabe; die Wrapper gehören der Aufgabe und sterben vor ihr. Die Skip-Schleifen sind seit `8582c27d` zusätzlich begrenzt (`guardMax` aus Abstand zum Keyframe plus Vorlauf), damit ein Ziel jenseits des Dateiendes nicht bis EOF dreht. |
+| `parallelMap` Worker-Zahl | `TTSettings::searchWorkerCount()`, 0 = automatisch (`idealThreadCount()/2`, gedeckelt 4), geklemmt auf [1, 16]. | MPEG-2 wird hart auf `mWorkerCount = 1` gesetzt — `setupWorkers()` öffnet für MPEG-2 nur den einen `TTMpeg2Decoder` (im Code als „single decoder for now“ vermerkt, Mehrfach-Dekoder nicht umgesetzt). Für MPEG-2 fällt `parallelMap` deshalb in den Inline-Zweig. |
+| `SETUP → WRAP` (`setCancelToken`, seit `f61baed4`) | Jeder Sub-Dekoder aus `setupWorkers()` (H.264/H.265) bekommt einen **Zeiger** auf das `std::atomic<bool> mIsAborted` der Aufgabe (nicht besessen, `nullptr` = kein Abbruch möglich). Der MPEG-2-Pfad hat keinen Token: `setupWorkers()` ruft für MPEG-2 `openDecoder()`, das einen `TTMpeg2Decoder` ohne Abbruchzeiger öffnet — dort greift der Abbruch erst zwischen den Stapeln (der H.26x-Zweig von `openDecoder()` setzt den Token zwar auch, wird aber von keinem Aufrufer erreicht). `TTFFmpegWrapper::isCancelled()` liest ihn relaxed, einmal je Skip-Schritt in `decodeFrame()`, `decodeFrameYUV()`, `isFrameBlack()` und `buildHistogram()`; bei gesetztem Flag kehrt der Aufruf leer bzw. `false` zurück — ohne Fehlerprotokoll und ohne den Nachbarversuch, ein Abbruch ist kein Fehlschlag. | Vorher pollte `TTSearchTask` das Flag nur **zwischen** den Stapeln: die Latenz eines Abbruchs war eine volle Dekodierung je Worker (gemessen 114/112 ms in `buildHistogram`/`isFrameBlack`, Bild trotzdem geliefert). Der Zeiger lebt so lange wie die Aufgabe; die Wrapper gehören der Aufgabe und sterben vor ihr. Die Skip-Schleifen sind seit `8582c27d` zusätzlich begrenzt (`guardMax` aus Abstand zum Keyframe plus Vorlauf), damit ein Ziel jenseits des Dateiendes nicht bis EOF dreht. |
 | `FSEARCH → WRAP` (`setCancelToken`) | Die Gleichbild-Suche gibt ihrem Referenz- und ihrem Such-Wrapper denselben Zeiger auf ihr eigenes `std::atomic<bool> mAbort` (vorher ein nicht-atomares `bool`); `onUserAbort()` setzt es auf dem GUI-Thread, der Worker liest es zwischen den Bildern **und** in der laufenden Dekodierung. | `TTFrameSearchTask` steht außerhalb der `TTSearchTask`-Familie und hat kein `mIsAborted`-Polling zwischen Stapeln — ohne den Token sah der Abbruch dort erst nach dem Bild an der Reihe. |
-| `ASPECT → PURE` | `classifyAspectSample()` bekommt ein `Format_Grayscale8`-Bild und liefert drei Werte: `Pillarbox`, `NoPillarbox`, `NoStatement`. Seit `37d20e13` zusätzlich über einen **optionalen** Ausgabeparameter den Grund (`TTAspectReason`: `None`, `NoBars`, `BarsTooWide`, `CentreTooDark`, `Unusable`). | `NoStatement` ist **kein** Fehlerwert, sondern die Aussage „dieses Bild darf den Zustand nicht bewegen": Schwarzbild (mittlere Luminanz ≤ 20), zu breiter Balken (> 1,5 × Nennwert — dunkler Bildinhalt am Rand) oder Dekodierfehler. Die Hysterese ignoriert solche Proben, statt den Kandidatenlauf zurückzusetzen. Der Grund existiert für die Abschlussbilanz im Detailbereich, die die `NoStatement`-Proben aufschlüsselt; der Vorgabewert `nullptr` hält die zweiargumentigen Aufrufe (u. a. `refineTransition`, ~15 Prüffälle im Harness) gültig. **Zählen darf nur der Hauptlauf**: `refineTransition()` ruft `classifyBatch()` ein zweites Mal über dieselbe Gegend und übergibt bewusst keinen Gründe-Vektor, sonst wären die Proben doppelt gezählt. |
+| `ASPECT → PURE` | `classifyAspectSample()` bekommt ein `Format_Grayscale8`-Bild und liefert drei Werte: `Pillarbox`, `NoPillarbox`, `NoStatement`. Seit `37d20e13` zusätzlich über einen **optionalen** Ausgabeparameter den Grund (`TTAspectReason`: `None`, `NoBars`, `BarsTooWide`, `CentreTooDark`, `Unusable`). | `NoStatement` ist **kein** Fehlerwert, sondern die Aussage „dieses Bild darf den Zustand nicht bewegen": Schwarzbild (mittlere Luminanz ≤ 20), zu breiter Balken (> 1,5 × Nennwert — dunkler Bildinhalt am Rand) oder Dekodierfehler. Die Hysterese ignoriert solche Proben, statt den Kandidatenlauf zurückzusetzen. Der Grund existiert für die Abschlussbilanz im Detailbereich, die die `NoStatement`-Proben aufschlüsselt; der Vorgabewert `nullptr` hält die zweiargumentigen Aufrufe gültig (17 Prüffälle in `tools/diag/test_aspectdetect.cpp`); `classifyBatch()` hat denselben Vorgabewert für seinen Gründe-Vektor. **Zählen darf nur der Hauptlauf**: `refineTransition()` ruft `classifyBatch()` ein zweites Mal über dieselbe Gegend und übergibt bewusst keinen Gründe-Vektor, sonst wären die Proben doppelt gezählt. |
 | `PURE → ASPECT` (`TTAspectTransition`) | Die Hysterese meldet einen Wechsel erst, wenn der neue Zustand `10 s × fps` Frames durchgehalten hat; `firstFrame` ist die **erste** Probe des Laufs, nicht die bestätigende. | Der Stichprobenabstand darf das Hysteresefenster nicht überschreiten, sonst ist die Hysterese wirkungslos. Seit `aed01838` klemmt der Konstruktor `mSampleStride` auf das Fenster; beide Seiten lesen `kHysteresisWindowSeconds`. |
 | `PURE → ASPECT` (`TTAspectCandidate`) | Zusätzlich zum bestätigten Wechsel gibt die Hysterese **verworfene** Kandidatenläufe heraus — abzuholen mit `takeDiscardedCandidate()` nach jedem `feed()`, Einzelplatz mit Löschen beim Lesen. `feed()` behält seine Signatur. | Aufgezeichnet wird nur ein Lauf, der den **bestätigten** Zustand herausgefordert hätte (`mCandidate != mConfirmed`); Schwanken innerhalb des bestätigten Zustands erzeugt nichts. `heldFrames` ist `letzte − erste Probe des Laufs`, nicht `brechende − erste` — dafür führt die Klasse `mCandidateLast` mit, das auf **allen drei** Pfaden nachgezogen wird (Grundzustand, Kandidatenwechsel, Fortsetzung). Ein Lauf, der einen Wechsel auslöst, wird nicht zusätzlich als verworfen gemeldet. Der Scan zeigt Läufe mit `heldFrames == 0` **nicht** an (Einzelausreißer des Klassifizierers, gemessen 11 von 15 auf einer 90-min-Aufnahme mit 1 s Abstand), zählt sie aber getrennt in der Bilanz. |
 | `ASPECT.refineTransition` | Zweiter, engerer Durchlauf über **jeden** I-Frame zwischen der letzten Probe des alten Zustands und `firstFrame`; liefert den ersten Frame mit dem gesuchten Zustand. | Ohne den Nachlauf wäre der Marker nur auf den Stichprobenabstand genau. Der Nachlauf läuft nur über I-Frames — auf Bildgenauigkeit *zwischen* zwei I-Frames kommt er nicht. |
 | `DIR → found(pos, wasAborted)` | Ein Signal für beide Ausgänge: `pos ≥ 0` Treffer, `pos = -1` kein Treffer. Das zweite Argument trennt „nichts gefunden" von „abgebrochen". | Bei `-1` springt die GUI auf `mLastSearchStartPos` zurück, damit der Abbruch die Anzeige nicht verschiebt. |
 | `SCAN → pointsDetected` | Wird **auch bei Abbruch** ausgesendet, mit den bis dahin gefundenen Punkten. | Bewusst: Teilergebnisse sind brauchbar. Die Statuszeile des Widgets kennzeichnet den Lauf über `setAnalysisRunning(false, aborted)` als unvollständig. |
 | `ANOMALY → pointsDetected` | Weicht vom `SCAN`-Verhalten oben **bewusst ab**: bei Abbruch sendet `TTAudioAnomalyScanTask::operation()` eine **leere** Liste, keine Teilergebnisse. | Ein Abbruch darf nicht wie ein vollständiger Lauf mit kurzer Trefferliste aussehen (Spec Komponente 1, „Sichtbarkeit"). `pointsDetected` feuert bei ihr genau einmal je Lauf, am Ende von `operation()`: mit den Treffern beider Suchen, leer bei Abbruch und leer bei einer Spur, die sich nicht dekodieren lässt oder nicht 48 kHz hat. |
-| `LOADEXIT → MW` (`maybeStartAutoAnomalyScan()`) | Zwei unabhängige Einsprünge — `TTAVData::onAVDataReloaded()` (jeder Pool-Exit) und `TTCutMainWindow::onAVItemChanged()` (setzt `mpCurrentAVDataItem`) — beide über `QTimer::singleShot(0, …)`, damit der Scan erst nach der restlichen Ladekette einreiht statt mitten in ihr. | Notwendig, weil `TTAVData::onOpenVideoFinished` den modalen „Defective Frames"-Dialog vor `currentAVItemChanged()` zeigen kann; der Pool-Exit wartet nicht auf diesen Dialog, `onAVDataReloaded()` kann also mit `mpCurrentAVDataItem == nullptr` feuern (gemessen 2026-08-20 auf realem 1,6-GB-Material). Welcher der beiden Einsprünge tatsächlich startet, hängt vom Material ab; die Wächter in `maybeStartAutoAnomalyScan()` (`anomalyScanStarted()`, laufende Analyse, vorhandene `AudioAnomaly`-Marker, `audioAnomalyScanEnabled()`, `mProjectLoadInProgress`) machen jeden weiteren Aufruf zum No-op. Ruft intern `startAudioAnomalyScan()` — denselben Helfer wie der Button-Pfad über `WIDGET`/`MW`; kein zweiter Verdrahtungscode. |
+| `LOADEXIT → MW` (`maybeStartAutoAnomalyScan()`) | Zwei unabhängige Einsprünge — `TTCutMainWindow::onAVDataReloaded()` (Slot auf `TTAVData::avDataReloaded`, das `TTAVData::onThreadPoolExit()` — ausser nach dem Mux-Poollauf —, `onOpenVideoFinished()` und `onReadProjectFileFinished()` aussenden) und `TTCutMainWindow::onAVItemChanged()` (setzt `mpCurrentAVDataItem`) — beide über `QTimer::singleShot(0, …)`, damit der Scan erst nach der restlichen Ladekette einreiht statt mitten in ihr. Ein dritter, nur für das Projektladen: `onOpenProjectFileFinished()` gibt `mProjectLoadInProgress` frei und reiht dieselbe Prüfung ebenfalls über den 0-ms-Timer ein. | Notwendig, weil `TTAVData::onOpenVideoFinished` den modalen „Defective Frames"-Dialog vor `currentAVItemChanged()` zeigen kann; der Pool-Exit wartet nicht auf diesen Dialog, `onAVDataReloaded()` kann also mit `mpCurrentAVDataItem == nullptr` feuern (gemessen 2026-08-20 auf realem 1,6-GB-Material). Welcher der beiden Einsprünge tatsächlich startet, hängt vom Material ab; die Wächter in `maybeStartAutoAnomalyScan()` (`anomalyScanStarted()`, laufende Analyse, vorhandene `AudioAnomaly`-Marker, `audioAnomalyScanEnabled()`, `mProjectLoadInProgress`) machen jeden weiteren Aufruf zum No-op. Ruft intern `startAudioAnomalyScan()` — denselben Helfer wie der Button-Pfad über `WIDGET`/`MW`; kein zweiter Verdrahtungscode. |
 | `NODEC → MODEL` (`ANOMALY`-Anteil) | `TTAudioAnomalyScanTask` liefert `TTStreamPoint`s vom Typ `AudioAnomaly` mit **zwei** Koordinaten: `frameIndex`/`duration` (Video-Anzeigeindex, `duration` endexklusiv in Sekunden — dieselbe Konvention wie alle anderen Markertypen) **und** `audioFrameFrom()`/`audioFrameTo()` (exakter AC3-Quell-Frame-Bereich, **beide Grenzen inklusiv** — dieselbe Konvention wie `TTAudioRepairItem`). Dazu `audioChannelMask()`: die Kanäle, die der Reparaturdialog vorwählt (C+LFE bei einem LFE-Fund, alle Kanäle der Rahmen bei einem Abbruch; 0 = unbekannt) und `audioAnomalyKind()` (`LfeBurst` / `LastingStop` / `Hole`, aus Projekten vom 2026-10-04/05 `AbruptStop`): das Kontextmenü bietet für einen `AbruptStop`-Marker keine neue Reparatur an, für einen bleibenden Abbruch die Ausblend-Reparatur (`offersNewAudioRepair()`, Begründung in `audio-repair.md`) und für ein Loch die Spender-Füllung, wenn die Spur einen Spender-Kandidaten hat (`TTAVItem::donorCandidateTracks`; die Entscheidung fällt in `TTStreamPointWidget::buildContextMenu`, deshalb meldet `offersNewAudioRepair()` für ein Loch `false`). | Die Video-Koordinate ist eine verlustbehaftete Projektion (Rundung auf 40-ms-Videoraster gegen das 32-ms-Audioraster); der Reparaturdialog verwendet deshalb `audioFrameFrom/To`, nicht `frameIndex/duration`, sobald sie vorhanden sind (`hasAudioFrameRange()`). Ein aus einer älteren Projektdatei geladener `AudioAnomaly`-Marker hat `-1/-1` (unbekannt) und muss auf die Schätzung zurückfallen. |
 | `POOLQ → BAR` (`statusReport`) | Die Aufgaben dieser Familie melden `Start`/`Step`/`Finished` — `Init` sendet nur `TTAVData` auf den Schnitt-Pfaden. Der `Start`-Zweig in `onStatusReport` öffnet den Dialog. | Zwei Aufgaben ⇒ zwei `Start`. Das Kreuz des Dialogs bricht deshalb ab (`closeEvent → onBtnCancelClicked`, `7d6dad0d`): reines Verstecken hätte die zweite `Start`-Meldung wieder aufgezogen. |
 | `BAR.cancel → onAbortStreamPoints` | Nicht direkt an den Pool, sondern über die Fenstermethode, damit `mStreamPointAnalysisAborted` gesetzt wird. | Ohne dieses Flag meldet das Widget einen abgebrochenen Lauf als normal beendet. |
@@ -272,8 +277,8 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
 - Ereigniszeilen sind gedeckelt (`resetCap()` zwischen den zwei Abschnitten des
   Audio-Workers), Kopf- und Bilanzzeilen nicht. Was der Deckel schluckt, hängt
   als Zahl an der Bilanz. Der Bildformat-Scan hält dafür **zwei** Protokollierer
-  auf derselben Senke (`7f472967`): `mLog` für Kopf, bestätigte Übergänge und
-  Bilanz (20 Zeilen), `mNoiseLog` für verworfene Kandidaten (10). Mit einem
+  auf derselben Senke (`7f472967`): `mLog` für Kopf und bestätigte Übergänge
+  (20 Zeilen), `mNoiseLog` für verworfene Kandidaten (10). Mit einem
   gemeinsamen Budget konnte eine unruhige Aufnahme jede Zeile für Beinahe-Treffer
   ausgeben, bevor ein einziger bestätigter Übergang geschrieben war — die
   Übergänge sind aber das Ergebnis, die Verwürfe nur die Begründung.
@@ -295,7 +300,9 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   überholen, damit ist der Punkt gegenstandslos; taucht der Effekt anderswo
   auf, ist das hier der Anhaltspunkt.
 - Läufe, die von vornherein nichts finden **können**, sagen das: kein
-  MPEG-2-Strom für die Sequenzkopf-Analyse, keine AC3-Kopfdaten für die
+  MPEG-2-Strom für die Sequenzkopf-Analyse (die Zeile dafür im Video-Worker ist
+  unerreichbar — der Hinweis kommt aus `onAnalyzeStreamPoints()`, siehe den
+  nächsten Punkt), keine AC3-Kopfdaten für die
   Kanalwechsel-Erkennung (MP2 wird in `detectAudioChanges()` übersprungen —
   Lücke sichtbar gemacht, nicht geschlossen), und alle acht Ausstiege der
   Stille-Erkennung über `silenceUnavailable()`, das zugleich die sonst
@@ -348,10 +355,14 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
 - **ffmpeg-`n` ≠ TTCut-Anzeigeindex bei MPEG-2.** Für `pb43.m2v` Versatz +2
   (135000 Indexeinträge gegen 134998 ffmpeg-Ausgabeframes = 2 verworfene
   führende B-Bilder). Gleiche Falle wie in `mpeg2-cut.md`.
-- **Abbruch räumt synchron auf.** `TTThreadTaskPool::onUserAbortRequest()`
-  bricht auch noch nicht gestartete Aufgaben ab, und `TTThreadTask::run()`
-  prüft `mIsAborted` **vor** `operation()`. Eine abgebrochene Aufgabe meldet
-  deshalb nie `Start`. Darauf ruht die Kreuz-gleich-Abbrechen-Lösung.
+- **Der Abbruch erreicht auch noch nicht gestartete Aufgaben.**
+  `TTThreadTaskPool::onUserAbortRequest()` ruft `onUserAbort()` an jeder
+  eingereihten Aufgabe auf, auch an noch nicht gestarteten. Bei den Aufgaben
+  dieser Familie setzt `onUserAbort()` nur `mIsAborted`;
+  `TTThreadTask::run()` prüft das Flag **vor** `operation()` und wirft
+  `TTAbortException`, sobald der Pool die Aufgabe startet — es kommt dann nur
+  `aborted`. Eine abgebrochene Aufgabe meldet deshalb nie `Start`. Darauf ruht
+  die Kreuz-gleich-Abbrechen-Lösung.
 - **`onUserAbortRequest()` darf `finished` nicht trennen.** Genau dieser Slot
   nimmt die Aufgabe über `removeAll()` aus `mTaskQueue`; trennt man ihn und
   löscht die Aufgabe per `deleteLater`, behält der Pool einen toten Zeiger
@@ -390,7 +401,8 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   Mit `tools/diag/test_task_cleanup_order` unter AddressSanitizer nachgestellt:
   `heap-use-after-free` in `cleanUp()`, freigegeben im `DeferredDelete` des
   GUI-Threads. Keine `cleanUp()`-Implementierung im Baum braucht das Signal
-  vorher; die beiden, die etwas freigeben, halten es privat ohne Getter.
+  vorher; die drei, die etwas freigeben (`TTOpenVideoTask`, `TTOpenAudioTask`,
+  `TTOpenSubtitleTask`: ihr `mp…Type`), halten es privat ohne Getter.
 - **Leerer Indexlisten-Fall meldet nichts.** `TTAspectScanTask::operation()`
   kehrt bei `mIndexList->count() == 0` zurück, ohne `onStatusReport` zu rufen;
   die GUI schirmt den Fall zwar ab, der Harness-Pfad aber nicht. Kleinigkeit,
@@ -439,8 +451,9 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   an den Pool-Thread gereicht. Weggefallen ist alles, was `mTaskQueue`
   berührt: die Aufgabe wird nicht eingereiht, und die `destroyed`-Verbindung
   entfällt (sie existiert nur, um eine tote Aufgabe aus der Warteschlange zu
-  nehmen). Die Fortschritts-Slots laufen im Pool-Thread, weil die
-  Aufgabenobjekte dort leben — Qt wählt dann eine Queued Connection.
+  nehmen). Die Fortschritts-Slots gehören dem Pool und laufen im Thread des
+  Pools (GUI-Thread) — aus dem Arbeitsthread gesendet, wählt Qt eine Queued
+  Connection.
   `start()` sichert seine Thread-Zugehörigkeit jetzt per `Q_ASSERT` ab.
   Beleg: ThreadSanitizer meldete auf dem alten Stand Datenrennen auf
   `QListData` der Warteschlange und einen SEGV in `runningTaskCount()`

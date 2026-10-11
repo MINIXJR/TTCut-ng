@@ -30,7 +30,7 @@ TTCut-ng is a Qt6-based video editing application for MPEG-2, H.264, and H.265 s
 - Cut-in: I-frames only
 - Cut-out: P-frames or I-frames
 
-**Key Constraint for H.264/H.265**: Smart cut re-encodes partial GOPs at cut points. For streams without IDR frames (only Non-IDR I-slices), Smart Cut forces IDR generation via `forced-idr=1` to ensure clean decoder resets at segment boundaries.
+**Key Constraint for H.264/H.265**: Smart cut re-encodes partial GOPs at cut points. For streams without IDR frames (only Non-IDR I-slices), Smart Cut re-encodes the cut-in so that the segment starts with an IDR and the decoder resets cleanly at segment boundaries. libx264 gets `forced-idr=1` for that; libx265 gets no such option — every re-encode pass opens a fresh encoder, and the first picture of a fresh libx265 encode is an IDR (measured on the Tux HEVC test video, libx265 4.3: `IDR_N_LP` at the tail). In the H.265 RASL-preserving head seam that IDR is demoted to CRA on purpose (see below).
 
 ## Build System
 
@@ -214,7 +214,7 @@ DVB Recording (TS) → ttcut-demux -e → ES files + .info → TTCut-ng → MKV
 **Key implementation details (extern/ttessmartcut.cpp):**
 - TTNaluParser: Memory-mapped native H.264/H.265 NAL unit parser
 - TTESSmartCut: Frame-accurate Smart Cut engine
-- Encoder uses `bf=0` (no B-frames) and `forced-idr=1` for clean segment transitions
+- Encoder uses `bf=0` (no B-frames) for clean segment transitions; `forced-idr=1` is set for libx264 only (libx265 starts each fresh encode with an IDR without it)
 - Encoder recreated between segments (libx264 lookahead limitation)
 - GOP detection recognizes both IDR frames and I-slices (Open GOPs)
 - Non-IDR I-frame streams: `analyzeCutPoints()` forces re-encode to produce IDR at segment boundaries
@@ -271,7 +271,7 @@ Demux tool for H.264/H.265 TS files:
 - The `stream-copy → tail` seam needs none of this: the tail's first frame is a forced IDR, which resets `PrevRefFrameNum`.
 
 **Frame display (TTFFmpegWrapper):**
-- `seekToFrame()` seeks to the keyframe BEFORE the target keyframe (DPB prefill) to ensure Open-GOP B-frames decode correctly after `avcodec_flush_buffers()`.
+- `seekToFrame()` seeks to the keyframe BEFORE the target keyframe (DPB prefill) to ensure Open-GOP B-frames decode correctly after `avcodec_flush_buffers()` — except in search mode (`mSearchMode`), where it seeks to the target's own keyframe because the search only asks for I-frames.
 - The sequential decode optimization is disabled — `decodeFrame()` always seeks. This ensures identical DPB state across all decoder instances (CutOut and CurrentFrame widgets). The LRU frame cache mitigates the performance impact.
 
 The project is Linux-only, builds cleanly with Qt 6.7+ (developed against 6.10) and has full Wayland support.
