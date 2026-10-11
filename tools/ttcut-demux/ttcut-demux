@@ -627,6 +627,23 @@ format_ranges_hms() {
         END { if (n) printf "%s%s\n", out, line }'
 }
 
+# trailing_null_bytes FILE
+# Prints how many null bytes end FILE; 0 when it cannot be read.
+# The path goes in as an argument: a recording's name is data and must
+# never become part of the Python source (an apostrophe in it broke the
+# count, a crafted name was run as code).
+trailing_null_bytes() {
+    python3 -c '
+import os, sys
+with open(sys.argv[1], "rb") as f:
+    sz = os.fstat(f.fileno()).st_size
+    n = 0; f.seek(sz - 1)
+    while n < sz:
+        if f.read(1) != b"\x00": break
+        n += 1; f.seek(sz - n - 1)
+    print(n)' "$1" 2>/dev/null || echo 0
+}
+
 # True playing time of a raw audio elementary stream, in seconds.
 #
 # Deliberately NOT ffprobe's format=duration: a raw ES has no container to
@@ -1395,15 +1412,7 @@ if $ES_MODE; then
         # ffmpeg stream-copy from TS extracts zero-stuffed PES payload,
         # leaving invalid null padding that has no MPEG-2 start codes.
         if [ "$VIDEO_CODEC" = "mpeg2video" ]; then
-            TRAILING=$(python3 -c "
-import os
-with open('$OUTPUT_VIDEO','rb') as f:
-    sz=os.fstat(f.fileno()).st_size
-    n=0; f.seek(sz-1)
-    while n<sz:
-        if f.read(1)!=b'\x00': break
-        n+=1; f.seek(sz-n-1)
-    print(n)" 2>/dev/null || echo 0)
+            TRAILING=$(trailing_null_bytes "$OUTPUT_VIDEO")
             if [ "$TRAILING" -gt 0 ]; then
                 ORIG_SIZE=$(stat -c%s "$OUTPUT_VIDEO")
                 TRUNC_SIZE=$((ORIG_SIZE - TRAILING))

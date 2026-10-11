@@ -155,6 +155,7 @@ repairdialog_model     unit  300  test_repairdialog_model
 demux_framerate        unit  60   -
 demux_slotplan         unit  120  -
 demux_slot_e2e         unit  300  -
+demux_trailing_nulls   unit  60   -
 vdr_example_names      unit  120  -
 ocr_glyphs_selftest    unit  60   -
 ffmpeg_edge_packets    unit  120  -
@@ -461,6 +462,7 @@ gate_repairdialog_model()    { need "$TESTDATA/tux_test.264" "$TESTDATA/tux_test
 gate_demux_framerate()       { need "$DEMUX"; "$D/gate_demux_framerate.sh"; }
 gate_demux_slotplan()        { need "$DEMUX"; "$D/gate_demux_slotplan.sh"; }
 gate_demux_slot_e2e()        { need "$DEMUX" "$AUDIOFIX"; "$D/gate_demux_slot_e2e.sh"; }
+gate_demux_trailing_nulls()  { need "$DEMUX"; "$D/gate_demux_trailing_nulls.sh"; }
 gate_vdr_example_names()     { need "$DEMUX"; "$D/gate_vdr_example_names.sh" "$W"; }
 # Edge-repair rules and line bands of the subtitle glyph repair (needs Pillow).
 gate_ocr_glyphs_selftest() {

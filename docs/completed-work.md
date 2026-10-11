@@ -689,6 +689,32 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **Recording name pasted into Python source** → **DONE (2026-10-11, branch
+  `fix/demux-trailing-null-path`)**. Found by the security review before
+  v0.86.0; the code is older (`9ac0c99b`, 2026-04-08) and was in v0.85.0.
+  - **Defect:** the MPEG-2 branch counted the null bytes at the end of the
+    video ES with `python3 -c "… open('$OUTPUT_VIDEO','rb') …"`. The path
+    carries the `-n NAME` argument, i.e. the recording's name.
+  - **Measured on the function** (`gate_demux_trailing_nulls.sh`, a file of
+    4 bytes + 100 null bytes per name): plain name 100; apostrophe 0;
+    backslashes 0; a name that is a Python expression 0 — and the command
+    inside it ran (a marker file appeared). Double quote, `$(…)`, backticks
+    and a space were never affected (the string is not parsed again by the
+    shell).
+  - **Not measured:** the effect on a recording. Neither the Tux MPEG-2
+    recording nor the three demux logs at hand ever show "Truncated …
+    trailing null bytes", so no material here reaches the truncation; and
+    which characters VDR lets through from a programme title into the
+    directory name was not checked.
+  - **Fix:** `trailing_null_bytes FILE` — the path is `sys.argv[1]`. After
+    it: all eleven checks pass, no marker file. A demux of the Tux MPEG-2
+    recording under the name `Grey's_Tux` gives the same video file as under
+    a plain name, with the old and the new script (82803061 bytes).
+  - **Same pattern elsewhere:** none — the other inline `awk`/`sed`
+    programs of the shipped scripts take numbers from `ffprobe` or the
+    script's own output, not names.
+  - **Gate:** `demux_trailing_nulls`.
+
 - **Ton nach Zeitstempeln platzieren (Slot-Regel)** → **DONE** (2026-10-08,
   Zweig `feature/av-sync-timestamp-rule`: `d2345751` ttcut-audiofix `-p`,
   `9b32909d` ttcut-demux + Gates + Messwerkzeuge, `a344b304` TTCut-ng)
