@@ -143,6 +143,7 @@ aspect_autocut         unit  300  -
 exit_cancel            tux   900  test_exit_cancel
 save_suffix            tux   300  test_save_suffix
 marker_cutpoint        tux   600  test_marker_cutpoint
+quickjump_worker       tux   600  test_quickjump_worker
 pool_abort             unit  120  test_pool_abort
 abort_after_finish     unit  120  test_abort_after_finish
 cutlist_minsize        unit  120  test_cutlist_minsize
@@ -454,6 +455,9 @@ gate_save_suffix()           { need "$V264"; mkdir -p "$W/save"; "$D/test_save_s
 gate_marker_cutpoint() { cases 300 marker_cutpoint_mpeg2 marker_cutpoint_h264; }
 case_marker_cutpoint_mpeg2() { need "$M2V";  "$D/test_marker_cutpoint" "$M2V"; }
 case_marker_cutpoint_h264()  { need "$V264"; "$D/test_marker_cutpoint" "$V264"; }
+gate_quickjump_worker() { cases 300 quickjump_worker_h264 quickjump_worker_mpeg2; }
+case_quickjump_worker_h264()  { need "$V264"; "$D/test_quickjump_worker" "$V264"; }
+case_quickjump_worker_mpeg2() { need "$M2V";  "$D/test_quickjump_worker" "$M2V"; }
 gate_pool_abort()            { "$D/test_pool_abort"; }
 gate_abort_after_finish()    { "$D/test_abort_after_finish"; }
 gate_cutlist_minsize()       { "$D/test_cutlist_minsize"; }

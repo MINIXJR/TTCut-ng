@@ -65,7 +65,7 @@ TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
     mCurrentPosition(currentPosition),
     mSelectedFrameIndex(-1),
     mHighlightKeyframeListIndex(0),
-    mCurrentWorker(0),
+    mCurrentWorker(),
     mTaskPool(new TTThreadTaskPool()),
     mResizeTimer(new QTimer(this))
 {
@@ -265,29 +265,39 @@ void TTQuickJumpDialog::startThumbnailWorker()
   if (const auto* h26x = dynamic_cast<const TTH26xVideoStream*>(mVideoStream))
     prebuiltIndex = h26x->frameIndexBundle();
 
-  mCurrentWorker = new TTQuickJumpWorker(
+  TTQuickJumpWorker* worker = new TTQuickJumpWorker(
     mVideoStream->filePath(), streamType, pageFrames,
     mDelegate->thumbnailSize(),
     mVideoStream->indexList(), mVideoStream->headerList(),
     prebuiltIndex
   );
 
-  connect(mCurrentWorker, &TTQuickJumpWorker::thumbnailReady,
+  connect(worker, &TTQuickJumpWorker::thumbnailReady,
           mModel, &TTQuickJumpModel::onThumbnailReady);
 
+  // The pool does not own its tasks (TTThreadTask::setAutoDelete(false)) and
+  // the worker has no parent: without these two connections every page turn,
+  // resize and interval change left one worker behind, and none was freed
+  // when the dialog closed (gate quickjump_worker). Same pair as
+  // TTCutMainWindow::startAnalysisTask.
+  connect(worker, &TTThreadTask::finished, worker, &QObject::deleteLater);
+  connect(worker, &TTThreadTask::aborted,  worker, &QObject::deleteLater);
+
+  mCurrentWorker = worker;
   mTaskPool->init(1);
-  mTaskPool->start(mCurrentWorker);
+  mTaskPool->start(worker);
 }
 
 void TTQuickJumpDialog::abortCurrentWorker()
 {
   if (mCurrentWorker) {
     // Disconnect signals BEFORE aborting to prevent stale thumbnails
-    disconnect(mCurrentWorker, 0, mModel, 0);
-    if (mCurrentWorker->isRunning()) {
-      mCurrentWorker->onUserAbort();
-    }
-    mCurrentWorker = 0;
+    disconnect(mCurrentWorker.data(), nullptr, mModel, nullptr);
+    // Not only while isRunning(): a worker that was started but has not
+    // reached run() yet would decode its whole page for nobody. The flag
+    // makes TTThreadTask::run end in the abort route before operation().
+    mCurrentWorker->onUserAbort();
+    mCurrentWorker = nullptr;
   }
 }
 

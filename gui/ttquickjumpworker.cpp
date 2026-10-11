@@ -19,6 +19,13 @@
 #include <QDebug>
 #include <QImage>
 
+#include <atomic>
+
+namespace {
+std::atomic<int> sLiveWorkers{0};
+std::atomic<int> sDecodedThumbs{0};
+}
+
 TTQuickJumpWorker::TTQuickJumpWorker(
     const QString& filePath, int streamType,
     const QList<int>& frameIndices, const QSize& thumbSize,
@@ -33,7 +40,16 @@ TTQuickJumpWorker::TTQuickJumpWorker(
     mHeaderList(headerList),
     mPrebuiltFrameIndex(prebuiltFrameIndex)
 {
+  ++sLiveWorkers;
 }
+
+TTQuickJumpWorker::~TTQuickJumpWorker()
+{
+  --sLiveWorkers;
+}
+
+int TTQuickJumpWorker::liveCount()    { return sLiveWorkers.load(); }
+int TTQuickJumpWorker::decodedCount() { return sDecodedThumbs.load(); }
 
 void TTQuickJumpWorker::operation()
 {
@@ -85,6 +101,7 @@ void TTQuickJumpWorker::operation()
 
   for (int i = 0; i < mFrameIndices.size(); ++i) {
     if (mIsAborted) break;
+    ++sDecodedThumbs;
 
     int frameIndex = mFrameIndices.at(i);
     QImage thumb;
