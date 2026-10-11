@@ -557,10 +557,14 @@ bool TTCutMainWindow::onFileSave()
   }
 
   // append project file extension
-  QFileInfo fInfo(TTSettings::instance()->projectFileName());
-
-  if (fInfo.suffix().isEmpty())
+  if (QFileInfo(TTSettings::instance()->projectFileName()).suffix().isEmpty())
     TTSettings::instance()->setProjectFileName(TTSettings::instance()->projectFileName() + ".ttcut");
+
+  // Built from the name WITH its extension: writeProjectFile writes where
+  // this points. Built before the append, a name typed without extension
+  // went to disk as typed while projectFileName said ".ttcut", and the next
+  // save wrote a second file (gate save_suffix).
+  const QFileInfo fInfo(TTSettings::instance()->projectFileName());
 
   try
   {

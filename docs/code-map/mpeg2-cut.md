@@ -119,8 +119,11 @@ flowchart TD
 
 ## Variant matrix — cut-in / cut-out frame type
 
-`isCutInPoint()` / `isCutOutPoint()` gate only the GUI buttons in
-`gui/ttcutframenavigation.cpp`; nothing in the cut path enforces them.
+`isCutInPoint()` / `isCutOutPoint()` decide the enabled state of the two
+buttons in `gui/ttcutframenavigation.cpp`, and `onSetCutIn`/`onSetCutOut`
+return while their button is disabled — the button, the `[`/`]` keys and a
+marker's menu all obey them (gate `marker_cutpoint`). Nothing in the cut path
+enforces them.
 **`TTSettings::mEncoderMode` defaults to `true`**, and in that mode both return
 `true` for every position — so B-frame cut-outs are the default-reachable case.
 
