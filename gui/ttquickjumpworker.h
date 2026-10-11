@@ -29,6 +29,12 @@ public:
                     const QList<int>& frameIndices, const QSize& thumbSize,
                     TTVideoIndexList* indexList, TTVideoHeaderList* headerList,
                     const TTFrameIndexBundle& prebuiltFrameIndex = TTFrameIndexBundle());
+  ~TTQuickJumpWorker() override;
+
+  //! For the gate quickjump_worker: workers alive right now, and thumbnails
+  //! all workers of this process have started to decode.
+  static int liveCount();
+  static int decodedCount();
 
 signals:
   void thumbnailReady(int frameIndex, const QImage& thumbnail);

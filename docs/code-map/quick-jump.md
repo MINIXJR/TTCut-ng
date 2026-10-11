@@ -1,5 +1,5 @@
 ---
-base_commit: c71740dfe779b83b2febb400a89b285c693fd325
+base_commit: b820b48a860aecf045df1e64312efa5251dcf3b3
 last_verified: 2026-10-11
 sources:
   - gui/ttcutmainwindow.cpp
@@ -92,7 +92,7 @@ flowchart TD
 | `TTQuickJumpModel` → `TTQuickJumpDelegate` | Per tile: a `QPixmap` if decoded, else a placeholder. `isFailedFrame()` decides the colour — **dark red** for a decode that returned null, **grey** for one still pending. A tile that stays grey means the worker has not answered yet; red means it answered with nothing. |
 | `TTFrameIndexer` → `TTH26xVideoStream` | `TTFrameIndexer::build(file, streamIdx, progress)` opens the file itself and produces the whole `TTFrameIndexBundle` — index, `gops`, `rawToMerged`/`rawPacketCount` and the three stream values. `createHeaderList()` keeps it in `mFrameIndexBundle`. The stream opens no `TTFFmpegWrapper` at all — `openStream()` probes the file via `ttProbeVideo()` into `mProbe` instead, and `TTH26xVideoStream` never constructs a decoder; only `frameIndexBundle()` hands the bundle out, to whichever wrapper an adopter creates for itself. No decoder instance is involved in building the index. |
 | `TTH26xVideoStream` → `TTQuickJumpWorker` | `frameIndexBundle()` — the owner's own bundle: index **and** the H.264 stream metadata (`isPAFF`, `frameMbsOnlyFlag`, `log2MaxFrameNum`). The bundle exists so the two cannot be separated; see pitfalls. The bundle also carries the display-order map (`displayMap`). |
-| `TTQuickJumpDialog` → `TTQuickJumpWorker` | Page frame list, thumbnail size, index/header lists, the bundle. One worker per page; `abortCurrentWorker()` disconnects the model first, so a late thumbnail from a superseded worker cannot repaint the new page. |
+| `TTQuickJumpDialog` → `TTQuickJumpWorker` | Page frame list, thumbnail size, index/header lists, the bundle. One worker per page; `abortCurrentWorker()` disconnects the model first, so a late thumbnail from a superseded worker cannot repaint the new page, and aborts the worker whether it runs yet or not. |
 | `TTThreadTaskPool` ⇢ `TTQuickJumpWorker` | Pool ownership is the dialog's. Destroying the dialog destroys the pool, whose `cleanUpQueue()` calls `waitForDone()` — a **blocking** wait on the GUI thread. |
 | `TTQuickJumpWorker` → `TTFFmpegWrapper` | One wrapper per worker, created inside the worker thread (it is a `QObject`). The worker's `mIsAborted` is handed over as a cancel token, so an abort reaches into a running decode instead of only being seen between frames. With no bundle handed in, the worker runs its own `TTFrameIndexer` over `mFilePath` and installs the result — `setFrameIndex()` is the only way an index enters a wrapper. |
 | `TTQuickJumpWorker` → `TTMpeg2Decoder` | MPEG-2 takes a completely separate decoder; no bundle, no cancel token, no wrapper involvement. The thumbnail is `getFrameInfo()` after `moveToFrameIndex(frameIndex)`. |
@@ -107,11 +107,15 @@ flowchart TD
   ranges its spin box from them, the dialog clamps against them, and the
   `.ui` carries no `minimum`/`maximum` of its own — deliberately, with a
   comment saying so.
-- **The dialog owns its pool, nobody deletes the workers.** Nothing outside
-  the dialog may keep a pointer to a worker past `abortCurrentWorker()`. The
-  worker is not freed after its run: `TTThreadTask` calls
-  `setAutoDelete(false)`, the dialog connects no `deleteLater`, and the pool
-  only drops its queue pointer on `finished`/`aborted`.
+- **The dialog owns its pool, the workers delete themselves.** Nothing
+  outside the dialog may keep a pointer to a worker past
+  `abortCurrentWorker()`. `TTThreadTask` calls `setAutoDelete(false)` and the
+  pool only drops its queue pointer on `finished`/`aborted`, so
+  `startThumbnailWorker` connects both signals to the worker's own
+  `deleteLater`; `mCurrentWorker` is a `QPointer` and falls to null with it.
+  `abortCurrentWorker()` calls `onUserAbort()` on every worker it drops,
+  running or not — a worker that has not reached `run()` yet then ends in the
+  abort route without decoding (gate `quickjump_worker`).
 - **`TTFFmpegWrapper` knows nothing about tasks.** It sees a
   `const std::atomic<bool>*` it does not own. Whoever sets the token must
   outlive every `decodeFrame()` call made after setting it — today the token is

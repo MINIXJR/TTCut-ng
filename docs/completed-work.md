@@ -1668,6 +1668,33 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Zeitsprung: Vorschaubild-Worker wurden nie gelöscht, ein noch nicht
+  gestarteter nicht abgebrochen** → **ERLEDIGT (2026-10-11)**, Zweig
+  `fix/quickjump-worker-lifetime` (zwei Lesebefunde der vollen
+  Kartenprüfung).
+  - Gemessen vor dem Fix (`test_quickjump_worker`, Dialog über den Knopf im
+    Hauptfenster geöffnet, je 3 von 3 Läufen auf dem H.264- und dem
+    MPEG-2-Tux): lebende Worker 2 nach dem Öffnen, je Seitenwechsel,
+    Größenänderung und Intervallwechsel einer mehr, 7 nach drei Wechseln,
+    nach dem Schließen weiter 7. Zwei Seitenwechsel in einem Durchlauf der
+    Ereignisschleife dekodierten beide Seiten (4 Vorschaubilder statt 2).
+  - Ursache: `TTThreadTask::setAutoDelete(false)`, der Dialog verband kein
+    `deleteLater` und vergaß nur seinen Zeiger; `abortCurrentWorker` rief
+    `onUserAbort()` nur bei `isRunning()`.
+  - Fix: `startThumbnailWorker` verbindet `finished` und `aborted` des
+    Workers mit dessen `deleteLater` (wie `startAnalysisTask`),
+    `mCurrentWorker` ist ein `QPointer`, `abortCurrentWorker` bricht immer
+    ab. Danach: 0 lebende Worker an jeder Messstelle, zwei schnelle Wechsel
+    dekodieren eine Seite; die Seiten selbst werden wie vorher dekodiert
+    (je 2 Bilder).
+  - Gate `quickjump_worker` (Fälle H.264 und MPEG-2). `TTQuickJumpWorker`
+    trägt dafür zwei Zähler (`liveCount()`, `decodedCount()`). Die
+    Tux-Videos füllen nur eine Seite; das Prüfprogramm verkleinert den
+    Dialog und stellt das Intervall aufs Minimum.
+  - Nicht gemessen: wie viel Speicher ein liegengebliebener Worker hielt,
+    und wie oft zwei Starts im echten Gebrauch in einen Durchlauf fallen
+    (im Dialog selbst löst das kein Weg aus).
+
 - **Projektname ohne Endung wurde unter zwei Namen gespeichert** →
   **ERLEDIGT (2026-10-11)**, Zweig `fix/save-suffix-and-cutpoint-guard`
   (Lesebefund der vollen Kartenprüfung).
@@ -1681,6 +1708,13 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     `save_suffix` (sechs Prüfungen, zwei vorher rot).
   - Nicht gemessen: was der KDE-Dateidialog für einen Namen ohne Endung
     zurückgibt.
+  - Nachtrag am selben Tag: das Gate war in seiner ersten Fassung
+    unzuverlässig (allein gestartet 5 von 12 Läufen rot, im vollen Lauf
+    einmal). Das Prüfprogramm setzte den Namen per `selectFile`, und der
+    eben geöffnete Dialog überschrieb ihn mit seinem Vorschlag. Jetzt
+    schreibt es den Namen ins Eingabefeld des Dialogs und bestätigt erst
+    einen Takt später: 30 von 30 Läufen allein, 36 von 36 parallel; am
+    alten `onFileSave` weiter rot (6 von 6).
 
 - **Schnittpunkte, die die Knöpfe ablehnen, über Marker und Tasten
   gesetzt** → **ERLEDIGT (2026-10-11)**, selber Zweig (Lesebefund der

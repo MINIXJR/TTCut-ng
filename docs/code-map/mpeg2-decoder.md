@@ -1,5 +1,5 @@
 ---
-base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
+base_commit: b820b48a860aecf045df1e64312efa5251dcf3b3
 last_verified: 2026-10-11
 sources:
   - mpeg2decoder/ttmpeg2decoder.h

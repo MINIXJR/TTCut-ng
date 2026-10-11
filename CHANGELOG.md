@@ -18,6 +18,12 @@ All notable changes to TTCut-ng are documented in this file.
   cut list. They now do nothing where the button is disabled. With the
   encoder mode on (the default) every frame is a cut point and nothing
   changes.
+- **The quick-jump window frees its thumbnail workers.** Every page turn,
+  resize and interval change left one worker object behind, and closing the
+  window freed none of them (measured: 2 after opening, 7 after three page
+  turns, still 7 after closing). Each worker now deletes itself when it has
+  finished or was aborted. A worker that was replaced before it had started
+  is aborted as well; before, it decoded its whole page for nothing.
 
 ## v0.86.0 (2026-10-11)
 

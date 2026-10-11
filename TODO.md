@@ -576,15 +576,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
       `TTStreamPointVideoWorker::isPillarboxFrame`, das es im Programm
       nicht mehr gibt (`classifyAspectSample`).
   - **Aus der zweiten Stufe (21 Karten), von mir nachgelesen:**
-    - **Zeitsprung-Worker werden nie gelöscht.** `TTThreadTask` setzt
-      `setAutoDelete(false)`, `TTQuickJumpDialog` verbindet kein
-      `deleteLater` und löscht `mCurrentWorker` nicht, der Pool nimmt die
-      Aufgabe nur aus seiner Liste: ein `TTQuickJumpWorker` je Seite,
-      Größenänderung und Intervallwechsel bleibt liegen.
-    - **Ein wartender Zeitsprung-Worker wird nicht abgebrochen.**
-      `abortCurrentWorker` ruft `onUserAbort()` nur bei `isRunning()`; ein
-      eingereihter, noch nicht gestarteter Worker ist vom Modell getrennt,
-      dekodiert seine Seite aber trotzdem.
     - **Duplizieren eines Schnitts ohne Fangnetz.** `onEntryDuplicate` →
       `TTAVData::copyCutEntry` → `appendCutEntry`, das bei einer Ablehnung
       eine Ausnahme wirft; anders als `onAppendCutEntry` fängt hier niemand.

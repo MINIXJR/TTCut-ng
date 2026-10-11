@@ -11,6 +11,7 @@
 #define TTQUICKJUMPDIALOG_H
 
 #include <QDialog>
+#include <QPointer>
 
 class QListView;
 class QLabel;
@@ -70,7 +71,9 @@ private:
   QLabel*               mPageLabel;
   QLabel*               mHintLabel;
 
-  TTQuickJumpWorker*    mCurrentWorker;
+  //! Guarded: the worker deletes itself once it has finished or was aborted
+  //! (startThumbnailWorker), so the pointer falls to null by itself.
+  QPointer<TTQuickJumpWorker> mCurrentWorker;
   TTThreadTaskPool*     mTaskPool;
   QTimer*               mResizeTimer;
   QSpinBox*             mIntervalSpinner;
