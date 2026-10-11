@@ -1,10 +1,16 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - tools/ttcut-ac3fix/ttcut-ac3fix.c
   - tools/ttcut-demux/ttcut-demux
   - tools/diag/gate_ac3fix.sh
+  - tools/diag/gate_ac3fix_contract.sh
+  - tools/diag/run-gates.sh
+  - tools/ttcut-audiofix/ttcut-audiofix.c
+  - avstream/ttac3audioheader.h
+  - tools/diag/ac3_acmod_scan.py
+  - avstream/ttesinfo.cpp
   - CMakeLists.txt
   - debian/rules
 ---
@@ -81,7 +87,7 @@ flowchart TD
 | `ARGS` ⇢ `WALK` | `ac3fix_options_t`. Rules applied in `main` before any file is touched: `--force-fix` needs an output file (error) and clears analyze mode; no output file → analyze mode (with a note on stdout); when an output will be written, input and output being the same file is an error, and an existing output file is refused without `-f`. First positional = input, second = output, a third is an error. `-b` accepts 32–640. Exit code 0 after `--help`, 1 after a usage error. |
 | `ESA` → `WALK` | The whole file through `open_ac3_files` (size via `ftell`, an empty file is an error with exit 1) and a 64 KiB buffer that is refilled and compacted with `memmove`. The walker advances **one byte at a time** over everything that is not a frame and counts those bytes (`skipped_junk`). |
 | `WALK` → `PARSE` | The bytes from one position to the end of the buffer, whether the end of the file has been reached, and `in_sync` — whether the previous position was an accepted frame. |
-| `PARSE` → `HDR` | A verdict and, for a frame, `fscod`, `frmsizecod`, `acmod`, derived `frame_size` (bytes) and `bitrate` (kbit/s). `parse_ac3_header` accepts **only** a sync word `0x0B77` with `fscod` 0 (48 kHz), `frmsizecod` < 38 and `bsid` ≤ 10 (E-AC3 shares the sync word and uses 11–16). A header directly behind an accepted frame is taken as it is; anywhere else (start of file, behind foreign bytes) it counts only when the next sync word follows the frame or the file ends with it. A header whose frame is cut off by the end of the file is the tail when in sync, a foreign byte otherwise. No CRC check. |
+| `PARSE` → `HDR` | A verdict and, for a frame, `fscod`, `frmsizecod`, `acmod`, derived `frame_size` (bytes) and `bitrate` (kbit/s). `parse_ac3_header` accepts **only** a sync word `0x0B77` with `fscod` 0 (48 kHz), `frmsizecod` < 38 and `bsid` ≤ 10 (E-AC3 shares the sync word and uses 11–16). A header directly behind an accepted frame is taken as it is; anywhere else (start of file, behind foreign bytes) it counts only when the next sync word follows the frame or fewer than two bytes remain behind it at the end of the file. A header whose frame is cut off by the end of the file is the tail when in sync, a foreign byte otherwise. No CRC check. |
 | `HDR` → `FRAME` | Called only for an accepted frame that is completely in the buffer. Time is counted as frames × 1536/48000 s and is advanced **after** the call, so a message inside it carries the start time of the frame together with a 1-based frame number. |
 | `FRAME` → `STATS` | Per frame: total; stereo / 3/2 / other by `acmod`; `inconsistent_frames` when `acmod` is 2/0 **and** `bitrate >= min_bitrate`; `fixed_frames` for the same frames in force-fix mode; `format_changes` whenever `acmod` differs from the previous frame (with `-s` each change is printed). |
 | `FRAME` → `PATCH` | The frame is first copied into a local buffer, so the read buffer is never modified. Patched only when the frame is inconsistent, force-fix is on and an output file is open. |
@@ -89,7 +95,7 @@ flowchart TD
 | `FRAME` → `OUT` | Whenever an output file is open — with or without `--force-fix` — every accepted frame is written, patched or not. A write error ends the run with exit 1 and no statistics. |
 | `WALK` → `OUT` | Every byte that belongs to no frame (`pass_unparsed`), in place: single skipped bytes and whatever is left in the buffer at the end of the file. Together with the row above: **the output has the size of the input and differs from it only in `acmod` bits of patched frames.** |
 | `STATS` → `REPORT` | stdout: banner (`print_ac3_banner`), then the statistics block; in analyze mode with a count above 0 a recommendation naming `--force-fix`. stderr: progress in steps of 10 %, and one line about bytes that belong to no frame, wherever in the file they were: "no 48 kHz AC3 frame found" (no frame at all), "Partial frame at file edges" (fewer than one frame in total) or "Warning: N bytes could not be parsed (M of them at end of file)". Exit code 0 whatever was found. |
-| `REPORT` → `DEMUX` | A **text contract**: the function takes the number after `Inconsistent frames:` with `grep -oP` (0 when the line is missing) and, from the fix run, the number after `Fixed frames:`. Both exit codes are evaluated: a failing analyze run is a warning and the track stays; a failing fix run, or an empty output, likewise. |
+| `REPORT` → `DEMUX` | A **text contract**: the function takes the number after `Inconsistent frames:` with `grep -oP` (0 when the line is missing) and, from the fix run, the number after `Fixed frames:` (the analyze count when that line is missing). Both exit codes are evaluated: a failing analyze run is a warning and the track stays; a failing fix run, or an empty output, likewise. |
 | `ESA` → `DECODE` | `ac3_decode_errors`: a full decode with `-loglevel repeat+error -f ac3`, output = number of error lines. Run on the unrepaired track only when the analyze run counted something. The input format is named because the repaired copy does not end in `.ac3`; `repeat` keeps equal lines from being folded. |
 | `OUT` → `DECODE` | The same count on `<track>.fixed`, after a fix run that ended with exit code 0. |
 | `DECODE` → `DEMUX` | 0 errors before → "decode OK — skipping fix". Errors after ≥ errors before → "repair does not decode better", the copy is deleted. Only fewer errors after lead to the replacement. The exit status of ffmpeg is not used: it turns non-zero only above an error rate of two thirds. |

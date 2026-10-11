@@ -1,5 +1,5 @@
 ---
-base_commit: ceadf8817524dbb08b40f436cebd99fc930205dd
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - data/ttaudioanomalyscantask.h
@@ -24,6 +24,11 @@ sources:
   - data/ttstreampoint.cpp
   - extern/ttaudiocutter.h
   - extern/ttaudiocutter.cpp
+  - gui/ttstreampointwidget.h
+  - data/ttpreviewclip.cpp
+  - data/ttcutpreviewtask.cpp
+  - data/ttaudioonlycuttask.cpp
+  - data/tth26xcuttask.cpp
   - docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md
   - docs/superpowers/specs/2026-10-05-audio-repair-fade-out-design.md
   - docs/superpowers/specs/2026-10-10-audio-repair-donor-fill-design.md
@@ -118,7 +123,7 @@ flowchart TD
 | From → To | What crosses (data / order / invariant) |
 |---|---|
 | `MW` -.-> `SCAN` | `startAudioAnomalyScan`: file of `TTAVItem::firstAc3TrackIndex()` only (one AC3 track, TODO M8), the video frame rate, `TTAVData::extraFrameIndices()` and `audioGapFrameRanges()`. Automatic start and its latch (`maybeStartAutoAnomalyScan`, `anomalyScanStarted`) are in stream-points.md. |
-| `SCAN` → `PTS` | `pointsDetected` emits once, at the end of `operation()`; a cancel emits an empty list (partial results are discarded). One `TTStreamPoint` per finding of either search, sorted by position: `frameIndex` = `videoFrameForTime(frameFrom · 32 ms)`, duration in seconds, description with the LFE peak (LFE search) or the drop in dB (stop search; “overlaps gap repair” when it touches an audio-gap range), the finding's own AC3 range via `setAudioFrameRange` (both bounds inclusive) the planes of the finding via `setAudioChannelMask` — C+LFE for an LFE finding, every plane of its frames for a stop — and its kind via `setAudioAnomalyKind`: `LfeBurst`, or the form `evaluateStops` found — `LastingStop` (“sound stops abruptly”) or `Hole` (“hole in the sound”, depth in dB); several drops within 19 blocks are one finding with the kind of the largest. A stop or hole marker covers three AC3 frames: the one with the boundary and one on each side. The scan refuses any sample rate other than 48 kHz (empty stats, “not run”). |
+| `SCAN` → `PTS` | `pointsDetected` emits once, at the end of `operation()`; a cancel emits an empty list (partial results are discarded). One `TTStreamPoint` per finding of either search, sorted by position: `frameIndex` = `videoFrameForTime(frameFrom · 32 ms)`, duration in seconds, description with the LFE peak (LFE search) or the drop in dB (stop search), plus “overlaps gap repair” for either search when the marker's video-frame range touches an audio-gap range, the finding's own AC3 range via `setAudioFrameRange` (both bounds inclusive) the planes of the finding via `setAudioChannelMask` — C+LFE for an LFE finding, every plane of its frames for a stop — and its kind via `setAudioAnomalyKind`: `LfeBurst`, or the form `evaluateStops` found — `LastingStop` (“sound stops abruptly”) or `Hole` (“hole in the sound”, depth in dB); several drops within 19 blocks are one finding with the kind of the largest. A stop or hole marker covers three AC3 frames: the one with the boundary and one on each side. The scan refuses any sample rate other than 48 kHz (empty stats, “not run”). |
 | `PTS` → `WID` | The marker row; the menu offers repair actions only for `AudioAnomaly` markers and only when the item has an AC3 track. A **new** repair (“Repair…”) only when `TTStreamPoint::offersNewAudioRepair()`: for `LfeBurst`, for a marker without a kind (older project files — it was an LFE finding) and for `LastingStop`. Not for `AbruptStop`, the kind of projects saved on 2026-10-04/05, whose form was not recorded. For `Hole` the method says false and the menu decides (`buildContextMenu`): “Repair…” when `TTAVItem::donorCandidateTracks(first AC3 track)` is not empty — a hole is filled from a second track. |
 | `ITEM` → `WID` | `TTAudioRepairDialog::repairIndexForMarker(item, point, extras)` — the one marker ↔ repair link: on the item's first AC3 track, `findAudioRepairOverlapping(track, from, to)` over the marker's range (`approxAc3RangeForMarker`), i.e. the index of the first repair whose closed AC3 range touches it, or -1 (also for other marker types and items without AC3). Decides “Repair…” vs “Edit repair…”/“Remove repair”; an existing repair stays editable and removable behind every kind of marker — except that a `donor-fill` repair offers “Edit repair…” only while the item has a donor candidate (“Remove repair” always). |
 | `WID` → `DLG` | Marker, `repairTrackIndex` = the item's **first** AC3 track, `mExtraFrameIndices`. Before the dialog opens the widget emits `jumpToFrame(marker frame)`, so the main window shows the spot (a right click does not navigate; the dialog has no jump button). The dialog is modal (`exec()`). A menu closed without a choice does nothing (`handleContextAction` returns on a null action). The dialog has three views, chosen once in the constructor: the stored method when a repair is edited, else the marker's kind (`LastingStop` → fade-out, `Hole` → fill, everything else → silence). Silence view: channel boxes from the marker's `audioChannelMask()` (0, older project files: C+LFE; an existing repair's own mask wins), start/end of the range. Fade-out view: “Fade-out ends at”, “Length” (20 ms, 10–100), no channel boxes. Fill view: a combo of the donor candidates (the only input) and three read-only values — hole, offset, match. On accept the widget appends the “(repair planned)” suffix to the marker text and removes a “(repair DISABLED …)” suffix. |
@@ -127,7 +132,7 @@ flowchart TD
 | `DEL` → `ITEM` / `DEL` → `PTS` | A marker with a repair goes only together with it: one question (“Delete all”: one question for all, `%n` repairs), No keeps both; Yes removes the repairs (highest index first, so the others stay valid) and then the marker(s). A marker without a repair is removed without a question. |
 | `DLG` → `STOP` / `STOP` → `DLG` | Only for a **new** fade-out repair: `findStop(file, marker frames)` → `StopPlacement` (end of the fade-out, end of the sound, silence in samples). Nothing found: the field stands on the start of the marker's middle frame, silence 1 ms, and a hint asks to set it by ear. The position is kept in samples (`mFadeEndSample`); the spin box shows whole ms and a step moves the sample position by one ms, inside the marker's frames (so the repair stays linked to its marker). The silence moves along and is not adjustable. Editing shows the stored values, no new search. |
 | `ITEM` → `DLG` | Fill view only. `donorCandidateTracks(track)`: every other track with two channels at 48 kHz — MPEG layer II not mono (dual-channel counts), or AC3 with two channels and no LFE — in list order, empty when the repaired track is not 48 kHz. `presetDonorTrack`: the first candidate with the repaired track's language, else the first. `expectedDonorShift(track, donor)`: (start offset of the repaired track − start offset of the donor, both from the `.info` next to the video) · 48 samples; 0 without video or `.info`. |
-| `DLG` → `FILL` / `FILL` → `DLG` | `findDonorFill(file, track, marker frames, donor file, donor track, expected shift)` when the dialog opens and on every donor change; not when an enabled fill whose donor is still a candidate is edited (its stored values are shown). Result: a `TTAudioRepairItem` (`Found`) or one of `NoHole`, `NoSound`, `FormatChange`, `UnsupportedLayout`, `DonorUnreadable` (the donor file cannot be opened or does not start on a frame), `Error` (the track itself; its text is shown as it is), each a message in the dialog with “Plan repair” and “Play repaired” disabled; so is an item without any donor candidate. A fill whose frames lie outside the marker's frames is not accepted (“The hole lies next to the marker.”), so the repair stays linked to its marker. Editing a fill that is not applied searches with that fill's own donor while it is still a candidate, else with the preset one. A match below 0.80 shows a hint, planning stays possible. |
+| `DLG` → `FILL` / `FILL` → `DLG` | `findDonorFill(file, track, marker frames, donor file, donor track, expected shift)` when the dialog opens and on every donor change; not when an enabled fill whose donor is still a candidate is edited (its stored values are shown). Result: a `TTAudioRepairItem` (`Found`) or one of `NoHole`, `NoSound`, `FormatChange`, `UnsupportedLayout`, `DonorUnreadable` (the donor file cannot be read or does not start on a frame), `Error` (the track itself, an invalid frame range, or a donor of another sample rate; its text is shown as it is), each a message in the dialog with “Plan repair” and “Play repaired” disabled; so is an item without any donor candidate. A fill whose frames lie outside the marker's frames is not accepted (“The hole lies next to the marker.”), so the repair stays linked to its marker. Editing a fill that is not applied searches with that fill's own donor while it is still a candidate, else with the preset one. A match below 0.80 shows a hint, planning stays possible. |
 | `FILL` → `REENC` / `FILL` → `DONOR` | Two `walkRange` passes with a copying edit: frames `from − 2 … to + 2` (fewer at the end of the track) for `TTDonorFill::locateHole` — per filled plane the block boundary with the largest drop, then the longest run of samples at or below the level before − 30 dB; shorter than 2 ms or touching the region `from − 1 … to + 1` = no hole; two planes: earliest start to latest end — then exactly the frames covering 150 ms + 5 ms on each side of the hole. Filled planes by layout (`donorFillPlanes`): the centre of a 3/2 stream (mask 0x04), left and right of a 2/0 stream (0x03), nothing else. The donor's sound for that span ± 50 ms around the expected shift comes from `readDonorRange`; `fitDonor` takes the shift with the best correlation over both windows and all filled planes (the donor's mid (L+R)/2 against the centre, L and R against L and R), a least-squares gain per plane (never negative) and that correlation as the match. |
 | `STOP` → `REENC` | `findStop` walks frames `frameFrom − 1 … frameTo + 1` (without the frame behind when the track ends there) through `walkRange` with an edit that only copies the planes (no LFE) — the same decode as the repair build, so its positions are positions in the samples the repair edits. `locateStop` (pure): the block boundary with the largest drop (≥ 20 dB, three 256-sample blocks before, two after); from one block behind it back to the first sample above the level before − 12 dB = end of the sound; the earliest sample step of ≥ 20 times the median step of the 20 ms before, within the 15 ms before the end of the sound = end of the fade-out, else the end of the sound. An error (file, layout change) → not found. |
 | `DLG` → `TABLE` | Audition and the probe build of `accept`, both from `currentItem()`, `targetAcmod = -1` (keep the source layout). Silence view: the spin-box range (`currentFrameFrom` = round(start ms / frame ms), `currentFrameTo` = round(end ms / frame ms) − 1, end exclusive in the spin box) and channel mask. Fade-out view: `makeFadeOutItem(track, mask, end, length, silence)`, whose frame range is every frame the curve touches. Fill view: the item the search returned (or the stored one), with the file of its donor track as `buildRepairTable`'s fifth argument; without a fill the marker's frames, so that the original can be played. |
@@ -162,7 +167,7 @@ flowchart TD
 
 - **One AC3 frame numbering, two ways to count it.** The scan, the
   replacement table and the audition count packets (ordinal in the file);
-  the cutter derives the number from the packet time (`pktTime / 32 ms`).
+  the cutter derives the number from the packet time (`pktTime / frameDurSec`, 32 ms at 48 kHz).
   They agree while the elementary stream's timestamps start at 0 and run
   without gaps — measured so on the test material and a real recording
   (audit run 10); not checked in the code.
@@ -223,7 +228,7 @@ flowchart TD
   search on generated files), `donorfill_app` (item, cut, project file,
   dialog), case 8 of `marker_delete_repair` (menu and marker text); on a
   recording `gate_donorfill_real.sh`. The generated files
-  (`make_donorfill_sample.sh`) carry noise of its own in every channel;
+  (`make_donorfill_sample.sh`) carry noise of its own in every channel (the LFE of the 5.1 file is silent);
   ffmpeg's AC3 encoder smears the edges of their holes, so the hole found
   there is shorter than the one made.
 - **Audition ≠ main-window playback.** Main-window playback plays the
@@ -242,7 +247,8 @@ flowchart TD
   lines to the completion box. Cleared with each `cutAudioTracks` call, so
   after a preview they describe the preview clip.
 - **A failed repair fails its track, and a failed track fails the cut**
-  (`mRequireAllInputs`); for H.26x preview clips a failed audio cut only
+  (`TTAVData::onDoCut`, `TTH26xCutTask::runCut` and `TTAudioOnlyCutTask::runAudioCut`
+  each end the cut as failed when fewer tracks were cut than the item has); for H.26x preview clips a failed audio cut only
   logs and the clip is muxed without audio (cut-preview.md).
 - **Scan statistics:** one `FrameStat` per decoded frame, plus one failed
   entry for a packet the decoder rejects on send, to keep the numbering in
@@ -284,7 +290,7 @@ flowchart TD
   - shared purpose: binary search in the sorted extra-frame list
   - status: consolidate → one free function next to the extra-frame list; the dialog's comment keeps its copy because it has no `TTAVData`, which a free function does not need
 - **AC3 frame duration / size of a file**
-  - sites: `data/ttaudioanomalyscantask.cpp:kFrameDurSec`, `gui/ttaudiorepairdialog.cpp:probeFrameDurationMs` (+ `kApproxFrameDurMs`), `data/ttavdata.cpp:TTAVData::cutAudioTracks` (`frame_time` of the first header), `extern/ttaudiocutter.cpp:TTAudioCutter::cut` (`frameDurSec`), `data/ttcutprojectdata.cpp:ac3FrameByteSize`
+  - sites: `data/ttaudioanomalyscantask.cpp:kFrameDurSec`, `gui/ttaudiorepairdialog.cpp:probeFrameDurationMs` (+ `kApproxFrameDurMs`), `data/ttavdata.cpp:TTAVData::cutAudioTracks` (`frame_time` of the first header), `extern/ttaudiocutter.cpp:TTAudioCutter::openCutSession` (sets `frameDurSec`; `cut` uses it), `data/ttcutprojectdata.cpp:ac3FrameByteSize`
   - shared purpose: the 32 ms grid in time or bytes
   - status: kept separate → four of them read the real file, the scan's constant is guarded by its 48 kHz refusal; worth one helper only if the load validation stops assuming CBR over the whole file
 - **Opening the first audio stream**

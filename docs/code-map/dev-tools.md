@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - build-package.sh
@@ -22,6 +22,8 @@ sources:
   - tools/ttcut-burst-probe/main.cpp
   - tools/ttcut-burst-probe/CMakeLists.txt
   - tools/ttcut-burst-probe/README.md
+  - CMakeLists.txt
+  - extern/ttaudiocutter.cpp
 ---
 
 # Code Map: Developer tools (package, screenshots, test material, burst aids)
@@ -112,19 +114,23 @@ flowchart TD
 | `APP` → `DOCPNG` | Last step of the usual set: `ttcutng-main.png` is copied to `docs/MainWindow.png` next to the binary's parent directory — a **tracked** file outside the output directory, on every such run. The set `repair` does not touch it (gate `screenshots_repair` checks that). |
 | `PNG` → `WIKI` | The script compares each `ttcutng-*.png` byte for byte with the file of the same name in the output directory (default: the wiki's `images`) and copies only those that differ; the temporary directory is removed. No image at all is an error (exit 1). |
 | `TDATA` → `GATES` | One gate per program: a table row and a function `gate_<name>`; where a program is run in several ways the gate is `cases <limit> <case>…` over functions `case_<name>`, each run as a process of its own with its own work directory, settings and time limit — all cases run, the gate reports the worst outcome (out of time, failed, prerequisite missing, passed) and its log one verdict line per case (gate `cases_verdict` checks that rule). `run-gates.sh` (`TESTDATA`) and ten harnesses read `tools/testdata/tux_test.*`; the gate `screenshots_repair` runs the script with `--repair-only` and `offscreen` and expects the three repair pictures, all different, and nothing else; the directory is gitignored, so those gates need one screenshot-script run first. |
-| `SVG` → `MTV` → `CACHE` | The artwork is found relative to the script. Per variant a video stream, a 1 kHz stereo audio track (AC3 or MP2, 192 kbit/s) and a video-plus-audio project, all on one 120 s timeline (three colour segments with a moving Tux, three 1 s black gaps, a logo in the third segment, a test pattern) or the 30 s "duplicate" timeline (the same 10 s sequence twice). Eight variants: HEVC 4K, H.264 1080p progressive, 1080i MBAFF, 1080i PAFF, MPEG-2 576i, 720p, 576i with field pictures, a two-segment `.rec` directory; six duplicates. An output is reused when it exists, is not empty and is **newer than the script**; `--force` regenerates. A reused variant still gets its project rewritten. |
+| `SVG` → `MTV` → `CACHE` | The artwork is found relative to the script. Per variant a video stream, a 1 kHz stereo audio track (AC3 or MP2, 192 kbit/s) and a video-plus-audio project (the `.rec` directory is the exception: it carries the PAL stream's audio muxed into its two TS segments and a video-only project), all on one 120 s timeline (three colour segments with a moving Tux, three 1 s black gaps, a logo in the third segment, a test pattern) or the 30 s "duplicate" timeline (the same 10 s sequence twice). Eight variants: HEVC 4K, H.264 1080p progressive, 1080i MBAFF, 1080i PAFF, MPEG-2 576i, 720p, 576i with field pictures, a two-segment `.rec` directory; six duplicates. An output is reused when it exists, is not empty and is **newer than the script**; `--force` regenerates. A reused variant still gets its project rewritten — except the `.rec` directory, whose marker file `info` ends the run before any project is written. |
 | `MTV` → `INJ` → `CACHE` | The frame-coded PAL stream; every 50th picture block is written twice with `picture_structure` set to top and to bottom field. Bitstream-valid, visually broken (same payload for both fields). |
 | `MTV` → `JM` → `CACHE` | PAFF only: raw YUV of the timeline (about 7 GB, deleted afterwards) through the JM reference encoder with `paff.cfg`, limit two hours; the result must carry VUI and `field_pic_flag`. Without the encoder the variant is skipped with a message and exit 0. |
 | `CACHE` → `GATES` | The gate runner and the gate scripts name the cache files directly (`V264`, `A264`, `MBAFF`, `PAFF`, `MP2`, …); a missing file makes a gate SKIP. `EXPECTED.md` holds the expected frame numbers of the search markers for six of the files. The cache directory is gitignored and on this machine a symbolic link. |
-| `BA` → `BP` | `burst_analysis.py scan` reads the RMS level per audio frame with ffmpeg `astats` and lists boundary times where the rebuilt window logic would or would not fire; `dump` prints the chunks around given cut indices. Window bounds, the two tested chunks and the context level (`context_median`: `sorted[n/2]`) follow the detector. Its numbers are candidates; the README says the C++ tool decides. |
+| `BA` → `BP` | `burst_analysis.py scan` reads the RMS level per audio frame with ffmpeg `astats` and lists two kinds of boundary: those whose delta (peak of two chunks minus the context median) lies in the band `--gate-lo`..`--gate-hi` with the peak above `--floor`, and those with a delta of at least `--gate-hi` but a peak below `--floor`. It uses a simplified window (the median over the `n_ctx` = max(3, round(0.200 / frame duration)) chunks before and including chunk *i*, the peak over chunks *i* and *i*+1, CutOut orientation only). `dump` prints the chunks around given cut indices with `window_bounds` and `chunks_in_window`, CutOut or (`--cutin`) CutIn. Window bounds, the two tested chunks and the context level (`context_median`: `sorted[n/2]`) follow the detector; unlike the detector, `window_bounds` does not clamp the window start at 0. Its numbers are candidates; the README says the C++ tool decides. |
 | `BP` ⇢ `DET` | `ttcut-burst-probe <audio> <seconds> [--cutin] [--min-delta dB]` calls the detector once and prints `present=1 burstDb=… contextDb=… delta=…` or `present=0`; exit 0 = burst, 1 = none, 2 = usage error. Built only on request (`EXCLUDE_FROM_ALL`), from `extern/ttaudiocutter.cpp` and the sources it needs (re-encoder, bit reader, `ttavutil`, logger, settings). |
 
 ## Assumptions, contracts & pitfalls
 
 - **Two fixture directories, two makers** — `tools/testdata` comes from the
   screenshot script, `tools/test-videos/cache` from `make_test_video.sh`;
-  both are gitignored and both feed gates. Neither maker is called by the
-  gate runner. (`ac3_reencode` and other audio gates generate their own
+  both are gitignored and both feed gates. The gate runner never
+  builds either directory: its gates `need` the files and SKIP when they are
+  missing. Only `screenshots_script` and `screenshots_repair` run the screenshot
+  script itself (the first with `/bin/false` and `/bin/true` as the program,
+  the second with `--repair-only`, which writes the repair tracks and project
+  into `tools/testdata`); no gate of the table calls `make_test_video.sh`. (`ac3_reencode` and other audio gates generate their own
   material with ffmpeg into the run's work directory.)
 - **`build-package.sh` copies what is on disk** — a file that is neither
   tracked nor named in an exclude rule ends up in the build copy (15.7 MB

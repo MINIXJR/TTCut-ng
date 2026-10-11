@@ -1,12 +1,13 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-27
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
+last_verified: 2026-10-11
 sources:
   - mpeg2decoder/ttmpeg2decoder.h
   - mpeg2decoder/ttmpeg2decoder.cpp
   - avstream/ttframeinfo.h
   - avstream/ttvideoindexlist.cpp
   - avstream/ttvideoheaderlist.cpp
+  - avstream/ttmpeg2videoheader.h
   - mpeg2window/ttmpeg2window2.cpp
   - data/ttsearchtask.cpp
   - data/ttframesearchtask.cpp
@@ -44,7 +45,7 @@ flowchart TD
     MOVE["TTMpeg2Decoder<br/>moveToFrameIndex"]
     DEC["TTMpeg2Decoder<br/>seek / decodeNextFrame"]
     LIB["libmpeg2<br/>mpeg2_parse, display_fbuf"]
-    FI["static frameInfo<br/>getFrameInfo()"]
+    FI["mFrameInfo (member)<br/>getFrameInfo()"]
     WIN["TTMPEG2Window2<br/>current / cut-out frame"]
     SRCH["TTSearchTask<br/>mpeg2FrameAt"]
     FSRCH["TTFrameSearchTask<br/>equal-frame search"]
@@ -73,14 +74,14 @@ flowchart TD
 
 | From → To | What crosses (data / order / invariant) |
 |---|---|
-| users -.-> `MOVE` | `new TTMpeg2Decoder(file, indexList, headerList, pixelFormat)`: opens the file (`QFile`, 64 KiB stream buffer), `mpeg2_init`, then `decodeFirstMPEG2Frame` = full reset + decode from byte 0. Throws `TTMpeg2DecoderException` (`DecoderInit`, `StreamOpen`, `ArgumentNull` when either list is null). Windows (`openVideoFile`) and quick jump keep the default `formatRGB32`; the transcode, the equal-frame search and the frame search's reference decoder switch to `formatYV12` via `decodeFirstMPEG2Frame(formatYV12)` after construction. One instance per user; the windows construct theirs on the GUI thread, the search tasks, quick jump and transcode theirs while their task runs. |
+| users -.-> `MOVE` | `new TTMpeg2Decoder(file, indexList, headerList, pixelFormat)`: opens the file (`QFile`, 64 KiB stream buffer), `mpeg2_init`, then `decodeFirstMPEG2Frame` = full reset + decode from byte 0. Throws `TTMpeg2DecoderException` (`DecoderInit`, `StreamOpen`, `ArgumentNull` when either list is null). Windows (`openVideoFile`) and quick jump keep the default `formatRGB32`; the transcode switches to `formatYV12` via `decodeFirstMPEG2Frame(formatYV12)` after construction; the frame search builds both its decoders through `openMpeg2DecoderFor`, which passes `formatYV12` to the constructor (the search decoder then calls `decodeFirstMPEG2Frame(formatYV12)` once more). One instance per user; the windows construct theirs on the GUI thread, the search tasks, quick jump and transcode theirs while their task runs. |
 | `IDX` → `MOVE` | `moveToFrameIndex(pos)`, `pos` = position in the display-ordered index list (`sortDisplayOrder`). Walks back to the nearest position with coding type 1 (I) — in display order — and takes that entry's header-list index. `videoIndexAt(pos)` for a position outside the list is not checked here (the frame search clamps its range because of that). |
 | `HDR` → `MOVE` | From the I picture's header-list index back to the nearest `sequence_start_code`; its `headerOffset()` is the seek target (0 when none is found). |
 | `MOVE` → `DEC` | `seek(offset)`: `QFile::seek`, `mpeg2_reset(full_reset = offset == 0)`, one `decodeNextFrame`. When a `group_start_code` lies between that sequence header and the GOP header of the target's I picture (a GOP without its own sequence header), a second `seek` to that GOP header follows — the first one only loads the sequence parameters (no full reset the second time). Then `decodeNextFrame` until the displayed picture is an I (`type == 1`); then `skipFrames(pos − Ipos)` output pictures. Position arithmetic is in **output (display) order**, the order libmpeg2 hands pictures out. Returns `pos` whatever happened. |
 | `FILE` → `DEC` | `decodeNextFrame`: `mpeg2_parse` loop; on `STATE_BUFFER` the next 64 KiB; at EOF once a `sequence_end_code` (00 00 01 B7) so libmpeg2 flushes its last pictures — unless `isStreamEnd` is already set in this call, which every `STATE_SEQUENCE` also does (it falls through to `STATE_END`). `STATE_SEQUENCE` sets the libmpeg2 colour conversion for RGB24/RGB32; nothing for YV12. |
-| `LIB` → `FI` | On `STATE_SLICE`/`STATE_END`/`STATE_INVALID_END`/`STATE_SEQUENCE` with a `display_fbuf`: Y/U/V plane pointers (libmpeg2's buffers, valid until the next decode call of **this** decoder), width/height/chroma geometry of the sequence, `type` = display picture coding type (`flags & 3`: 1 I, 2 P, 3 B), `size` by pixel format. Written into the decoder's own `mFrameInfo`; `getFrameInfo()` returns a pointer to it (or null after a failed decode). Until audit run 13 this was one file-scope static shared by every instance and thread. |
+| `LIB` → `FI` | On `STATE_SLICE`/`STATE_END`/`STATE_INVALID_END`/`STATE_SEQUENCE` with a `display_fbuf`: Y/U/V plane pointers (libmpeg2's buffers, valid until the next decode call of **this** decoder), width/height/chroma geometry of the sequence, `type` = display picture coding type (`flags & 3`: 1 I, 2 P, 3 B), `size` by pixel format. Written into the decoder's own `mFrameInfo`; `getFrameInfo()` returns a pointer to it (or null after a failed decode). |
 | `FI` → `WIN` | `TTMPEG2Window2::moveToVideoFrame` → `getFrameInfo()`: `picBuffer = Y` (RGB32 data), `videoWidth/Height`; kept for later repaints and `saveCurrentFrame`. The two windows (current frame, cut-out frame) each own a decoder, both on the GUI thread. |
-| `FI` → `SRCH` | `TTSearchTask::mpeg2FrameAt(pos)`: `moveToFrameIndex` + `QImage(Y, w, h, RGB32)` over the decoder buffer (valid until the next decode); `frameAt` copies, the gray helpers convert. One decoder per task (`setupWorkers` forces one worker for MPEG-2), opened in `establishStartPosition` when the task starts. |
+| `FI` → `SRCH` | `TTSearchTask::mpeg2FrameAt(pos)`: `moveToFrameIndex` + `QImage(Y, w, h, RGB32)` over the decoder buffer (valid until the next decode); `decodeFrameAt` copies, the gray helpers convert. One decoder per task (`setupWorkers` forces one worker for MPEG-2), opened in `establishStartPosition` when the task starts. |
 | `FI` → `FSRCH` | Reference frame: own decoder, `moveToFrameIndex(ref)`, `refInfo = *getFrameInfo()` then `captureRefBuffers` copies the planes, decoder deleted. Search: second decoder, `decodeFirstMPEG2Frame(formatYV12)`, `moveToFrameIndex(start)`, then per step `moveToFrameIndex(start + i)` (range clamped to the stream). |
 | `FI` → `QJ` | Per thumbnail `moveToFrameIndex(frameIndex)` + `getFrameInfo()`, wrapped in a `QImage` and scaled to the thumbnail size (smaller than the picture; at equal size `QImage::scaled` would return a shallow copy over the decoder buffer, freed with the worker's decoder). One worker per page, decoder created in the worker. |
 | `FI` → `TRANS` | `encodeFrames(vs, start, end)`: per frame `moveToFrameIndex(start + i)` (a full seek from the sequence header for every frame) and the YV12 planes straight into an `AVFrame` (`linesize` = width / chroma width) for the MPEG-2 encoder; `drainPackets` writes what the encoder has ready (also after the final flush). Runs in the cut task's thread. Decoding sequentially after one seek would be 8–30× faster but gives different pictures when the range holds a field pair — left as is, TODO.md (H6). |
@@ -89,7 +90,7 @@ flowchart TD
 
 - **Positions are display positions.** `moveToFrameIndex` walks the sorted
   index list and counts output pictures; field-picture material counts
-  fields in the index list (see `mpeg2-cut.md`, "Field pictures").
+  fields in the index list (see `mpeg2-cut.md`, "Field-picture coding").
 - **Every move is a seek.** No sequential shortcut: each call resets
   libmpeg2 at the preceding sequence header and decodes forward — the cost
   per frame is the distance from that header.
@@ -104,7 +105,8 @@ flowchart TD
   start codes).
 - **Pixel format after construction.** The constructor always decodes the
   first picture with the format it was given (default RGB32); YV12 users
-  switch with `decodeFirstMPEG2Frame(formatYV12)`, which relies on the full
+  pass `formatYV12` to the constructor (frame search) or switch with
+  `decodeFirstMPEG2Frame(formatYV12)` (transcode), which relies on the full
   reset at byte 0 re-entering `STATE_SEQUENCE` without a conversion call.
 - **Out-of-range positions are not guarded** in `moveToFrameIndex`.
 - **Field pictures:** the index list counts a field pair as two positions,

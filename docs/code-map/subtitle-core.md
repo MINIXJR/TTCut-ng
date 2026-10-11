@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - avstream/ttsrtsubtitlestream.h
@@ -60,7 +60,7 @@ flowchart TD
     PARSE --> HL
     HL -->|last end time| LEN
     HL --> SEARCH
-    SEARCH -->|index| OVL
+    SEARCH -->|text via textAt| OVL
     SEARCH -->|index| CUT
     CUTT -->|start, end ms per keep segment| CUT
     HL -->|cues from index| CUT

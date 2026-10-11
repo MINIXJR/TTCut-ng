@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - gui/ttcutmainwindow.cpp
@@ -87,10 +87,11 @@ flowchart TD
 | `TTVideoIndexList` → `TTQuickJumpModel` | `buildKeyframeIndex()` walks `moveToNextIndexPos(pos, 1)` collecting **I-frame positions only** — never arbitrary frames. Positions are stream-index positions, which the decode path later treats as DISPLAY positions. |
 | `TTQuickJumpModel` interval filter | `setIntervalSeconds(n)`: `n <= 0` keeps every I-frame; `n > 0` thins them to roughly one per `n` seconds, anchored on the last I-frame at or before `mAnchorFrame`. A **small** interval therefore means *more* tiles, not different kinds of frames. |
 | `TTSettings` → `TTQuickJumpDialog` | Two values, both read **once at construction**: `quickJumpIntervalSec()` and `quickJumpThumbHeight()`. Changing either in the settings takes effect the next time the dialog opens, not in an open one. The height is clamped to `kQuickJumpThumbHeightMin/Max`, so a hand-edited config cannot collapse the tiles. |
-| `TTQuickJumpDialog` → `TTQuickJumpDelegate` | Tile geometry: the configured **height**, and a width computed from it by `computeThumbWidth()` via the stream's aspect ratio. Only the height is stored anywhere — the width is always derived, which is what keeps tiles undistorted. `calculateItemsPerPage()` then derives the tiles per page from the delegate's `sizeHint()`, so a larger height automatically means fewer tiles and more paging. |
+| `TTQuickJumpDialog` → `TTQuickJumpModel` | The dialog creates the model and drives it: `setAnchorFrame()` with the current position, then `setIntervalSeconds()` from the setting (which rebuilds the keyframe list and resets the start index); `setItemsPerPage()` from `calculateItemsPerPage()`; `setStartIndex()` per page. The interval spinner calls `setIntervalSeconds()` again and re-centres on the highlighted keyframe. |
+| `TTQuickJumpDialog` → `TTQuickJumpDelegate` | Tile geometry: the configured **height**, and a width computed from it by `computeThumbWidth()`: MPEG-2 from the sequence header's display aspect ratio (fallback: pixel dimensions), H.264/H.265 a fixed 16:9. Only the height is a setting — the width is always derived. `calculateItemsPerPage()` then derives the tiles per page from the delegate's `sizeHint()`, so a larger height automatically means fewer tiles and more paging. |
 | `TTQuickJumpModel` → `TTQuickJumpDelegate` | Per tile: a `QPixmap` if decoded, else a placeholder. `isFailedFrame()` decides the colour — **dark red** for a decode that returned null, **grey** for one still pending. A tile that stays grey means the worker has not answered yet; red means it answered with nothing. |
-| `TTFrameIndexer` → `TTH26xVideoStream` | `TTFrameIndexer::build(file, streamIdx, progress)` opens the file itself and produces the whole `TTFrameIndexBundle` — index, `gops`, `rawToMerged`/`rawPacketCount` and the three stream values. `createHeaderList()` keeps it in `mFrameIndexBundle`. Since 2026-09-04 the stream itself opens no `TTFFmpegWrapper` at all — `openStream()` probes the file via `ttProbeVideo()` into `mProbe` instead, and `TTH26xVideoStream` never constructs a decoder; only `frameIndexBundle()` hands the bundle out, to whichever wrapper an adopter creates for itself. No decoder instance is involved in building the index. |
-| `TTH26xVideoStream` → `TTQuickJumpWorker` | `frameIndexBundle()` — the owner's own bundle: index **and** the H.264 stream metadata (`isPAFF`, `frameMbsOnlyFlag`, `log2MaxFrameNum`). The bundle exists so the two cannot be separated; see pitfalls. Since 2026-09-04 the bundle also carries the display-order map. |
+| `TTFrameIndexer` → `TTH26xVideoStream` | `TTFrameIndexer::build(file, streamIdx, progress)` opens the file itself and produces the whole `TTFrameIndexBundle` — index, `gops`, `rawToMerged`/`rawPacketCount` and the three stream values. `createHeaderList()` keeps it in `mFrameIndexBundle`. The stream opens no `TTFFmpegWrapper` at all — `openStream()` probes the file via `ttProbeVideo()` into `mProbe` instead, and `TTH26xVideoStream` never constructs a decoder; only `frameIndexBundle()` hands the bundle out, to whichever wrapper an adopter creates for itself. No decoder instance is involved in building the index. |
+| `TTH26xVideoStream` → `TTQuickJumpWorker` | `frameIndexBundle()` — the owner's own bundle: index **and** the H.264 stream metadata (`isPAFF`, `frameMbsOnlyFlag`, `log2MaxFrameNum`). The bundle exists so the two cannot be separated; see pitfalls. The bundle also carries the display-order map (`displayMap`). |
 | `TTQuickJumpDialog` → `TTQuickJumpWorker` | Page frame list, thumbnail size, index/header lists, the bundle. One worker per page; `abortCurrentWorker()` disconnects the model first, so a late thumbnail from a superseded worker cannot repaint the new page. |
 | `TTThreadTaskPool` ⇢ `TTQuickJumpWorker` | Pool ownership is the dialog's. Destroying the dialog destroys the pool, whose `cleanUpQueue()` calls `waitForDone()` — a **blocking** wait on the GUI thread. |
 | `TTQuickJumpWorker` → `TTFFmpegWrapper` | One wrapper per worker, created inside the worker thread (it is a `QObject`). The worker's `mIsAborted` is handed over as a cancel token, so an abort reaches into a running decode instead of only being seen between frames. With no bundle handed in, the worker runs its own `TTFrameIndexer` over `mFilePath` and installs the result — `setFrameIndex()` is the only way an index enters a wrapper. |
@@ -106,9 +107,11 @@ flowchart TD
   ranges its spin box from them, the dialog clamps against them, and the
   `.ui` carries no `minimum`/`maximum` of its own — deliberately, with a
   comment saying so.
-- **The dialog owns its pool.** Nothing outside it may keep a pointer to a
-  worker past `abortCurrentWorker()`; the worker deletes itself through the
-  pool's autodelete.
+- **The dialog owns its pool, nobody deletes the workers.** Nothing outside
+  the dialog may keep a pointer to a worker past `abortCurrentWorker()`. The
+  worker is not freed after its run: `TTThreadTask` calls
+  `setAutoDelete(false)`, the dialog connects no `deleteLater`, and the pool
+  only drops its queue pointer on `finished`/`aborted`.
 - **`TTFFmpegWrapper` knows nothing about tasks.** It sees a
   `const std::atomic<bool>*` it does not own. Whoever sets the token must
   outlive every `decodeFrame()` call made after setting it — today the token is
@@ -125,8 +128,8 @@ flowchart TD
   own worker only. The wait is `QThreadPool::globalInstance()->waitForDone()`,
   which every `TTThreadTaskPool` in the app shares, so an unrelated task
   already running on the global pool (e.g. `TTAudioAnomalyScanTask`, which
-  auto-starts, has no cancel token, and is not touched by
-  `abortCurrentWorker()`) still bounds this wait by its own remaining runtime.
+  auto-starts, polls only its own `mIsAborted` — set through its own pool, not
+  by the dialog — and is not touched by `abortCurrentWorker()`) still bounds this wait by its own remaining runtime.
 
 ## Known pitfalls
 
@@ -136,18 +139,18 @@ flowchart TD
   An adopter that receives the bare list keeps the constructor defaults, its
   decode-order tagging then counts PAFF field packets as frames, and a
   field-pair target AU never appears. Measured on `06x03` display 3566:
-  **72 675 ms** against 13 ms with metadata. This defect was fixed once in July
-  2026 for the adopters of the stream's bundle and returned through the
-  quick-jump path, which pulled the index directly. `TTFrameIndexBundle` exists
-  so it cannot return a third time: since 2026-09-04 `setFrameIndex(bundle)` is
-  the wrapper's only entry point and stores the bundle whole.
+  **72 675 ms** against 13 ms with metadata. `TTFrameIndexBundle` keeps an
+  index from travelling without its metadata: `setFrameIndex(bundle)` is the
+  wrapper's only entry point and stores the bundle whole.
 - **Two index domains.** The model collects I-frame positions from
   `TTVideoIndexList`; the decoder treats the same numbers as display positions
   and maps them to decode-order AUs itself. The two agree today, and a change to
   either side has to keep them agreeing. A tile's frame number is not the AU
   that gets decoded for it.
-- **Interval 1 does not mean "every frame".** It means every I-frame, i.e. the
-  unthinned list. More tiles, same kind of frame.
+- **Interval 1 does not mean "every frame".** Interval 0 ("All") is the
+  unthinned I-frame list; any `n > 0` keeps I-frames at least `n` seconds apart
+  (`buildKeyframeIndex()`: `timeSec - lastTimeSec >= intervalSec`). A smaller
+  interval means more tiles, same kind of frame.
 - **A grey tile is not a failed tile.** Grey is pending, dark red is failed.
   While a decode was taking a minute, the whole page stayed grey, which reads
   like "no thumbnails" rather than "still working".
@@ -170,7 +173,7 @@ flowchart TD
   `TTFFmpegWrapper::adoptOrBuildFrameIndex(prebuilt, filePath, error,
   adopted)` — "use `prebuilt` if non-empty, else build a fresh
   `TTFrameIndexer` over `filePath`, then `setFrameIndex()` either way" — and
-  switched four call sites onto it (`gui/ttcutmainwindow.cpp`'s analysis
+  switched five call sites onto it (`gui/ttcutmainwindow.cpp`'s analysis
   wrapper, `data/ttframesearchtask.cpp`, `data/ttsearchtask.cpp` twice,
   `mpeg2window/ttmpeg2window2.cpp`). `TTQuickJumpWorker::operation()` still
   carries its own hand-written copy of exactly that branch
@@ -184,8 +187,10 @@ flowchart TD
   split by codec inside `TTQuickJumpWorker::operation()`. This mirrors the split
   everywhere else in the project (see `detection-and-search.md`) and is not a
   consolidation candidate — the two decoders share no interface worth unifying.
-- **Page-restart logic appears twice** in `TTQuickJumpDialog` — `onPageBack()`
-  and `onPageForward()` both do `abortCurrentWorker(); …; startThumbnailWorker();`
-  around a different offset computation. Small, but the pair must stay in step:
+- **Page-restart logic appears twice** in `TTQuickJumpDialog` —
+  `navigateToOffset()` (page back/forward) and `navigateCenteredOn()` (initial
+  highlight, resize, interval change) both do `abortCurrentWorker();
+  setStartIndex(); updatePageLabel(); startThumbnailWorker();` around a
+  different start-index computation. Small, but the pair must stay in step:
   a future third navigation entry point that forgets the abort would leave two
   workers writing into one model.
