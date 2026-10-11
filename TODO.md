@@ -822,6 +822,22 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   Halbbild-Paar im Bereich (`extraIndices()`); Sonde dafür lag in
   `CLAUDE_TMP/TTCut-ng/run13/` (`probe_mpeg2_decoder seek`).
 
+- **Gate `encode_tempdir` schlägt unter CPU-Last gelegentlich fehl**
+  (gefunden 2026-10-11 im vollen Gate-Lauf: 1 von 12 Läufen mit
+  „mplexabort: expected exactly one Canceled, got 0“). Gemessen: das Gate
+  allein achtmal hintereinander 0 von 96; dieselben vier Instanzen von
+  `test_mpeg2cut_abort … mplexabort` je Runde, dazu eine Endlosschleife je
+  Kern (32): master `eef95d35` 2 von 48, der Stand danach 4 von 72 — der
+  Fehlschlag ist also älter als jede Änderung dieses Tages. In einem
+  Fehllauf (master) wird der Abbruch an der mplex-Zeile „New sequence
+  commences...“ scharf, als die `.mpg` schon ihre Endgröße hat
+  (61143040 B); der Abbruch wird zugestellt, der Schnitt endet trotzdem mit
+  `Exit` statt `Canceled`, die `.mpg` bleibt liegen. **Nicht untersucht:**
+  ob mplex in dem Augenblick schon beendet war (dann schärft das Harness
+  unter Last zu spät, und der Lauf ist der Fall „Abbruch nach dem Ende“)
+  oder ob ein Abbruch im letzten Augenblick eines laufenden mplex verloren
+  geht.
+
 - **`_parse_fraction` in `ttcut-demux`: Zahl ohne `/`** (gefunden 2026-09-27,
   Abschluss-Review `fix/frame-rate-source`): Der Kommentar verspricht „a plain
   number gets DEN=1“, aber `cut -d/ -f2` liefert ohne `/` die ganze Eingabe —
