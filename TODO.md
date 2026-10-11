@@ -512,6 +512,28 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
     demselben Ton.
 ## Low Priority
 
+- **Zu prüfen/entscheiden: Verschiebe-Knopf in der Vorschau bei
+  AC3-Formatwechsel am Schnittrand** (Frage des Anwenders, 2026-10-11; nichts
+  entschieden, nichts gebaut).
+  - Heute: die Vorschau (`gui/ttcutpreview.cpp`) bietet zwei Knöpfe — „1
+    Frame“ bei erkanntem Ton-Burst (`checkBurstForCurrentCut`) und „Frame N“
+    bei einem Wechsel des Seitenverhältnisses (`checkAspectForCurrentCut`).
+    Das AC3-Kanalformat wertet sie nicht aus. Der Hinweis „AC3 Anfang“ /
+    „AC3 Ende“ in der Schnittliste (`TTCutTreeView::acmodHint`) ist eine
+    Auskunft; vorgesehen ist die Normalisierung beim Schnitt
+    (`normalizeAcmod`, Vorgabe an).
+  - Anlass, gemessen (`tools/diag/ac3_acmod_scan.py`, Aufnahme „05x05“,
+    50 fps): der Ton wechselt bei AC3-Rahmen 30612 (979,584 s) von 2.0 auf
+    5.1; der Cut-In (Bild 48979 = 979,580 s) liegt 4 ms davor im letzten
+    2.0-Rahmen. Der Schnitt beginnt so mit genau einem 2.0-Rahmen.
+  - Gerechnet, nicht im Programm ausprobiert: ein Cut-In ein Bild später
+    (48980 = 979,600 s) fiele in Rahmen 30612 (5.1), der Hinweis entfiele
+    und kein Rahmen müsste neu kodiert werden. Nicht nachgerechnet: die
+    Wirkung des Startversatzes der Spur (−4 ms in der `.info`) auf den
+    ersten geschnittenen Rahmen.
+  - Zu entscheiden: ob es den Knopf geben soll (Muster: der
+    Formatsprung-Knopf, der sein Zielbild selbst ausrechnet) oder ob die
+    Normalisierung genügt. Bei einem Ja: Brainstorming und Entwurf zuerst.
 - **Lesebefunde der vollen Kartenprüfung (2026-10-11)** — beim Lesen der
   Karten gegen den Code aufgefallen. **Alle nur gelesen, keiner gemessen**;
   vor einer Änderung zuerst nachstellen.
