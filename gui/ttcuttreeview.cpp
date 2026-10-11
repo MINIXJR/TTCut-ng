@@ -15,6 +15,7 @@
 #include "../data/ttcutlist.h"
 #include "ttthemedicon.h"
 #include "tttreeviewutil.h"
+#include "../common/ttexception.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 #include "../data/ttavdata.h"
@@ -362,7 +363,15 @@ void TTCutTreeView::onEntryDuplicate()
    for ( int i=0; i<videoCutList->topLevelItemCount(); ++i ) {
     if ( videoCutList->topLevelItem(i)->isSelected() ) {
       TTCutItem cutItem = mpAVData->cutItemAt(i);
-    	mpAVData->copyCutEntry(cutItem);
+      // This is a Qt slot: an exception leaving it ends the program. The
+      // same answer TTCutMainWindow::onAppendCutEntry gives a refused range.
+      try {
+        mpAVData->copyCutEntry(cutItem);
+      } catch (const TTInvalidOperationException& ex) {
+        QMessageBox msgBox;
+        msgBox.setText(ex.getMessage());
+        msgBox.exec();
+      }
     }
   }
 }

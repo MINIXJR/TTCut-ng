@@ -24,6 +24,15 @@ All notable changes to TTCut-ng are documented in this file.
   turns, still 7 after closing). Each worker now deletes itself when it has
   finished or was aborted. A worker that was replaced before it had started
   is aborted as well; before, it decoded its whole page for nothing.
+- **Duplicating cuts of two videos no longer ends the program.** With cut
+  rows of two videos selected, "Duplicate" put every copy on the current
+  video. A range that video does not have was refused by an error nobody
+  handled and the program ended; a range that fits landed on the wrong
+  video. Every copy now goes to the video of its own row.
+- **`ttcut-demux` looks for `ttcut-ocr-glyphs` in `PATH`.** A copy of the
+  script without the helper next to it fell back to a fixed path of the
+  author's source tree. It now takes the helper next to the script, else the
+  one in `PATH`. The installed package was not affected.
 
 ## v0.86.0 (2026-10-11)
 

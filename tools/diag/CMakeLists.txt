@@ -378,6 +378,9 @@ target_link_libraries(test_marker_cutpoint PRIVATE ttcut-core)
 # Lifetime and abort of the quick-jump thumbnail workers.
 diag_tool(test_quickjump_worker AV WIDGETS SOURCES)
 target_link_libraries(test_quickjump_worker PRIVATE ttcut-core)
+# Duplicating a cut row: which video gets the copy, and what a refusal does.
+diag_tool(test_duplicate_cut AV WIDGETS SOURCES)
+target_link_libraries(test_duplicate_cut PRIVATE ttcut-core)
 diag_tool(test_analysis_task_lifetime AV WIDGETS SOURCES)
 target_link_libraries(test_analysis_task_lifetime PRIVATE ttcut-core)
 # Drives TTAVData::cutSubtitleTracks() and planAudioCut() directly, so it
@@ -538,7 +541,7 @@ add_custom_target(diag DEPENDS
   test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_bitstream test_sps_basics_epb test_h264_syntax_golden test_h264_truncated_slice test_h264_mmco_neutralize test_unrewritten_frames test_aspectdetect
   test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2 test_aspect_window
   test_anomalyscan test_audio_corruption_marker test_donorfill
-  test_pillarbox test_pool_abort test_save_suffix test_marker_cutpoint test_quickjump_worker
+  test_pillarbox test_pool_abort test_save_suffix test_marker_cutpoint test_quickjump_worker test_duplicate_cut
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_track_persist test_track_language test_track_gui test_preview_clip_index test_preview_window_in_cut test_preview_drift_rows test_repair_window_edge test_marker_delete_repair test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_aspect_hint test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
   test_audiorepair_cut test_repairdialog_model test_audio_es_input test_donorfill_app

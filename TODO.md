@@ -576,18 +576,17 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
       `TTStreamPointVideoWorker::isPillarboxFrame`, das es im Programm
       nicht mehr gibt (`classifyAspectSample`).
   - **Aus der zweiten Stufe (21 Karten), von mir nachgelesen:**
-    - **Duplizieren eines Schnitts ohne Fangnetz.** `onEntryDuplicate` →
-      `TTAVData::copyCutEntry` → `appendCutEntry`, das bei einer Ablehnung
-      eine Ausnahme wirft; anders als `onAppendCutEntry` fängt hier niemand.
     - **Versatz-Spalte nach abgebrochener Vorschau.** `onCutPreview`
       verbindet `cutAudioDriftCalculated`, nur `onCutPreviewFinished`
       trennt es; nach einer abgebrochenen oder gescheiterten Vorschau
       bleibt die Verbindung bis zur nächsten Vorschau, und
       `onAudioOnlyCutFinished` sendet das Signal ohne Bedingung.
-    - **Fester Entwicklerpfad im ausgelieferten `ttcut-demux`.** Findet es
-      `ttcut-ocr-glyphs` nicht neben sich, sucht es zuerst unter
-      `/usr/local/src/TTCut-ng/tools/ttcut-demux/` und erst danach unter
-      `/usr/share/ttcut-ng/`.
+      **Noch nicht nachgestellt** (Entscheid 2026-10-11: bleibt im TODO).
+      Dafür nötig: ein Prüfprogramm, das eine Vorschau startet und
+      abbricht und danach einen Nur-Ton-Schnitt über den Schnittdialog
+      laufen lässt. Gelesen dazu: `TTCutTreeView::onAudioDriftUpdated`
+      schreibt die gelieferten Werte der Reihe nach in die ersten Zeilen
+      der ganzen Schnittliste, gleich welche Zeilen der Auftrag umfasste.
     - Veraltete Kommentare: `common/ttsettings.cpp`, `load()` („The Muxer
       block below still reads that key“ — `Muxer\OutputContainer` liest
       niemand mehr); `common/ttmessagelogger.cpp` („dreimal mit "" aufruft“

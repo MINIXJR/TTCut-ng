@@ -148,10 +148,15 @@ void TTAVData::appendCutEntry(TTAVItem* avItem, int cutIn, int cutOut)
  */
 void TTAVData::copyCutEntry(const TTCutItem& cutItem)
 {
-	if (mpCurrentAVItem == 0)
-		throw TTInvalidOperationException("No current AV-Data set!");
+	// The copy goes to the video the row belongs to, not to the current one:
+	// with rows of two videos selected the current video got every copy - a
+	// range it does not have was refused by an exception nobody caught, a
+	// range that fits landed on the wrong video (gate duplicate_cut).
+	TTAVItem* owner = cutItem.avDataItem();
+	if (owner == 0)
+		throw TTInvalidOperationException("Cut entry without AV-Data!");
 
-	appendCutEntry(mpCurrentAVItem, cutItem.cutIn(), cutItem.cutOut());
+	appendCutEntry(owner, cutItem.cutIn(), cutItem.cutOut());
 }
 
 /*!
