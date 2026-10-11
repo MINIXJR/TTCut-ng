@@ -1,5 +1,5 @@
 ---
-base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
+base_commit: 4fa1aba8d44cf9ff01c9743653a786b01a4ff13d
 last_verified: 2026-10-11
 sources:
   - extern/ttmkvmergeprovider.h

@@ -144,6 +144,7 @@ exit_cancel            tux   900  test_exit_cancel
 save_suffix            tux   300  test_save_suffix
 marker_cutpoint        tux   600  test_marker_cutpoint
 quickjump_worker       tux   600  test_quickjump_worker
+duplicate_cut          tux   600  test_duplicate_cut
 pool_abort             unit  120  test_pool_abort
 abort_after_finish     unit  120  test_abort_after_finish
 cutlist_minsize        unit  120  test_cutlist_minsize
@@ -159,6 +160,7 @@ demux_framerate        unit  60   -
 demux_slotplan         unit  120  -
 demux_slot_e2e         unit  300  -
 demux_trailing_nulls   unit  60   -
+demux_glyph_lookup     unit  60   -
 vdr_example_names      unit  120  -
 ocr_glyphs_selftest    unit  60   -
 ffmpeg_edge_packets    unit  120  -
@@ -458,6 +460,9 @@ case_marker_cutpoint_h264()  { need "$V264"; "$D/test_marker_cutpoint" "$V264"; 
 gate_quickjump_worker() { cases 300 quickjump_worker_h264 quickjump_worker_mpeg2; }
 case_quickjump_worker_h264()  { need "$V264"; "$D/test_quickjump_worker" "$V264"; }
 case_quickjump_worker_mpeg2() { need "$M2V";  "$D/test_quickjump_worker" "$M2V"; }
+gate_duplicate_cut() { cases 300 duplicate_cut_beyond duplicate_cut_fits; }
+case_duplicate_cut_beyond() { need "$M2V"; need "$M2VFP"; "$D/test_duplicate_cut" "$M2V" "$M2VFP" action; }
+case_duplicate_cut_fits()   { need "$M2V"; need "$M2VFP"; "$D/test_duplicate_cut" "$M2V" "$M2VFP" action fits; }
 gate_pool_abort()            { "$D/test_pool_abort"; }
 gate_abort_after_finish()    { "$D/test_abort_after_finish"; }
 gate_cutlist_minsize()       { "$D/test_cutlist_minsize"; }
@@ -473,6 +478,7 @@ gate_demux_framerate()       { need "$DEMUX"; "$D/gate_demux_framerate.sh"; }
 gate_demux_slotplan()        { need "$DEMUX"; "$D/gate_demux_slotplan.sh"; }
 gate_demux_slot_e2e()        { need "$DEMUX" "$AUDIOFIX"; "$D/gate_demux_slot_e2e.sh"; }
 gate_demux_trailing_nulls()  { need "$DEMUX"; "$D/gate_demux_trailing_nulls.sh"; }
+gate_demux_glyph_lookup()    { need "$DEMUX"; "$D/gate_demux_glyph_lookup.sh"; }
 gate_vdr_example_names()     { need "$DEMUX"; "$D/gate_vdr_example_names.sh" "$W"; }
 # Edge-repair rules and line bands of the subtitle glyph repair (needs Pillow).
 gate_ocr_glyphs_selftest() {

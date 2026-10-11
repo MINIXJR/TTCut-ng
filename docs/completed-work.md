@@ -689,6 +689,24 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **Fester Pfad des Quellbaums in der Helfer-Suche** → **ERLEDIGT
+  (2026-10-11)**, Zweig `fix/duplicate-cut-and-glyph-path` (Lesebefund der
+  vollen Kartenprüfung; der erste Wortlaut im `TODO.md` war falsch).
+  - Gemessen (Suchlogik für drei Lagen des Skripts nachgerechnet):
+    installiert unter `/usr/bin` → Helfer `/usr/bin/ttcut-ocr-glyphs`,
+    Vorlagen `/usr/share/ttcut-ng/ocr-glyphs`, der feste Pfad wird nicht
+    benutzt; im Quellbaum → beides neben dem Skript; nur ein einzeln
+    kopiertes Skript fiel auf
+    `/usr/local/src/TTCut-ng/tools/ttcut-demux/` zurück. Kein Fehler im
+    Paket.
+  - Auf Entscheid des Anwenders ersetzt: neue Funktion
+    `locate_glyph_helper SCRIPT_DIR` — Helfer neben dem Skript, sonst
+    `command -v ttcut-ocr-glyphs`, sonst leer; Vorlagen neben dem Skript,
+    sonst `/usr/share`. Gate `demux_glyph_lookup` (sechs Prüfungen, eine
+    davon: kein Pfad unter `/usr/local/src` im Skript).
+  - `tools/vdr-demux-example.sh` nennt seinen Quellbaum weiter in der
+    Variable `TTCUT_SRC` — eine Vorlage zum Anpassen, nicht angefasst.
+
 - **Karte `audio-cut-timing.md`: Hinweis zur Tonbilanz des Demuxers neu gefasst** → **DONE
   (2026-10-11, Kartenauffrischung vor v0.86.0)**. Die alte Fassung beschrieb die Bilanz
   (`audio_N_silence_ms`, `audio_N_removed_ms`) für den Demux vor der Slot-Regel und nannte
@@ -1667,6 +1685,29 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   - Scaling-Investigation: Sweet Spot 4-8 Worker, siehe `project_hevc_search_perf_investigation.md`
 
 ### GUI und Wiedergabe
+
+- **Duplizieren von Schnitten zweier Videos beendete das Programm** →
+  **ERLEDIGT (2026-10-11)**, Zweig `fix/duplicate-cut-and-glyph-path`
+  (Lesebefund der vollen Kartenprüfung; der Befund lautete „kein Fangnetz“,
+  die Messung zeigte mehr).
+  - Gemessen vor dem Fix (`test_duplicate_cut`, `tux_mpeg2_576i_pal_test`
+    mit 3000 und `…_fieldpic_test` mit 3060 Indexpositionen, auf jedem ein
+    Schnitt, beide Zeilen markiert wie nach Strg-Klick, das kürzere Video
+    aktuell): „Duplicate“ hängt jeden markierten Bereich an das AKTUELLE
+    Video. Bereich 3039–3059 des längeren Videos: Ausnahme „Cut out 3059
+    exceeds the video frame count of 3000!“ verlässt den Slot; über die
+    Kontextmenü-Aktion in der Ereignisschleife ausgelöst endet der Prozess
+    mit `terminate called after throwing an instance of
+    'TTInvalidOperationException'` (rc 134). Bereich 200–300: kein Fehler,
+    das Duplikat liegt am falschen Video.
+  - Ursache: `TTAVData::copyCutEntry` nahm `mpCurrentAVItem` statt des
+    Videos der Zeile; `onEntryDuplicate` fing nichts.
+  - Fix: `copyCutEntry` hängt an `cutItem.avDataItem()` an;
+    `onEntryDuplicate` fängt eine Ablehnung und zeigt sie an wie
+    `onAppendCutEntry`. Gate `duplicate_cut` (Fälle „beyond“ und „fits“,
+    beide über die Aktion): vier Zeilen, jede Kopie am Video ihrer Zeile.
+  - Das Fangnetz selbst erreicht kein Fall des Gates: nach dem Fix lehnt
+    auf diesem Weg nichts mehr ab.
 
 - **Zeitsprung: Vorschaubild-Worker wurden nie gelöscht, ein noch nicht
   gestarteter nicht abgebrochen** → **ERLEDIGT (2026-10-11)**, Zweig

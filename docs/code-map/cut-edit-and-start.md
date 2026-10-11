@@ -1,5 +1,5 @@
 ---
-base_commit: c71740dfe779b83b2febb400a89b285c693fd325
+base_commit: 4fa1aba8d44cf9ff01c9743653a786b01a4ff13d
 last_verified: 2026-10-11
 sources:
   - gui/ttcutframenavigation.h
@@ -122,7 +122,7 @@ flowchart TD
 
 ## Known pitfalls
 
-- **A refused range change is only visible in the log.** Both write paths validate through `isValidCut`, but `appendCutEntry` raises (`onAppendCutEntry` and `TTCutProjectData::parseCutSection` catch; `TTAVData::copyCutEntry`, reached from `onEntryDuplicate`, does not) while `updateCutEntry` refuses and logs — its six calling functions run inside Qt slots, where an escaping exception ends the application. The three gestures that could hit the limit stop at the other end before getting there, so the refusal is a last line of defence rather than something a user meets. `TTCutItem::cutLengthFrames` takes the absolute difference, so an inverted range would still report a plausible length.
+- **A refused range change is only visible in the log.** Both write paths validate through `isValidCut`, but `appendCutEntry` raises (`onAppendCutEntry`, `onEntryDuplicate` and `TTCutProjectData::parseCutSection` catch; `TTAVData::copyCutEntry` appends the copy to the row's own video, `cutItem.avDataItem()`, so a duplicate keeps a range its video has — gate `duplicate_cut`) while `updateCutEntry` refuses and logs — its six calling functions run inside Qt slots, where an escaping exception ends the application. The three gestures that could hit the limit stop at the other end before getting there, so the refusal is a last line of defence rather than something a user meets. `TTCutItem::cutLengthFrames` takes the absolute difference, so an inverted range would still report a plausible length.
 - **A cut list never validates what it is handed.** `TTCutList::append`/`update` store whatever they get; every check lives one level up in `TTAVItem`. `remove` guards against an entry it does not hold, as `update` and `onUpdateOrder` do.
 - **The two `append` overloads disagree about `order`.** `append(const TTCutItem&)` assigns `count()` when the order is negative and announces it; `append(avItem, cutIn, cutOut, order = -1)` stores whatever it got. Every job list goes through the second one, so all its entries carry `-1` — `sortByOrder()` on such a list is `std::sort` over equal keys and not stable.
 - **The codec is decided twice from two different places.** `onAudioVideoCut` sets the encoder codec from `mpCurrentAVDataItem`, the dispatch in `onDoCut` switches on `cutList->isH26xCut()`, which asks entry 0. `canCutWith` keeps them in step, because it rejects a differing stream type: `TTAVData::appendCutEntry` runs it per new cut, and for a project — whose loader appends its cuts while the streams are still opening — `TTAVData::onReadProjectFileFinished` runs the same rule over every cut once all streams are in (`findIncompatibleVideos`) and ends the load as aborted when it fails. Gate: `project_incompatible`.
