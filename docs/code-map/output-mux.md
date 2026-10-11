@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - extern/ttmkvmergeprovider.h
@@ -18,6 +18,9 @@ sources:
   - data/ttaudioonlycuttask.h
   - gui/ttcutpreview.cpp
   - data/ttplaybackmuxtask.cpp
+  - data/ttplaybackmuxtask.h
+  - extern/ttessmartcut.cpp
+  - avstream/ttnaluparser.cpp
   - data/ttavdata.cpp
   - gui/ttcurrentframe.cpp
   - gui/ttcutsettingsmuxer.cpp
@@ -100,7 +103,7 @@ flowchart TD
 
 | From → To | What crosses (data / order / invariant) |
 |---|---|
-| `TTESInfo` → `TTH26xCutTask` | `TTESInfo::timingForVideo(sourceFile).avOffsetMs`, read in `TTAVData::doH264Cut` and put into `TTH26xCutParams::mux` through `TTMkvMergeProvider::videoOptionsFor()`. Non-zero only when the `.info` has timing info **and** a non-zero `av_offset_ms` **and no track carries `audio_N_start_offset_ms`**: `TTESInfo::avOffsetMs()` returns 0 as soon as one does (every `.info` written by `ttcut-demux` since the slot rule, 2026-10-08) — the per-track offsets go into the cut through the effective delay (audio-cut-timing.md), not into the mux. |
+| `TTESInfo` → `TTH26xCutTask` | `TTESInfo::timingForVideo(sourceFile).avOffsetMs`, read in `TTAVData::doH264Cut` and put into `TTH26xCutParams::mux` through `TTMkvMergeProvider::videoOptionsFor()`. Non-zero only when the `.info` has timing info **and** a non-zero `av_offset_ms` **and no track carries `audio_N_start_offset_ms`**: `TTESInfo::avOffsetMs()` returns 0 as soon as one does (`ttcut-demux` writes the key per track whenever the check of the first copied audio frame passes) — the per-track offsets go into the cut through the effective delay (audio-cut-timing.md), not into the mux. |
 | `TTESInfo` → `TTAVData::onCutFinished` | Same value, read by hand in `TTAVData::onDoCut` (`findInfoFile` + `TTESInfo`, same two conditions) into the member `mAvSyncOffsetMs`; that branch keeps the `TTESInfo` object because `loadExtraFrameIndices` needs it too. |
 | `TTESInfo` → `ttConfigurePreviewMux` | `ttResolvePreviewSource` fills `TTPreviewSource::avOffsetMs` from `timingForVideo`. |
 | `TTESInfo` → `TTPlaybackMuxTask` | `TTCurrentFrame::buildPlaybackMuxParams` builds `TTPlaybackMuxParams::video` from `timingForVideo`; audio is the first track's **source** ES (uncut), so no per-track delay is in it (see playback.md). The offset handed to the muxer is that track's start offset (`trackStartOffsetMs` by file name) when the `.info` has per-track offsets, else `avOffsetMs`. |
@@ -109,7 +112,7 @@ flowchart TD
 | `TTAVItem` → `TTAudioOnlyCutTask` | `trackFiles`/`trackLanguages` from the `cutAudioTracks` callback, `ok` tracks only. A track short of the requested count ends the run **before** the MKA mux, like the video cuts. |
 | `TTESSmartCut` → `TTH26xCutTask` / preview | `outputDisplayOrder()` — one source display rank per written AU, empty on any anomaly (see smart-cut.md). Copied into `TTMkvVideoOptions::displayOrder` after the cut, unchanged. |
 | `generateChapterFile` → callers | Path of a `QTemporaryFile` `ttcut-chapters-XXXXXX.txt` in `cutDirPath`, written only when `workingMkvCreateChapters && workingMkvChapterInterval > 0` and `mLastCutResultMs > 0`; the caller removes it after the mux and on a cancel. Chapters sit at fixed intervals from 0, named `Chapter NN`; they do **not** follow the cut points. The H.26x path also demands `finalOutput.endsWith(".mkv")`, which `doH264Cut` already guarantees. |
-| `TTMuxListDataItem` → `onCutFinished` | `mpMuxList->appendItem(*cutVideoTask->muxListItem())`, then `itemAt(count()-1)`. The list is created once per `TTAVData` and never cleared, so it holds one item per **MPEG-2** cut of the session; nothing else appends to it, and only the mplex branch reads it. |
+| `TTMuxListDataItem` → `onCutFinished` | `mpMuxList->appendItem(*cutVideoTask->muxListItem())`, then `itemAt(count()-1)`. The list is created once per `TTAVData` and never cleared, so it holds one item per **MPEG-2** cut of the session; nothing else appends to it. The mplex branch reads the whole list; the MKV branch reads only the item just appended. |
 | `onCutFinished` → `TTMuxTask` | `TTMuxTaskParams`, copied on the GUI thread: `video` = `videoOptionsFor(first video of the run list, its frameRate(), mAvSyncOffsetMs)`, the item's files and languages, chapter file, `totalDurationMs`, and `cleanupOnAbort` = the whole `mCutProducedFiles` (ownership handover; the member is cleared). Output: `<cutDirPath>/<video ES base>.mkv`. |
 | `onCutFinished` → `TTMplexProvider` | The whole `mpMuxList` plus `lastIdx`; `setAudioSyncOffset(mAvSyncOffsetMs)`. `workingMuxMode == 1` writes the script (one mplex line per list item), else `mplexPart(lastIdx)` runs mplex synchronously on the GUI thread. mplex gets `-f<n>` (`TTEncoderNames::mpeg2MuxFormat(workingMpeg2Target)`), `-O <offset>ms`, `-o`, video and audio paths; subtitles, languages and chapters of the item have no place in an MPG. |
 | callers → option setters | `TTMkvVideoOptions` (frame rate, PAFF + `log2_max_frame_num`, codec id, A/V offset, display order) through `setVideoOptions()`; languages, chapters, total duration and `setRequireAllInputs()` separately. See the configuration matrix below. The provider is created fresh per operation. |
@@ -129,7 +132,7 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
 |---|---|---|---|---|---|---|---|---|
 | `TTH26xCutTask::runCut` | `TTH26xCutParams::mux` (built in `doH264Cut`) | Smart Cut | track list | cut `.srt` + langs | if enabled | fails | yes | fails the cut |
 | `TTMuxTask` (MPEG-2) | `TTMuxTaskParams::video` (built in `onCutFinished`) | – (derived in `mux()`) | mux item | cut `.srt` + langs | if enabled | fails | yes | fails the cut |
-| `TTCutPreviewTask`, MPEG-2 clip | `ttConfigurePreviewMux` | – (derived) | – (file-name fallback) | – (SRT goes to mpv) | – | skipped + logged | no | throws into the clip's failure path |
+| `TTCutPreviewTask`, MPEG-2 clip | `ttConfigurePreviewMux` | – (derived) | – (the `preview_NNN` file name never matches the fallback) | – (SRT goes to mpv) | – | skipped + logged | no | throws into the clip's failure path |
 | `TTCutPreviewTask`, H.26x clip | `ttConfigurePreviewMux` | Smart Cut | – | – | – | skipped + logged | no (deliberate, see comment above the mux) | throws, `mErrorMessage` set |
 | `ttRebuildMpeg2PreviewClip` / `ttRebuildSmartCutPreviewClip` | `ttConfigurePreviewMux` | – / Smart Cut | – | – | – | skipped + logged | no | returns false; `TTCutPreview` warns and keeps the old clip |
 | `TTPlaybackMuxTask` | `TTPlaybackMuxParams::video` (built in `buildPlaybackMuxParams`) | source map, dropped (RASL) slots parked behind the last real one | – | – | – | skipped + logged | yes | playback unavailable |
@@ -138,7 +141,7 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
 ## Assumptions, contracts & pitfalls
 
 - **Two offsets, two stages, never both on one track.** The per-track user
-  delay — plus, since 2026-10-08, the track's `.info` start offset — is baked
+  delay plus the track's `.info` start offset (`TTESInfo::effectiveAudioDelayMs`) — is baked
   into the cut audio file through the keep list (audio-cut-timing.md); the
   `.info` `av_offset_ms` is added at the mux, and reads 0 whenever the
   `.info` carries per-track start offsets, so the two never add up. It goes to
@@ -188,8 +191,10 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
   mux when any was dropped and `mRequireAllInputs` is set (the default), before
   the output file is opened. Gate `mkvmux_inputs`.
 - **Languages:** explicit list by index first; for audio only, a `_xxx` suffix
-  of the file name is the fallback (that is what the preview and playback MKVs
-  get). Every audio track is flagged default (`AV_DISPOSITION_DEFAULT`).
+  of the file name is the fallback (that is what the playback MKV gets, from the
+  source ES name `<base>_<lang>.<ext>`; the preview clips' audio files are named
+  `preview_NNN.<ext>` / `preview_audio_temp.<ext>`, so their MKVs carry no
+  language). Every audio track is flagged default (`AV_DISPOSITION_DEFAULT`).
 - **Abort:** `checkAbort()` polls per packet in `writeInterleaved()`, i.e. only
   after the output file is open and the header written; the tasks therefore
   poll once more right before calling `mux()`. An abort sets `mLastError`
@@ -225,5 +230,5 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
   - status: opening and input cleanup are shared (`openMatroskaOutputFile`, `TTMkvMergeProvider::freeMuxInputs`, next to `allocMatroskaOutput`/`freeMatroskaOutput`); the trailer + finish log stay per function → each closes over its own local cleanup lambda and logs its own text
 - **Preview audio-cut and Smart Cut failure skeleton**
   - sites: `data/ttcutpreviewtask.cpp:TTCutPreviewTask::createH264PreviewClip`, `data/ttpreviewclip.cpp:ttRebuildSmartCutPreviewClip`, `data/ttpreviewclip.cpp:ttRebuildMpeg2PreviewClip`
-  - shared purpose: cut the first audio track into the temp directory, log a failed Smart Cut
+  - shared purpose: cut the first audio track into the temp directory (all three), log a failed Smart Cut (the two Smart Cut sites; the MPEG-2 rebuild has none)
   - status: consolidate → a helper in `data/ttpreviewclip.cpp`; open since audit run 7 (preview pipeline, outside run 7's batches)

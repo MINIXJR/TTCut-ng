@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - gui/ttstreamnavigator.h
@@ -14,6 +14,8 @@ sources:
   - gui/ttcutmainwindow.cpp
   - gui/ttcuttreeview.cpp
   - gui/ttquickjumpdialog.cpp
+  - gui/ttcutsettingspaths.cpp
+  - data/ttavdata.cpp
   - gui/ttcutmain.cpp
   - ui/streamnavigationwidget.ui
   - ui/navigatordisplaywidget.ui
@@ -94,9 +96,10 @@ flowchart LR
   Centred titles therefore come from the proxy.
 - **Icons come from the desktop theme, not from the application.**
   `ttThemedIcon(themeName, fallback)` (`gui/ttthemedicon.h`) returns
-  `QIcon::fromTheme` with the widget style's standard pixmap as fallback; it
-  is the one form every button and action icon uses (62 calls in eleven GUI
-  files). What a button shows therefore depends on the icon theme of the
+  `QIcon::fromTheme` with the application style's standard icon as fallback; it
+  is the form the button and action icons use (62 calls in eleven GUI files;
+  the three folder buttons of `gui/ttcutsettingspaths.cpp` take the style's
+  `SP_DirOpenIcon` directly, without a theme name). What a button shows therefore depends on the icon theme of the
   session; offscreen runs and screenshot runs get whatever theme is found.
 - **The display's item pointer is raw.** `TTAVData::onRemoveAVItem` hands the
   GUI a neighbour before removing an item and a null item right after the last

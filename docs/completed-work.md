@@ -4576,7 +4576,116 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
       enthalten, stehen weiter in den Karten (u. a. `getCutEndObject` in
       `mpeg2-cut`, Defekt A/B/E in `smart-cut`, „Root cause & knot“ in
       `frame-order`).
-    - Die übrigen 21 Karten (zweite Stufe).
+    - Die übrigen 21 Karten: zweite Stufe, nächster Eintrag.
+
+- **Die übrigen 21 Karten ganz am Code gelesen (zweite Stufe)** →
+  **ERLEDIGT (2026-10-11)**, Zweig `docs/map-full-check-2`.
+  - Vorgehen wie in der ersten Stufe (Eintrag darüber), elf Agenten, jede
+    Berichtigung in der Hauptsitzung am Code gegengelesen, keine
+    zurückgenommen. Alle 29 Karten sind damit einmal ganz gelesen.
+  - 126 Berichtigungen in 21 Karten, je Karte zwischen 1 und 20 (die
+    Zahlen stehen im `INDEX.md`). Deutlich weniger als in der ersten Stufe,
+    die mit den größten und den drei zufällig aufgefallenen Karten begann.
+  - Die gewichtigsten Fehlaussagen, die der Code widerlegt:
+    - `stream-open-project-load` (und der Index): „der Pool erfährt das
+      Ende zuerst“ — der Fertig-Handler hängt am `finished(item, …)` aus
+      `operation()`, der Pool am `finished(this)`, das `TTThreadTask::run`
+      erst danach sendet; beide laufen queued, der Handler also zuerst
+      (gelesen, nicht gemessen). `markerDataReloaded` gibt es nicht.
+    - `stream-points`: „Set Cut-In/Cut-Out“ am Marker wendet die
+      `isCutInPoint`-Regel nicht an; die Regel schaltet nur die Knöpfe.
+    - `cut-edit-and-start`: sechs Funktionen rufen `updateCutEntry` an
+      `TTAVData` vorbei, nicht eine; `TTCutVideoTask` nimmt je Eintrag
+      dessen eigenen Strom, nicht den von Eintrag 0; `updateCutEntry`
+      prüft selbst mit `isValidCut`.
+    - `settings-state`: H.264/H.265 muxt immer MKV und liest weder
+      `workingOutputContainer` noch `workingMuxMode`; `cutVideoName` trägt
+      nur nach einem MKV-Schnitt einen Containernamen; der Vertrag des
+      Einstellungsdialogs (nichts vor OK) gilt, die Karte nannte ihn
+      gebrochen.
+    - `quick-jump`: die Worker löscht niemand (die Karte nannte
+      Autodelete); Intervall 0 ist die ungefilterte Liste, nicht 1.
+    - `playback`: die laufende Position geht wie die Stopp-Position durch
+      `displayToStreamIndex`; ein Fehlerende sendet auch
+      `playbackFinished`.
+    - `audio-repair`: ein gescheiterter Tonschnitt lässt den Schnitt über
+      die Spurzahl-Prüfung in drei Funktionen scheitern, nicht über
+      `mRequireAllInputs`.
+    - `cut-preview`: die clip-eigene Engine ist um `smartCutFrames` herum
+      angemeldet (abbrechbar), nur ihr `initialize` nicht.
+    - `quality-check`: die Klick-Regel nimmt den Betrag (ein Einbruch
+      zählt auch); der Skill `verify-smartcut` ruft das Werkzeug nicht.
+  - Aus den Karten herausgenommene Passagen über behobene Fehler
+    (wörtlich; in der Karte steht jetzt das heutige Verhalten):
+  - `docs/code-map/mpeg2-decoder.md`:
+    - Zeile `LIB` → `FI`: „Until audit run 13 this was one file-scope static shared by every instance and thread.“
+  - `docs/code-map/playback.md`:
+    - Fallstrick `TTCurrentFrame::onPlaybackPositionChanged`: „until `3504eb3e` assumed one displayed frame per `1/fps` of mpv time, so on MPEG-2 field-picture material the live index drifted by the number of extras before the position while `onPlaybackFinished` corrected it (finding 5, ruled and fixed: both go through `displayToStreamIndex`).“
+    - Zeile `WR` → `POS` → `SLIDER`: „The comment in `onPlaybackPositionChanged` used to say "no cut-position write"; ruled 2026-09-12 (finding 6): the behaviour is right, the comment was wrong and says so since `3504eb3e`.“
+  - `docs/code-map/quick-jump.md`:
+    - Fallstrick „An index without its metadata“: „This defect was fixed once in July 2026 for the adopters of the stream's bundle and returned through the quick-jump path, which pulled the index directly. `TTFrameIndexBundle` exists so it cannot return a third time: since 2026-09-04 `setFrameIndex(bundle)` is the wrapper's only entry point and stores the bundle whole.“
+  - `docs/code-map/stream-points.md`:
+    - Fallstrick zur Bilddomäne: „Until `0400b9a0` the column showed `frameIndex / fps` and ran ahead on field-picture material (`docs/completed-work.md`, audit run 4).“
+    - Fallstrick zur Lebensdauer der Aufgaben: „the two stream-point workers did, one per analysis, until `f2198216`“
+  - `docs/code-map/settings-state.md`:
+    - Zeile `DEF` → `WORK`: „(the 2026-08-16 defect: a fresh config cut MPEG-2 to MKV because the legacy global key was used)“
+    - Zeile `SDLG` → `DEF`: „`TTCutSettingsMuxer::onMkvChaptersChanged` wrote `setMkvCreateChapters` on every toggle until `7bfd4a3b`; now it only enables the interval spin box“
+    - Zeile `DEF` → `QS`: „until `7bfd4a3b` it saved after Cancel as well“
+    - dieselbe Zeile: „moved there on 2026-08-18 because `closeProject`'s `load()` used to revert unsaved dialog edits“
+    - Zeile `WORK` → `PIPE`: „it was ignored before code-audit run 7, every MPG got `-f8`“
+    - Zeile `HEAD`: „Until 2026-09-19 it set only `cutDirPath` and the bare base name: the codec-default muxer ran (mplex for MPEG-2), the ES had no extension and the `.mpg` went to `muxOutputPath` = home.“
+    - Absatz unter der Wertklassen-Tabelle: „The legacy key `Muxer\OutputContainer` is gone since `7bfd4a3b`“
+    - Fallstrick `TTSettingsDialog`: „is broken by the muxer page's live `setMkvCreateChapters`; combined with `openSettingsDialog` saving unconditionally after `exec()`, a toggled-then-cancelled checkbox reaches disk.“
+  - `docs/code-map/stream-open-project-load.md`:
+    - Zeile `PRF`, Abbruch: „**only if an item was current**: `onAVItemChanged` returns at once for `avItem == mpCurrentAVDataItem`, so when no video of the project ever opened (missing file), the created item, its cuts and the modified flag stay behind (measured 2026-09-23; open, `TODO.md`)“
+    - Zeile `PRF`: „(the first video; since `cc85a6c8` also stored — before, `mpCurrentAVItem` kept whatever `onOpenVideoFinished` set last)“
+    - Zeile `CLI` (headless) → wait: „Until then they polled `avCount() > 0` (video appended) and slept a fixed 2 s for the audio tasks.“
+    - Fallstrick „Headless wait“: „until `026aa9fb` the 2 s audio sleep was a guess, not a contract (a slow NAS or a large AC3 header scan could exceed it and the cut ran with fewer tracks than the project lists); `waitForProjectLoad` waits for the load chain itself. Screenshot gate: all 21 images unchanged by the switch.“
+  - `docs/code-map/burst-detection.md`:
+    - Zeile `MOVE` → `PREV`/`APREV`: „stand bis 2026-09-19 in `regeneratePreviewClip` und hätte nach einem Formatsprung einen nie vorhandenen Burst für behoben erklärt“
+    - Zeile `CUTRUN` → `FINAL`: „vor `27f8f29` existierte der Burst-Dialog dort doppelt“
+    - dieselbe Zeile: „(bis 2026-09-19 stieg die Funktion für die ganze Liste aus, wenn der **erste** Schnitt kein Audio hatte)“
+    - Redundanz „acmod-Mehrheitslogik doppelt“: „Der alte Dateiscan hatte bei Fenstern < 100 Frames einen echten Fehler: sein Cut-Out-Samplebereich begann vor dem Cut-In, sodass Cut-In-acmod und Mehrheit teils von außerhalb des Fensters stammten und ein kurzes Segment auf die Nachbarschaft statt auf sich selbst normalisiert werden konnte — mit der gemeinsamen Funktion behoben (7/7/7 statt fehlerhaft, Kurzfenster-Testfall).“
+  - `docs/code-map/cut-edit-and-start.md`: der ganze Abschnitt „Findings of audit run 6“:
+
+        1. **`checkCut` validates nothing — confirmed, reachable.** A probe appends
+           `(500, 100)` and `(-7, 1000000)`; both are accepted and the inverted range
+           reports a length of 401 frames. The reachable route is the project loader:
+           `TTCutProjectData::parseCutSection` calls `avItem->appendCutEntry` directly,
+           bypassing `TTAVData::appendCutEntry` and therefore `canCutWith`. The VDR
+           import in `data/ttavdata.cpp` already rebuilt the missing check locally
+           (`cutIn >= 0 && cutOut > cutIn`, capped at `frameCount - 1`).
+        2. **`TTCutList::remove` without the guard — confirmed, no route found.** A
+           foreign item produces `QList::operator[]: index out of range` (a silent
+           bad access in a build without active asserts). No reachable route: the
+           global list holds copies carrying the same UUID and the same
+           `mpAVDataItem`, and `onRemoveCutItem` always hands the entry to the item
+           whose list holds it. Hardening, not a defect.
+        3. **The job list has no owner — confirmed for the GUI route only.** The
+           headless route passes `mpAVData->cutList()` (the global list, not a `new`
+           one), so `--auto-cut` never leaks. Only `cutListFromSelection`'s five
+           callers do.
+        4. **`editCutData` — confirmed, larger than the read suggested.**
+           LeakSanitizer reports two 40-byte leaks from `onEditCut`: one when the
+           second edit overwrites the pointer, one because the destructor does not
+           free it either. A single unfinished edit already leaks.
+        5. **Codec from two sources — largely disproved.** `canCutWith` rejects a
+           differing stream type, so the encoder codec (from the current item) and
+           the dispatch (from entry 0) cannot disagree as long as every entry came
+           through `TTAVData::appendCutEntry`. The project loader bypassed that; a
+           project naming two videos of different codecs loaded — closed since,
+           see `docs/completed-work.md`.
+        6. **New in run 6:** the `canCutWith` MPEG-2 loop compared `video2` with
+           itself, so its aspect-ratio and picture-size tests could never fail.
+
+        The batches of the run fixed 1, 2, 4 and 6 and hardened 3. Finding 1 took
+        three of them: the appending path first, then `updateCutEntry` as the
+        other way in, then the three gestures that could reach the limit, which
+        now stop at the other end of the range. The codec hole of finding 5 was
+        closed afterwards (the loader checks with `canCutWith` once the streams are
+        in); the preview clones were held back as batch G. Details and evidence:
+        `docs/completed-work.md`.
+
 
 ## Funktionsverzeichnis
 

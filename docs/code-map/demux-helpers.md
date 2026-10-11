@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - tools/ttcut-demux/ttcut-ocr-glyphs
@@ -7,6 +7,8 @@ sources:
   - tools/vdr-demux-example.sh
   - tools/ttcut-demux/ttcut-demux
   - debian/rules
+  - tools/diag/gate_vdr_example_names.sh
+  - tools/diag/run-gates.sh
 ---
 
 # Code Map: Demux helpers (glyph repair, VDR example)
@@ -68,9 +70,9 @@ flowchart TD
 | `VDR` -.-> `DEMUX` | Sequential, foreground: `ttcut-demux -n "$show_name" <first segment> "$OUT_PFAD" > "$OUT_PFAD/$show_name.log" 2>&1`. No `--subs` (subtitle export off by default). The output name is the episode directory's name; `unique_name` appends the recording's date and time (`Folge_2026-01-02_21.30`) when that name was already used in this run, so a repeat recording does not overwrite the first one. A re-demux in a later run overwrites as before. `set -e` is on; a failing demux is counted, not fatal. |
 | `DEMUX` → `LOG` → `SUM` | After each recording: the first `SEVERELY DAMAGED RECORDING` line (percent of missing pictures, audio gaps per minute) and the first `[WARN] Material loss:` line (text up to the first `-`) go into two lists; the closing `kdialog --yesno` carries both above “TTCut starten?”. `grep … || true` because of `set -e`. The log itself is shown coloured afterwards (`colorize_log`, `sed` on the plain file). |
 | `SUM` -.-> `TT` | “yes” starts `ttcut-ng` in the background — `ttcut-ng` and `ttcut-demux` are looked up once at the top as absolute paths (`command -v`), else `build/ttcut-ng` and `tools/ttcut-demux/ttcut-demux` of the source tree; a second dialog offers the logs of this run (`-newermt @SCRIPT_START`) in `kwrite`. |
-| `DEMUX` → `SPU` | Inside the OCR step, after the SRT is sanitised and only when helper, template directory, `python3` and at least one PNG exist and `import PIL` works (otherwise a warning “glyph repair skipped”): a second ccextractor run with `--out=spupng --no-spupngocr --ignoreptsjumps -delay <same as OCR>`, from inside `spu_glyphs_tmp_<n>` with the dot-free name `cue` (ccextractor strips after the last dot of the whole path). Helper lookup: next to the script, else the source tree, templates else `/usr/share/ttcut-ng/ocr-glyphs`. |
+| `DEMUX` → `SPU` | Inside the OCR step, after the SRT is sanitised and only when helper, template directory, `python3` and at least one PNG exist and `import PIL` works (a failing `import PIL` gives the warning “glyph repair skipped”; a missing helper, directory, `python3` or PNG skips silently): a second ccextractor run with `--out=spupng --no-spupngocr --ignoreptsjumps -delay <same as OCR>`, from inside `spu_glyphs_tmp_<n>` with the dot-free name `cue` (ccextractor strips after the last dot of the whole path). Helper lookup: next to the script, else the source tree, templates else `/usr/share/ttcut-ng/ocr-glyphs`. |
 | `DEMUX` → `SRT` | The sanitised OCR SRT (CRLF, markup kept) — see [ttcut-demux.md](ttcut-demux.md). |
-| `SPU`, `SRT`, `TPL` → `MATCH` | `match --srt --spuxml cue --templates --delay-ms 0 --apply`; its stdout becomes `info "  glyph: …"` lines, **stderr is discarded**. Per spupng entry: the SRT cue with the nearest start within `TIME_SLACK_MS` = 400 ms; the K-th line **with visible text** of that cue (`visible_lines`: an OCR line of markup only has no band) meets the K-th ink band of the PNG (rows with ink, split at empty rows; a band shorter than `DOT_FRACTION` = 0.4 of the tallest — the dots of a capital umlaut — joins the band below); per band the first (start) and last (end) glyph group (split at gaps ≥ ¼ band height, at least 3 px). A glyph equals a template when both sizes differ by ≤ `SIZE_SLACK` = 2 px and ≥ `MATCH_RATIO` = 93 % of the common top-left area agree after binarising at 128. First matching template wins. |
+| `SPU`, `SRT`, `TPL` → `MATCH` | `match --srt --spuxml cue --templates --delay-ms 0 --apply`; its stdout becomes `info "  glyph: …"` lines, **stderr is discarded**. Per spupng entry: the SRT cue with the nearest start within `TIME_SLACK_MS` = 400 ms; the K-th line **with visible text** of that cue (`visible_lines`: an OCR line of markup only has no band) meets the K-th ink band of the PNG (rows with ink, split at empty rows; a band shorter than `DOT_FRACTION` = 0.4 of the tallest — the dots of a capital umlaut — joins the band below it, or the band above it when it is the last one); per band the first (start) and last (end) glyph group (split at gaps ≥ ¼ band height, at least 3 px). A glyph equals a template when both sizes differ by ≤ `SIZE_SLACK` = 2 px and ≥ `MATCH_RATIO` = 93 % of the common top-left area agree after binarising at 128. First matching template wins. |
 | `MATCH` → `OUTSRT` | `fix_line` per matched edge: leading/trailing tags kept, line end kept (CRLF, LF, none). The edge character is replaced when it is not a word character, or when it is listed in the template's sidecar **and** stands alone; otherwise the glyph is inserted/appended and the text stays. Idempotent (a line that already carries the glyph is left). The file is rewritten only with `--apply` and at least one change. |
 | `SPU` → `LEARN` → `TPL` | Manual: `learn --spuxml … --cue N (1-based spupng index, not SRT cue) --edge --line --out <dir>/<name>__<REPL>.png` crops the edge glyph of one bitmap; the sidecar `<stem>.txt` is written by hand (`2JF` for the note). Templates are renderer-specific (size gate). |
 | `PKG` -.-> `TPL` | `debian/rules` installs the helper to `/usr/bin`, `ocr-glyphs/*.png` **and** `*.txt` to `/usr/share/ttcut-ng/ocr-glyphs`; a missing sidecar silently reduces the repair to non-word characters. |
@@ -103,4 +105,4 @@ flowchart TD
 - **Tool lookup “installed, else source tree”**
   - sites: `tools/vdr-demux-example.sh` (top: `TTCUT`, `TTCUT_DEMUX`), `tools/ttcut-demux/ttcut-demux` (OCR step: `GLYPH_HELPER`, `GLYPH_DIR`)
   - shared purpose: find a companion program in the installed or the development layout
-  - status: deliberate — two separate programs, one Bash line each; the example is a template for users
+  - status: deliberate — two separate programs, a few Bash lines each; the example is a template for users

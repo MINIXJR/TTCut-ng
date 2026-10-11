@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - gui/ttcuttreeview.h
@@ -16,6 +16,7 @@ sources:
   - gui/ttcutpreview.cpp
   - common/ttsettings.h
   - ui/ttcutsettingssearch.ui
+  - avstream/ttaspectwindow.h
   - avstream/ttesinfo.h
   - avstream/ttesinfo.cpp
 ---
@@ -106,24 +107,24 @@ Direction measured with `mmdc` (2026-09-25): `TD` viewBox ratio 0.57, `LR` 10.41
 
 | From → To | What crosses (data / order / invariant) |
 |---|---|
-| `TV` → `MW` | `previewCut(list, skipFirst, skipLast)`. `onEntryPreview` puts the selected cuts **plus their neighbours** into a fresh job list (`newJobCutList`, owned by the view, replaced by the next job); `skipFirst`/`skipLast` are true when the first/last list entry is only a neighbour. Selecting one cut in the middle therefore gives three entries and `skipFirst = skipLast = true`. |
+| `TV` → `MW` | `previewCut(list, skipFirst, skipLast)`. `onEntryPreview` puts the selected cuts **plus their neighbours** into a fresh job list (`newJobCutList`, owned by the view, replaced by the next job); `skipFirst`/`skipLast` are true when the first/last list entry is only a neighbour. Selecting one cut in the middle therefore gives three entries and `skipFirst = skipLast = true`. The Preview button (`onPreview`) takes the other route: `cutListFromSelection(true)`, every cut of the list, no neighbours, both flags at their default `false`. |
 | `MW` → `AVD` | `onCutPreview` stores the job list as `mpPreviewOriginalCutList` and the two flags, re-arms (disconnect, connect) `cutPreviewFinished` → `onCutPreviewFinished` and `cutAudioDriftCalculated` → `TTCutTreeView::onAudioDriftUpdated`, then `doCutPreview(list)`. |
 | `AVD` → `TASK` | `doCutPreview` deletes the previous task, creates `TTCutPreviewTask(avData, jobList)`, connects `finished` and the pool's `aborted` → `onCutPreviewAborted`, `init(count * 2)`, `start`. The task owns its nested `TTCutVideoTask` and the preview list; it lives until the next preview starts or until `onCutPreviewAborted` deletes it — the dialog's pointer to the preview list relies on that. |
 | `TASK` -.-> `CLEAN` | First thing in `operation()`: `ttRemovePreviewFiles` deletes **every** `preview*` file in `TTSettings::tempDirPath()`. |
 | `TASK` → `PL` | `createPreviewCutList`: two entries per job cut, from the shared window rules in `data/ttpreviewclip`: `ttPreviewFrames` = `cutPreviewSeconds · fps / 2` (half the setting per side; the first entry's stream decides it for all), `ttPreviewCutInWindow` = `[cutIn, min(cutIn + frames, cutOut)]` with the end moved forward past B-frames (`frameType == 3`) but not past `cutOut`, `ttPreviewCutOutWindow` = `[max(cutOut − frames, cutIn), cutOut]` with the start moved back to `findIDRBefore` only while that stays `≥ cutIn`. Both windows stay inside their cut: a cut shorter than the window is shown whole (both entries then equal the cut). |
 | `PL` → `BCL` | `ttBuildClipCutList(list, i)`: `ttPreviewClipCount` = `count / 2 + 1` clips; `ttPreviewCutOutEntry(i)` = `2i − 1` is clip i's first entry. Clip 0 = entry 0 (first cut-in), clip i (0 &lt; i &lt; last) = entries `2i−1` and `2i` (cut-out of cut i, cut-in of cut i+1), last clip = entry `2(n−1)+1` (last cut-out). Entries keep their `avDataItem`, so a clip can span two videos. |
-| `BCL` → `SRC` | `ttResolvePreviewSource` reads everything off clip entry 0: item, video stream, source file, suffix, frame rate (stream first, `.info` only when the stream has none), `.info` A/V offset, audio track 0 (`hasAudio`, `audioFile`). |
-| `SRC` → `ENG` | H.26x: one shared `TTESSmartCut` for the whole run, `initialize(source, fps)` (full ES parse), preview preset and the stream's display-order map (`ttApplyPreviewEncoderSettings`). Registered in `mpActiveSmartCut` under `mSmartCutMutex` before the parse, so a cancel reaches it. If the shared init fails, `createH264PreviewClip` builds a clip-local engine per clip — never registered, so not cancellable. |
+| `BCL` → `SRC` | `ttResolvePreviewSource` reads everything off clip entry 0: item, video stream, source file, suffix, frame rate (stream first, `.info` only when the stream has none), `.info` A/V offset, audio track 0 (`hasAudio`, `audioFile`). The H.26x branch of `operation()` also resolves entry 0 of the **job** list once, for the shared engine. The MPEG-2 branch of `operation()` calls it only after the video, audio and subtitle cuts (for the mux); those cuts read `tmpCutList->at(0).avDataItem()` themselves. Both rebuilds and `createH264PreviewClip` resolve first. |
+| `SRC` → `ENG` | H.26x: one shared `TTESSmartCut` for the whole run, `initialize(source, fps)` (full ES parse), preview preset and the stream's display-order map (`ttApplyPreviewEncoderSettings`). Registered in `mpActiveSmartCut` under `mSmartCutMutex` before the parse, so a cancel reaches it. If the shared init fails, `createH264PreviewClip` builds a clip-local engine per clip; it is registered in `mpActiveSmartCut` only around its `smartCutFrames` call, not around its `initialize` (the full ES parse), so a cancel cannot interrupt that parse. |
 | `SRC` → `M2V` | MPEG-2: `cutVideoTask->init(preview_NNN.m2v, clipList)` and `threadTaskPool()->startNested` (synchronous, outside the pool queue; `onUserAbort` forwards the cancel to it). |
 | `SRC` → `AUD` | `cutAudioTracks(item, {0}, keepList, normalizeAcmod, …, shouldAbort)` — track 0 only, keep list from `buildVideoKeepList(clipList, fps)`; `cutSubtitleTracks(item, {0}, …)` — subtitle 0 only. The audio cut uses the same effective delay (user delay + `.info` start offset). The audio file keeps the source suffix. |
 | `ENG` / `M2V` / `AUD` → `TMP` | H.26x: `preview_video_temp.<suffix>` and `preview_audio_temp.<ext>` (fixed names, one at a time); MPEG-2: `preview_NNN.m2v` and `preview_NNN.<audio ext>`. The task keeps the H.26x temp video after the mux ("for debugging"), the rebuild removes it; audio is removed by both. |
 | `AUD` → `CLIP` | `preview_NNN.srt` next to the clip; the dialog picks it up by name. |
 | `TMP` → `MUX` | `ttConfigurePreviewMux`: video options for the stream and fps, `.info` A/V offset, the engine's output display order (H.26x), `setRequireAllInputs(false)` — a clip without its audio still gets made. MPEG-2 without audio skips the mux and renames the `.m2v` to `preview_NNN.mkv`: the target is removed first (`QFile::rename` does not overwrite) and a failed rename is an error (task: `TTIOException`, rebuild: `false`). |
 | `MUX` → `CLIP` | `preview_NNN.mkv`, `NNN` = clip index + 1. A failed mux throws `TTIOException` with `mErrorMessage` set. |
-| `AVD` → `CTV` | `TTAVData::onCutPreviewFinished`, on the GUI thread: `planAudioCut(track 0, buildVideoKeepList(project cut list), effective delay of track 0).drifts` (`TTESInfo::effectiveAudioDelayMs`: the user delay plus the track's `.info` start offset) over **all cuts of the project**, whatever the preview showed (user decision 2026-09-25), emitted as `cutAudioDriftCalculated`; `onAudioDriftUpdated` writes value i into row i. Connected only between `onCutPreview` and `onCutPreviewFinished`. |
+| `AVD` → `CTV` | `TTAVData::onCutPreviewFinished`, on the GUI thread: `planAudioCut(track 0, buildVideoKeepList(project cut list), effective delay of track 0).drifts` (`TTESInfo::effectiveAudioDelayMs`: the user delay plus the track's `.info` start offset) over **all cuts of the project**, whatever the preview showed (user decision 2026-09-25), emitted as `cutAudioDriftCalculated`; `onAudioDriftUpdated` writes value i into row i. Connected by `onCutPreview`, disconnected by `onCutPreviewFinished` only (a cancelled or failed preview leaves it connected until the next `onCutPreview`). |
 | `AVD` -.-> `MW` | Success: `onCutPreviewFinished` drops the abort connection and emits `cutPreviewFinished(previewList)`. Abort: `onCutPreviewAborted` deletes the task; empty `errorMessage()` = user cancel → `Canceled` bracket (arms `mCutOperationActive`), otherwise "Preview not possible" warning. `onCutPreviewFinished` never runs then; the next `onCutPreview` re-arms its connections. |
 | `PL` → `DLG` | `onCutPreviewFinished` creates `TTCutPreview`, `initPreview(previewList, jobList, avData, skipFirst, skipLast)`, `exec()` (modal), deletes it, disconnects both signals. `initPreview` fills the combo from `clipLabel` (`Start`, `Cut i-(i+1)`, `End`, the first/last skipped per flag; the times come from the job-list copy: cut-in of the first joined cut to cut-out of the second, not the preview windows) with signals blocked, and sets the entry tooltips (`updatePrePostRollToolTips` → `prePostRollToolTip`: pre-/post-roll = frames of the clip's cut-out and cut-in entries / fps, plus the setting); `mClipOffset = skipFirst ? 1 : 0`. The first load waits for `showEvent` + one event-loop turn (render context). |
-| `DLG` → `PLAYER` / `CLIP` → `PLAYER` | `onCutSelectionChanged(iCut)`: clip `clipIndexOf(iCut)` = `iCut + mClipOffset` (first sets the combo's own tooltip to that entry's pre-/post-roll), file `createPreviewFileName(clip + 1, "mkv")`; `preview_NNN.srt` as `--sub-file` when non-empty; output channels pinned from audio 0; load paused on dialog open, playing on later selections. |
+| `DLG` → `PLAYER` / `CLIP` → `PLAYER` | `onCutSelectionChanged(iCut)`: clip `clipIndexOf(iCut)` = `iCut + mClipOffset` (first sets the combo's own tooltip to that entry's pre-/post-roll), file `createPreviewFileName(clip + 1, "mkv")`; `preview_NNN.srt` as `--sub-file` when non-empty; output channels pinned from audio 0; load paused on dialog open, playing on later selections (the Back button's second stage selects the previous clip paused). |
 | `DLG` → `HINT` | Both checks get the **clip index** (`clipIndexOf`): 0 = cut-in of cut 1; otherwise entry `ttPreviewCutOutEntry(clip)` (cut-out) first, then the one after it (cut-in); the cut numbers in the messages are clip-based and match the combo labels. Burst reads the preview entries, aspect reads the job-list cut (`originalCutItem(segmentIdx) = job[segmentIdx / 2]`). |
 | `HINT` → `MOVE` | `mBurstSegmentIdx` / `mAspectSegmentIdx`, cut-in or cut-out, and for the aspect jump `mAspectTarget`. Burst shift: ±1 frame with a one-frame-cut guard; aspect jump: to the first/last picture of the cut's majority aspect. |
 | `MOVE` → `MODEL` | `updateRealCutItem`: finds the real cut by `(cutIn, cutOut, avItem)` equality with the job-list copy and calls `TTAVItem::updateCutEntry` — the project's cut list changes. The shared video stream's position is saved and restored around the whole move + rebuild. |
@@ -148,20 +149,25 @@ Direction measured with `mmdc` (2026-09-25): `TD` viewBox ratio 0.57, `LR` 10.41
   `preview*` file at task start and on dialog close; the H.26x temp names
   are fixed. A second TTCut-ng instance or harness on the same temp
   directory collides (TODO „Weitere geteilte Temp-Namen“).
-- **Cancel reaches:** the shared engine (registered), the nested MPEG-2
-  video task (forwarded), the audio cut (predicate), the clip loop (top of
-  each iteration). **Not:** a clip-local fallback engine, the mux, the
-  dialog's rebuild.
+- **Cancel reaches:** the shared engine (registered), a clip-local
+  fallback engine's `smartCutFrames` call (registered for that call), the
+  nested MPEG-2 video task (forwarded), the audio cut (predicate), the clip
+  loop (top of each iteration). **Not:** the ES parse of a clip-local
+  fallback engine, the mux, the dialog's rebuild.
 - **Error reporting differs by codec.** MPEG-2: a failed audio cut, mux or
-  rename throws with a message. H.26x: a failed mux throws; a failed audio
-  cut only logs and the clip is muxed without audio; a failed local-engine
+  rename throws with a message. H.26x: a failed Smart Cut ("too damaged") and a failed mux throw with a
+  message; a failed audio cut only logs and the clip is muxed without audio; a failed local-engine
   init or an invalid source returns without a clip and without a message
   (not reproduced so far - kept with TODO P3).
 - **Pitfall — `preview_NNN.mkv` can be raw MPEG-2.** Without audio the
   `.m2v` is renamed, not muxed; mpv sniffs the content.
-- **The drift column is filled only by a preview.** The audio-only cut
-  emits `cutAudioDriftCalculated` too, but the column is connected only
-  while a preview runs, so that emission reaches nothing.
+- **The drift column is filled by a preview, and by an audio-only cut that
+  runs while the preview connection is still live.** The audio-only cut
+  emits `cutAudioDriftCalculated` too. `onCutPreview` connects the column
+  and only `onCutPreviewFinished` disconnects it; a preview that is
+  cancelled or fails never reaches that slot, so the connection stays until
+  the next `onCutPreview` re-arms it, and an audio-only cut run in between
+  writes its drifts into the column.
 
 ## Redundancy / consolidation candidates
 

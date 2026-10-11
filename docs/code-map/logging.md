@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - common/ttmessagelogger.h
@@ -15,7 +15,10 @@ sources:
   - gui/ttcutsettingspaths.cpp
   - gui/ttcutsettingspaths.h
   - common/ttsettings.cpp
+  - common/ttsettings.h
   - gui/ttmpvlibbackend.cpp
+  - data/ttabortabletask.cpp
+  - CMakeLists.txt
 ---
 
 # Code Map: Logging
@@ -23,7 +26,7 @@ sources:
 **Scope:** every way a message reaches the log file or stderr —
 `TTMessageLogger` (singleton, level filter, console mode, lazy file open with
 rotation), the Qt message handler that routes `qDebug`/`qWarning`/…, the
-libav log callback, the FATAL line every located `TTException` writes, and
+libav log callback, the ERROR line every located `TTException` writes, and
 how the settings (log file on/off, console, extended, path, the per-subsystem
 switches, libav) reach the logger.
 
@@ -69,9 +72,9 @@ flowchart LR
 
 | From → To | What crosses (data / order / invariant) |
 |---|---|
-| `CODE` → `LOG` | `infoMsg`/`warningMsg`/`errorMsg`/`fatalMsg`/`debugMsg` (QString or printf form) with `__FILE__`, `__LINE__` → one line `[type][hh:mm:ss][file-basename:line] text`, type one of `info`, `warning`, `error`, `fatal`, `debug`. `ttSetLastError` logs a class's last-error text as WARNING (or ERROR). `fatalMsg` is called directly by `TTMpeg2VideoStream` (three places) and `TTAVData::createAVItem`. |
+| `CODE` → `LOG` | `infoMsg`/`warningMsg`/`errorMsg`/`fatalMsg`/`debugMsg` (QString form; `fatalMsg` has no printf form) with `__FILE__`, `__LINE__` → one line `[type][hh:mm:ss][file-basename:line] text` (`[type][hh:mm:ss][file-basename] text` when the line is 0, as for libav), type one of `info`, `warning`, `error`, `fatal`, `debug`. `ttSetLastError` logs a class's last-error text as WARNING (or ERROR). `fatalMsg` is called directly by `TTMpeg2VideoStream` (three places) and `TTAVData::createAVItem`. |
 | `QT` → `LOG` | `ttQtMessageHandler`, installed in `main` before `QApplication`: debug → DEBUG, info → INFO, warning → WARNING, critical → ERROR, fatal → ERROR + `abort()`. Caller = `context.file`; the build defines `QT_MESSAGELOGCONTEXT`, so TTCut-ng's own lines carry file and line and only Qt's internal ones (Qt built without context) come as `"qt"`. |
-| `AV` → `LOG` | `ttAvLogCallback`, installed in `main`, replaces libav's own stderr printer. AV_LOG_ERROR and worse always pass; everything below only with `TTSettings::logLibav()` (default off), then level-filtered by `av_log_get_level()`. Mapped ERROR/WARNING/INFO/DEBUG, caller `"libav"`. Runs on libav's worker threads. |
+| `AV` → `LOG` | `ttAvLogCallback`, installed in `main`, replaces libav's own stderr printer. AV_LOG_ERROR and worse skip the `TTSettings::logLibav()` switch; everything below passes only with it (default off); every level is then cut at `av_log_get_level()`. Mapped ERROR/WARNING/INFO/DEBUG, caller `"libav"`. Runs on libav's worker threads. |
 | `MPV` -.-> `AV` | libmpv takes the process-global av_log callback when its context starts and restores ffmpeg's default when the last context is destroyed. `TTMpvLibBackend::start` re-installs ours right after `mpv_initialize` (and after a failed initialize), `shutdown` after `mpv_terminate_destroy`. Without that every libav message of the process — TTCut-ng's own decoders and encoders included — reached mpv's log, and only its errors came back through `mpv_request_log_messages("error")` as `Playback error: [mpv:ffmpeg/video] …` (measured 2026-09-27). mpv's own messages still arrive that way. |
 | `EXC` → `LOG` | The `(caller, line, msg)` constructor of `TTException` (inherited by every subclass) calls `errorMsg` at construction, whether or not the exception is later caught and handled. The message-only constructors log nothing — `TTAbortableTask::abortNow` uses one on purpose, so a cancel leaves no failure line. |
 | `LOG` level filter | `passesLevel`: ERROR and FATAL always; otherwise `sLogLevel` ALL (default, and “extended” on) or MINIMAL (“extended” off: WARNING too). EXTENDED and NONE exist but are never set. |
@@ -85,10 +88,10 @@ flowchart LR
 
 - **One logger per process, one rotation per process.** Any process that
   logs — the app, a second instance, `--auto-cut`, a diagnostic harness or
-  probe — rotates the same `logfile.log` on its first line unless it sets its
+  probe — rotates the same `logfile.log` on its first line (with the log file enabled) unless it sets its
   own `XDG_CACHE_HOME` or path. `tools/diag/run-gates.sh` gives each gate its
-  own `XDG_CACHE_HOME`, `tools/diag/acm-cut.sh` and `qc-autocut.sh` one below
-  their output directory. **Measured 2026-09-27:** ten direct probe runs
+  own `XDG_CACHE_HOME`, `tools/diag/acm-cut.sh` one next to its output file and
+  `qc-autocut.sh` one in its work directory. **Measured 2026-09-27:** ten direct probe runs
   replaced all eleven generations of the user's log.
 - **Not measured:** a second instance renames the file a running instance
   still has open; that instance then keeps writing into what is now

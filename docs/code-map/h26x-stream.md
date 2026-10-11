@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
 last_verified: 2026-10-11
 sources:
   - avstream/tth26xvideostream.h
@@ -13,6 +13,9 @@ sources:
   - avstream/ttframeindexer.cpp
   - avstream/ttavutil.cpp
   - avstream/ttavstream.cpp
+  - avstream/ttavtypes.cpp
+  - avstream/ttvideoindexlist.cpp
+  - extern/ttmkvmergeprovider.cpp
   - avstream/ttdisplayordermap.cpp
   - data/ttopenvideotask.cpp
   - data/ttopenvideotask.h
@@ -194,6 +197,6 @@ Probe over the Tux progressive/PAFF/MBAFF H.264 and HEVC CRA fixtures and a
   - shared purpose: `.info` over libav, `isPAFF && rate > 30 → rate / 2`
   - status: done (C1) → `TTFrameIndexer::effectiveFrameRate`
 - **Getting the bundle from either subclass**
-  - sites: `gui/ttquickjumpdialog.cpp`, `data/ttframesearchtask.cpp:TTFrameSearchTask::decoderKindFor`
+  - sites: `gui/ttquickjumpdialog.cpp`, `data/ttframesearchtask.cpp:TTFrameSearchTask::openFFmpegWrapperFor`
   - shared purpose: “is this an H.26x stream”
   - status: done (C2) → one `dynamic_cast<TTH26xVideoStream*>` each
