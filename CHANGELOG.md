@@ -20,6 +20,13 @@ All notable changes to TTCut-ng are documented in this file.
   track is removed it is disabled, not dropped.
 
 ### Fixed
+- **`ttcut-demux`: the name of a recording is no longer read as program
+  text.** For MPEG-2 video the tool counts the null bytes at the end of the
+  demuxed video file with a short Python program, and it pasted the file's
+  path into that program's source. A name with an apostrophe or a backslash
+  made the count fail silently (the null bytes then stayed in the file), and
+  a crafted name was run as code — a recording's name comes from the
+  programme title. The path is now handed over as an argument.
 - **A planned audio repair stays with its track when another track of the
   project cannot be opened.** A project remembers each repair under the
   position of its audio track. When a track in front of it was missing at
