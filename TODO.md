@@ -705,6 +705,29 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
   Ort — ins Repo oder unter `/home/` —, nicht ins Temp-Verzeichnis. Solange das
   nicht festgelegt ist, wiederholt sich der Verlust beim nächsten Aufräumen.
 
+  **Aufgeräumt am 2026-10-11 auf Wunsch des Anwenders** (nach dem Release
+  v0.86.0): gelöscht wurden 101 Einträge ohne jeden Verweis, die Gate-Läufe
+  vom Vortag, 13 Bildschirmfotos und die folgenden 39 Einträge, die nur noch
+  `docs/completed-work.md` oder ein Skript unter `docs/code-audit/` als
+  Fundort nannte — Verweise dorthin zeigen seither ins Leere, die Befunde
+  selbst stehen in `docs/completed-work.md`:
+  `abgleich168`, `check.qm`, `code-audit-2026-09-05`,
+  `code-audit-2026-09-05-demux`, `code-audit-2026-09-12`,
+  `code-audit-2026-09-12-review`, `code-audit-2026-09-13`,
+  `code-audit-2026-09-13b`, `code-audit-2026-09-13c`,
+  `code-audit-2026-09-13-review`, `code-audit-backlog1c`,
+  `code-audit-backlog1d`, `code-audit-reconcile1`, `code-audit-reconcile2`,
+  `code-audit-run12`, `code-audit-run12b`, `code-audit-run13`,
+  `code-audit-run13b`, `code-audit-run14`, `code-audit-run14c`,
+  `code-audit-run5`, `code-audit-run5b`, `code-audit-run5-review`,
+  `code-audit-run6`, `code-audit-run6b`, `code-audit-run7`,
+  `code-audit-run7c`, `code-audit-run8`, `code-audit-run8c`,
+  `code-audit-run9`, `code-audit-run9c`, `code-audit-run9d`,
+  `demux-framerate-ab`, `demux-zonesync-tests`, `donorfill-app-work`,
+  `donorfill-xdg`, `fadeout`, `novui-block.sh`, `rule-wire`.
+  Der jüngste Scan des Code-Audits (`code-audit-run18`, Eingabe `--previous`
+  des nächsten Laufs) und die Hörproben (`hoerproben`) sind geblieben.
+
 
 - **Cut-ES-Dateinamen zwischen den Codec-Pfaden vereinheitlichen**
   (User-Wunsch 2026-08-05, bei der Untertitel-Abnahme aufgefallen). Die
