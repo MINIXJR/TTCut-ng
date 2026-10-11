@@ -537,12 +537,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
 - **Lesebefunde der vollen Kartenprüfung (2026-10-11)** — beim Lesen der
   Karten gegen den Code aufgefallen. **Alle nur gelesen, keiner gemessen**;
   vor einer Änderung zuerst nachstellen.
-  - **Projekt speichern ohne Endung.** `TTCutMainWindow::onFileSave` baut
-    das `QFileInfo` für `writeProjectFile`, bevor `.ttcut` an
-    `projectFileName` gehängt wird. Ein im Dialog ohne Endung eingegebener
-    Name würde demnach ohne Endung geschrieben, während Titel und
-    `projectFileName` die Endung tragen. Offen, ob der Dateidialog die
-    Endung vorher selbst ergänzt.
   - **Fenster ohne Schutz im Lauf ohne Oberfläche.**
     `TTAVData::showImportAsStreamPointsWarning` ruft `msgBox.exec()` ohne
     Abfrage von `mNonInteractive`; aufgerufen aus
@@ -591,10 +585,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
       `abortCurrentWorker` ruft `onUserAbort()` nur bei `isRunning()`; ein
       eingereihter, noch nicht gestarteter Worker ist vom Modell getrennt,
       dekodiert seine Seite aber trotzdem.
-    - **„Set Cut-In/Cut-Out“ am Marker prüft die Schnittregel nicht.**
-      `onStreamPointSetCutIn` springt (`onGotoFrame`) und ruft
-      `navigation->onSetCutIn()` direkt; die Regel `isCutInPoint` /
-      `isCutOutPoint` schaltet nur die Knöpfe, der Slot prüft sie nicht.
     - **Duplizieren eines Schnitts ohne Fangnetz.** `onEntryDuplicate` →
       `TTAVData::copyCutEntry` → `appendCutEntry`, das bei einer Ablehnung
       eine Ausnahme wirft; anders als `onAppendCutEntry` fängt hier niemand.

@@ -2,6 +2,23 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Fixed
+- **A project name typed without extension was saved under two names.** The
+  first save wrote the file as typed, while the title and the remembered
+  name already carried `.ttcut`; the next save then wrote a second file.
+  The file is now written under the name with its extension from the start.
+  Measured with Qt's own file dialog; a desktop file dialog that appends the
+  extension itself never showed it.
+- **"Set cut-in" and "Set cut-out" on a marker, and the keys `[` and `]`,
+  obey the cut-point rule.** With the encoder mode switched off only certain
+  frames are cut points and the two buttons are disabled elsewhere, but the
+  marker menu and the keys set the cut point anyway, and the cut reached the
+  cut list. They now do nothing where the button is disabled. With the
+  encoder mode on (the default) every frame is a cut point and nothing
+  changes.
+
 ## v0.86.0 (2026-10-11)
 
 **Audio sits on the picture after demuxing; abrupt stops and holes in the sound can be repaired; many fixes from the audit runs**

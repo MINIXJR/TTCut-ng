@@ -408,6 +408,12 @@ void TTCutFrameNavigation::onNextBFrame()
 
 void TTCutFrameNavigation::onSetCutIn()
 {
+  // The cut-point rule lives in the button's enabled state
+  // (checkCutPosition). The slot is also reached without the button - the
+  // "[" key and a marker's "Set cut-in" - so it has to ask (gate
+  // marker_cutpoint).
+  if (!pbSetCutIn->isEnabled()) return;
+
   QString szTemp1, szTemp2;
 
   isCutInPosition = true;
@@ -425,6 +431,8 @@ void TTCutFrameNavigation::onSetCutIn()
 
 void TTCutFrameNavigation::onSetCutOut()
 {
+  if (!pbSetCutOut->isEnabled()) return;   // see onSetCutIn
+
   QString szTemp1, szTemp2;
 
   isCutOutPosition = true;

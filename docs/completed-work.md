@@ -1668,6 +1668,40 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Projektname ohne Endung wurde unter zwei Namen gespeichert** →
+  **ERLEDIGT (2026-10-11)**, Zweig `fix/save-suffix-and-cutpoint-guard`
+  (Lesebefund der vollen Kartenprüfung).
+  - Gemessen vor dem Fix (`test_save_suffix`, Qts eigener Dateidialog,
+    offscreen, Name `noext`): erstes Speichern schreibt `noext`,
+    `projectFileName` und Titel sagen `noext.ttcut`; zweites Speichern
+    schreibt `noext.ttcut` als zweite Datei.
+  - Ursache: `TTCutMainWindow::onFileSave` bildete das `QFileInfo` für
+    `writeProjectFile`, bevor `.ttcut` angehängt wurde.
+  - Fix: das `QFileInfo` aus dem Namen mit Endung bilden. Gate
+    `save_suffix` (sechs Prüfungen, zwei vorher rot).
+  - Nicht gemessen: was der KDE-Dateidialog für einen Namen ohne Endung
+    zurückgibt.
+
+- **Schnittpunkte, die die Knöpfe ablehnen, über Marker und Tasten
+  gesetzt** → **ERLEDIGT (2026-10-11)**, selber Zweig (Lesebefund der
+  vollen Kartenprüfung).
+  - Gemessen vor dem Fix (`test_marker_cutpoint`, Encoder-Modus aus):
+    „Set cut-in“ am Marker nimmt Bild 1 (P auf dem MPEG-2-Tux, B auf dem
+    H.264-Tux), obwohl der Knopf dort gesperrt ist; auf H.264 ebenso „Set
+    cut-out“ auf Bild 21; der Schnitt landet in der Schnittliste. Gelesen,
+    nicht gemessen: die Tasten `[` und `]` rufen dieselben Slots direkt.
+  - Ursache: `isCutInPoint`/`isCutOutPoint` setzten nur den Zustand der
+    beiden Knöpfe (`checkCutPosition`); `TTCutFrameNavigation::onSetCutIn`
+    und `onSetCutOut` prüften ihn nicht.
+  - Fix: beide Slots kehren sofort zurück, solange ihr Knopf gesperrt ist.
+    Gate `marker_cutpoint` (Fälle MPEG-2 und H.264, je mit Gegenprobe: ein
+    erlaubtes Bild wird gesetzt und der Schnitt angelegt). Der
+    MPEG-2-Tux hat keine B-Bilder; die Cut-Out-Regel prüft nur der
+    H.264-Fall.
+  - Mit Encoder-Modus an (Vorgabe) ist jedes Bild ein Schnittpunkt, dort
+    ändert sich nichts. Nicht Teil des Fixes: die Menüeinträge am Marker
+    auszugrauen — ein Klick auf einem abgelehnten Bild tut jetzt nichts.
+
 - **Begriffskollision „Tonstörung" vs. „Tonanomalie"** → **ERLEDIGT**
   (2026-09-11, Branch `fix/tonanomalie-wording`)
   - Die englischen Quelltexte waren schon einheitlich („Audio anomaly …");

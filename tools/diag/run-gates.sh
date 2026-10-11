@@ -141,6 +141,8 @@ preview_clip_index     unit  300  test_preview_clip_index
 preview_window_in_cut  unit  300  test_preview_window_in_cut
 aspect_autocut         unit  300  -
 exit_cancel            tux   900  test_exit_cancel
+save_suffix            tux   300  test_save_suffix
+marker_cutpoint        tux   600  test_marker_cutpoint
 pool_abort             unit  120  test_pool_abort
 abort_after_finish     unit  120  test_abort_after_finish
 cutlist_minsize        unit  120  test_cutlist_minsize
@@ -448,6 +450,10 @@ gate_exit_cancel() { cases 300 exit_cancel exit_discard exit_savefail; }
 case_exit_cancel()           { need "$V264"; "$D/test_exit_cancel" "$V264" cancel; }
 case_exit_discard()          { need "$V264"; "$D/test_exit_cancel" "$V264" discard; }
 case_exit_savefail()         { need "$V264"; "$D/test_exit_cancel" "$V264" savefail; }
+gate_save_suffix()           { need "$V264"; mkdir -p "$W/save"; "$D/test_save_suffix" "$V264" "$W/save"; }
+gate_marker_cutpoint() { cases 300 marker_cutpoint_mpeg2 marker_cutpoint_h264; }
+case_marker_cutpoint_mpeg2() { need "$M2V";  "$D/test_marker_cutpoint" "$M2V"; }
+case_marker_cutpoint_h264()  { need "$V264"; "$D/test_marker_cutpoint" "$V264"; }
 gate_pool_abort()            { "$D/test_pool_abort"; }
 gate_abort_after_finish()    { "$D/test_abort_after_finish"; }
 gate_cutlist_minsize()       { "$D/test_cutlist_minsize"; }

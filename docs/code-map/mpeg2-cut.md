@@ -1,5 +1,5 @@
 ---
-base_commit: 17201fe393526f3a3f5a7229d4daa5aa0aafd682
+base_commit: c71740dfe779b83b2febb400a89b285c693fd325
 last_verified: 2026-10-11
 sources:
   - avstream/ttmpeg2videostream.cpp
@@ -119,8 +119,11 @@ flowchart TD
 
 ## Variant matrix — cut-in / cut-out frame type
 
-`isCutInPoint()` / `isCutOutPoint()` gate only the GUI buttons in
-`gui/ttcutframenavigation.cpp`; nothing in the cut path enforces them.
+`isCutInPoint()` / `isCutOutPoint()` decide the enabled state of the two
+buttons in `gui/ttcutframenavigation.cpp`, and `onSetCutIn`/`onSetCutOut`
+return while their button is disabled — the button, the `[`/`]` keys and a
+marker's menu all obey them (gate `marker_cutpoint`). Nothing in the cut path
+enforces them.
 **`TTSettings::mEncoderMode` defaults to `true`**, and in that mode both return
 `true` for every position — so B-frame cut-outs are the default-reachable case.
 
