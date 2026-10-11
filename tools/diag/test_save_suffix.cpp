@@ -16,6 +16,7 @@
 #include <QElapsedTimer>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QLineEdit>
 #include <QThread>
 #include <QTimer>
 #include <cstdio>
@@ -77,8 +78,17 @@ int main(int argc, char** argv)
     QObject::connect(timer, &QTimer::timeout, [&]() {
       auto* dlg = qobject_cast<QFileDialog*>(QApplication::activeModalWidget());
       if (!dlg) return;
+      // The name goes into the dialog's own input field, and the dialog is
+      // accepted only on a later tick that still finds it there: right after
+      // it opens, the dialog applies its initial selection, and a name set
+      // before that is overwritten (measured: 5 of 12 runs saved under the
+      // proposed name instead of the typed one).
+      auto* edit = dlg->findChild<QLineEdit*>("fileNameEdit");
+      if (!edit) { printf("FAIL: the file dialog has no input field\n"); failures++; dlg->reject(); return; }
+      if (edit->text() != typed) { edit->setText(typed); return; }
+      if (dlg->property("ttAccepted").toBool()) return;
+      dlg->setProperty("ttAccepted", true);
       fileDialogsSeen++;
-      dlg->selectFile(typed);
       QMetaObject::invokeMethod(dlg, "accept", Qt::QueuedConnection);
     });
     timer->start(50);
