@@ -627,6 +627,23 @@ format_ranges_hms() {
         END { if (n) printf "%s%s\n", out, line }'
 }
 
+# locate_glyph_helper SCRIPT_DIR
+# Sets GLYPH_HELPER and GLYPH_DIR for the OCR glyph repair.
+# Helper: the one next to this script (source tree), else the one in PATH
+# (the installed layout, or a copy of this script alone); empty when there
+# is none. Templates: the directory next to this script, else the installed
+# one under /usr/share. No path of a particular machine in here.
+locate_glyph_helper() {
+    GLYPH_HELPER="$1/ttcut-ocr-glyphs"
+    GLYPH_DIR="$1/ocr-glyphs"
+    if [ ! -x "$GLYPH_HELPER" ]; then
+        GLYPH_HELPER="$(command -v ttcut-ocr-glyphs 2>/dev/null || true)"
+    fi
+    if [ ! -d "$GLYPH_DIR" ] && [ -d "/usr/share/ttcut-ng/ocr-glyphs" ]; then
+        GLYPH_DIR="/usr/share/ttcut-ng/ocr-glyphs"
+    fi
+}
+
 # trailing_null_bytes FILE
 # Prints how many null bytes end FILE; 0 when it cannot be read.
 # The path goes in as an argument: a recording's name is data and must
@@ -2204,18 +2221,7 @@ if $ES_MODE; then
                             # OCR run (--ignoreptsjumps, same -delay): with
                             # different flags the two ccextractor clocks drift
                             # apart mid-recording (measured: 1.28 s at min 25).
-                            GLYPH_BASE="$(dirname "$(readlink -f "$0")")"
-                            GLYPH_HELPER="$GLYPH_BASE/ttcut-ocr-glyphs"
-                            GLYPH_DIR="$GLYPH_BASE/ocr-glyphs"
-                            if [ ! -x "$GLYPH_HELPER" ]; then
-                                GLYPH_HELPER="/usr/local/src/TTCut-ng/tools/ttcut-demux/ttcut-ocr-glyphs"
-                                GLYPH_DIR="/usr/local/src/TTCut-ng/tools/ttcut-demux/ocr-glyphs"
-                            fi
-                            # Installed layout (Debian package): helper sits in
-                            # /usr/bin, the PNG templates under /usr/share.
-                            if [ ! -d "$GLYPH_DIR" ] && [ -d "/usr/share/ttcut-ng/ocr-glyphs" ]; then
-                                GLYPH_DIR="/usr/share/ttcut-ng/ocr-glyphs"
-                            fi
+                            locate_glyph_helper "$(dirname "$(readlink -f "$0")")"
                             # The helper needs Pillow (python3-pil, only suggested by
                             # the package); its stderr is dropped below, so without
                             # this check the repair would vanish without a word.
