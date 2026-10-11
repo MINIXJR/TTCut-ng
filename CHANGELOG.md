@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.86.0 (2026-10-11)
+
+**Audio sits on the picture after demuxing; abrupt stops and holes in the sound can be repaired; many fixes from the audit runs**
 
 ### Added
 - **A hole in the sound can be filled from a second audio track.** The

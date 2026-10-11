@@ -1,6 +1,6 @@
 ---
-base_commit: b24d6c4ef84eb3d602f4bfd87901f9162181db62
-last_verified: 2026-10-01
+base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+last_verified: 2026-10-11
 sources:
   - avstream/ttavtypes.h
   - avstream/ttavtypes.cpp

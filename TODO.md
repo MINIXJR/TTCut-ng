@@ -232,7 +232,7 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     dasselbe Muster wie in `encodePart()` (`QTemporaryDir` je Vorgang).
 
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
-  - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~3050 Zeilen, Stand v0.82.1) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
+  - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (2620 Zeilen, Stand v0.86.0) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Paketlisten für die Slot-Regel, Untertitel-Export, Dauer-Messung, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): TTAudioCutter::cut(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
   - ttcut-demux blieb auf bash+CLI hängen.
   - **Probleme**: stream-copy concat über libav-CLI ist fragil bei mp2/ac3 Splice-Punkten (Frame-Misalignment, Header-missing-Errors). Re-encode als Workaround funktioniert (siehe Audio-Gap-Fix 2026-05-10), aber libav-direkt wäre PTS-genauer und ohne Subprocess-Overhead.
@@ -310,7 +310,7 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 - Internationalisation (i18n) - translate UI to other languages
   - **English source + de_DE: DONE** — die App ist vollständig auf englische
     Source-Strings konvertiert, deutsche Übersetzung in `trans/ttcut-ng_de_DE.ts`
-    (661 Einträge, vollständig). Settings+Cut-Dialog (`ed2a531`/`d716c83`), Rest der App
+    (897 Texte, vollständig; Stand v0.86.0). Settings+Cut-Dialog (`ed2a531`/`d716c83`), Rest der App
     (`51e798b`..`7b3eec5`).
   - **Offen:** weitere Zielsprachen — je `ttcut-ng_<locale>.ts` anlegen und
     mit `lupdate` (Verzeichnis-Scan `common data avstream gui extern
@@ -401,7 +401,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 Aus `docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`
 (Nicht-Ziele) und den Task-Reviews des Vorhabens. Nichts davon blockiert
-v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
+v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
 
 - **Doppelte `<Order>`-Werte in handbearbeiteten Projektdateien sind bei
   der Repair-Spur-Zuordnung unvalidiert** (Task-3-Review-Befund, hierher
@@ -431,8 +431,9 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   solche Reparatur mit Meldung ab (Probe-Bau in `accept`), vorher scheiterte
   erst der Schnitt. Besser: die Kanäle der Spur im Bereich ermitteln, fehlende
   Kästchen sperren und die Vorbelegung daran anpassen (Stereo: kein C/LFE).
-- **Weitere Ersatzverfahren**: v1 kennt nur „Stille mit Randfades"
-  (`Method`-Feld ist für Erweiterung vorgesehen). Interpolation
+- **Weitere Ersatzverfahren**: es gibt „Stille mit Randfades"
+  (`silence-fade`), Ausblenden vor einem Abbruch (`fade-out`) und Füllen
+  eines Lochs aus einer zweiten Spur (`donor-fill`). Offen: Interpolation
   (autoregressive Vorhersage aus Randsamples, nur für kurze Störungen) und
   Raumton-Ersatz (Nachbarschafts-Atmo, Center aus gedämpfter L+R-Summe,
   Rauschsynthese nach Spektralprofil) brauchen eigene Parameter + Hörtests.
@@ -483,16 +484,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     nach laut je Kanal, Vorhersagefehler, stehender Sprung, Kantenkontrast,
     ffmpeg `adeclick`, drei Essentia-Sucher; an den Löchern außerdem
     Frequenzverteilung, Länge des Lochs und Sprunghöhe an der Kante.
-  - **Für „Loch im Ton"-Marker gibt es keine Reparatur.** Ein bleibender
-    Abbruch („Ton bricht ab") wird seit 2026-10-06 ausgeblendet
-    (`docs/completed-work.md`, „Tonreparatur: Ausblenden vor dem Abbruch").
-    Für ein Loch hilft das nicht: Stummschalten mit kurzer Blende endet so
-    hart wie das Loch selbst (am Loch bei 77493 hörte der Anwender zwischen
-    Original und Repariert keinen echten Unterschied). Vorgesehen ist das
-    Füllen aus der zweiten Tonspur (unten: „Idee des Anwenders: die AC3-Spur
-    aus der zweiten Spur reparieren"; eigenes Vorhaben).
-    Die Kanal-Vorwahl der Marker (alle Kanäle der Stelle,
-    `<AudioChannels>`) bleibt dafür in Code und Projektdatei.
   - **Marker „Ton bricht ab" aus Projekten vom 2026-10-04/05** tragen die
     Art `AbruptStop` (Form nicht festgehalten) und bieten keine Reparatur.
     Eine neue Analyse ersetzt sie durch „Ton bricht ab" (bleibend) oder
@@ -521,29 +512,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     einer Spur sicher, ob hörbar oder nicht; was in beiden Spuren steckt
     (Knacks 24238), findet er nicht. Er braucht eine zweite Spur mit
     demselben Ton.
-  - **Idee des Anwenders: die AC3-Spur aus der zweiten Spur reparieren.**
-    An einem Loch hat die MP2-Spur den fehlenden Ton. Gemessen auf 02x06
-    (Mitte aus L und R, um 8,6 ms verschoben, im Pegel angepasst): sie
-    trifft den Center der AC3-Spur direkt neben der Stelle auf 26,0 / 25,2 /
-    23,9 dB genau (Löcher 77493, 3617, 59024), bei 64477 nur auf 13,4 dB.
-    An der Störung bei 0:34 springt der Center um 7 dB, die MP2-Spur nicht —
-    dort ließe sich der Dialog wiederherstellen, den die heutige Reparatur
-    stummschaltet. Nichts davon gebaut oder gehört. **Achtung
-    (Anwender): die zweite Spur kann Hörfilm oder Fremdsprache sein.** Ob
-    die Kreuzkorrelation als Wächter dafür reicht, ist ungemessen. Offen
-    außerdem: die MP2-Spur ist Stereo, das Loch sitzt im Center einer
-    5.1-Spur; Pegel und Versatz müssen angeglichen werden. Nicht
-    untersucht.
-    **Entscheid des Anwenders (2026-10-05):** die Spenderspur wählt der
-    Anwender im Dialog selbst; vorbelegt ist die nächste andere Tonspur,
-    also nicht die zu reparierende. Hörproben (Loch 77493, Störung 0:34)
-    gehen dem Bau voraus.
-    **Hörproben, Urteil des Anwenders (2026-10-05,
-    dekodierter Ton als 5.1-WAV, nicht über die AC3-Neu-Kodierung):** Loch
-    77493 aus der MP2-Spur gefüllt: „scheint gut zu funktionieren". Störung
-    0:34: zwischen heutiger Reparatur (Stille) und Füllung aus der MP2-Spur
-    „kein Unterschied" — der dort erwartete Gewinn (Dialog bleibt erhalten)
-    ist nach Gehör nicht bestätigt; der Nutzen liegt bei den Löchern.
 ## Low Priority
 
 - **Neu kodierte AC3-Rahmen: was offen bleibt** (2026-10-02; die drei
@@ -634,7 +602,7 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     mitten in der Spur-Schleife gebaut (kognitive Komplexität 83); Ablauf
     laut `audio-cut-timing.md` erhalten.
   - **P6 Spur-Listen als eine Vorlage** — `TTAudioList`/`TTSubtitleList`
-    (und nach Befund des Klassifizierers auch `TTMarkerList`/`TTCutList`)
+    (und nach Befund des Klassifizierers auch `TTCutList`)
     samt Item-Klassen sind eine Klasse mit Sortier- und Order-Politik je Art;
     dazu `TTOpenAudioTask`/`TTOpenSubtitleTask` (gleiche Klasse bis auf
     Typprüfung und Signaltyp, daher Helfer ohne `QObject`). Braucht einen
@@ -822,6 +790,22 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   Halbbild-Paar im Bereich (`extraIndices()`); Sonde dafür lag in
   `CLAUDE_TMP/TTCut-ng/run13/` (`probe_mpeg2_decoder seek`).
 
+- **`--auto-cut` schreibt in die Einstellungsdatei des Anwenders** (gefunden
+  2026-10-11). `--auto-cut` endet über `QApplication::quit()`, und
+  `closeEvent` speichert die Einstellungen (`endAutoCut`,
+  `gui/ttcutmainwindow_headless.cpp`). `tools/diag/acm-cut.sh` und
+  `qc-autocut.sh` geben dem Lauf ein eigenes `XDG_CACHE_HOME`, aber kein
+  eigenes `XDG_CONFIG_HOME`. Gemessen: nach sieben Läufen von `acm-cut.sh`
+  standen in `~/.config/TTCut-ng/TTCut-ng.conf` die Schlüssel
+  `Common\LastDirPath`, `CutOptions\DirPath` und `Muxer\MuxOutputDir` auf
+  dem Ausgabeverzeichnis des letzten Laufs, und `RecentFiles` enthielt nur
+  noch die fünf zuletzt geschnittenen Testprojekte. Zu entscheiden: ob ein
+  Lauf ohne Fenster überhaupt Einstellungen speichern soll, und ob die
+  Wrapper mit einer Kopie der Einstellungen arbeiten (die Encoder-Werte des
+  Anwenders gelten dann weiter, geschrieben wird in die Kopie). Der
+  Screenshot-Lauf (`tools/ttcut-screenshots.sh`) teilt dieselbe Datei
+  (`Screenshot\Dir`).
+
 - **Gate `encode_tempdir` schlägt unter CPU-Last gelegentlich fehl**
   (gefunden 2026-10-11 im vollen Gate-Lauf: 1 von 12 Läufen mit
   „mplexabort: expected exactly one Canceled, got 0“). Gemessen: das Gate
@@ -845,13 +829,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   Bildraten immer als `N/D`); beim nächsten Commit an der Funktion richtig
   stellen (Nenner nur setzen, wenn ein `/` vorkommt) und in
   `gate_demux_framerate.sh` einen Fall `50 25/1 tt` ergänzen.
-
-- **Veralteter Kommentar in `tools/diag/CMakeLists.txt`** (gefunden
-  2026-09-26): Der Kommentar über `diag_tool(test_audiorepair_cut …)` nennt
-  noch den „cut-segment-boundary error path“. Seit Audit-Lauf 10 darf eine
-  Reparatur über den Fensterrand ragen; der Fehlerweg, den das Harness
-  treibt, heißt „reaches into cut segments with different channel layouts“.
-  Beim nächsten Commit an der Datei mit berichtigen.
 
 - **Verification-Test-Policy: Tux-Videos bevorzugen**
   - Bei Cut-Verification + Pipeline-Validation IMMER zuerst die Tux-Test-Videos verwenden

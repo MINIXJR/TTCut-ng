@@ -1,6 +1,6 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-27
+base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+last_verified: 2026-10-11
 sources:
   - common/ttsettings.h
   - common/ttsettings.cpp
@@ -46,7 +46,7 @@ window geometry (own `QSettings` block in `TTCutMainWindow::closeEvent`),
 
 | Class | Fields | Stored in | Written by | Read by |
 |---|---|---|---|---|
-| **App-Defaults** | 76 keys in `/Settings/{Navigation,StreamPoints,Common,Screenshot,Preview,Search,IndexFiles,LogFile,RecentFiles,Encoder,Muxer,CutOptions}`, among them the per-codec `mpeg2Crf`, `h264Preset/Crf/Profile`, `h265Preset/Crf/Profile`, `mpeg2Muxer/h264Muxer/h265Muxer` and the mux defaults `mkvCreateChapters`, `mkvChapterInterval`, `muxDeleteES`, `mpeg2Target`, `muxMode`, `audioOnlyFormat` | `TTCut-ng.conf` via `TTSettings::load()`/`save()` | settings dialog pages (`saveTabData`), cut dialog for the per-codec container sticky and `cutDirPath`/`cutAddSuffix`, main window for `lastDirPath`, `screenshot*` from the CLI | dialogs (to show defaults), `load()` and `setEncoderCodec()` (to derive the Working-Set), preview (`previewPreset`), everything navigation/logging/detection |
+| **App-Defaults** | 76 keys in `/Settings/{Navigation,StreamPoints,Common,Screenshot,Preview,Search,IndexFiles,LogFile,RecentFiles,Encoder,Muxer,CutOptions}`, among them the per-codec `mpeg2Crf`, `h264Preset/Crf/Profile`, `h265Preset/Crf/Profile`, `mpeg2Muxer/h264Muxer/h265Muxer` and the mux defaults `mkvCreateChapters`, `mkvChapterInterval`, `muxDeleteES`, `mpeg2Target`, `muxMode`, `audioOnlyFormat` | `TTCut-ng.conf` via `TTSettings::load()`/`save()` | settings dialog pages (`saveTabData`), cut dialog for the per-codec container sticky and `cutDirPath`/`cutAddSuffix`, main window for `lastDirPath`, `screenshotDir`/`screenshotProject` from the CLI (`screenshotSet`, from `--screenshot-set`, is a memory-only value for the run and not one of the keys) | dialogs (to show defaults), `load()` and `setEncoderCodec()` (to derive the Working-Set), preview (`previewPreset`), everything navigation/logging/detection |
 | **Working-Set** | `workingOutputContainer`, `workingMkvCreateChapters`, `workingMkvChapterInterval`, `workingMuxDeleteES`, `workingMpeg2Target`, `workingMuxMode`, `workingAudioOnlyFormat` + the encoder transients `encoderPreset`, `encoderCrf`, `encoderProfile` | memory only; **`.ttcut` `<Settings>`** on project save | `load()` (via `syncWorkingSetToCodec` + `resetWorkingMuxSet`), `setEncoderCodec()` (only on a codec CHANGE, `syncWorkingSetToCodec`), `deserializeSettings()` (project, last and wins), `TTCutAVCutDlg::setGlobalData()` (OK), `TTCutAVCutDlg::onResetDefaults()` | cut pipeline: `TTAVData::onCutFinished` (container, mux mode, chapters, delete ES), `TTAVData::doAudioOnlyCut` (`workingAudioOnlyFormat`), `TTESSmartCut::setupEncoder` and `TTTranscodeProvider` (encoder transients), the cut dialog UI |
 | **Identity / output name** | `projectFileName` (never persisted), `cutVideoName` (never in QSettings, in `.ttcut`), `cutDirPath` and `cutAddSuffix` (persistent AND in `.ttcut`), `lastDirPath` | memory, partly `.ttcut`, partly `TTCut-ng.conf` | main window (save/save-as, open, new), `deserializeSettings()`, cut dialog, **cut pipeline** (`setCutVideoName` with the final output name), headless CLI | project save, `onAudioVideoCut` (default name), `onDoCut` target path, the cut dialog fields |
 

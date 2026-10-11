@@ -1,6 +1,6 @@
 ---
-base_commit: 2a88baf1e3f7b687a7b65fcdd67166d71f3c524c
-last_verified: 2026-10-02
+base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+last_verified: 2026-10-11
 sources:
   - tools/ttcut-ac3fix/ttcut-ac3fix.c
   - tools/ttcut-demux/ttcut-demux

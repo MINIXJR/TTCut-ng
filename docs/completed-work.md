@@ -689,6 +689,37 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **Karte `audio-cut-timing.md`: Hinweis zur Tonbilanz des Demuxers neu gefasst** → **DONE
+  (2026-10-11, Kartenauffrischung vor v0.86.0)**. Die alte Fassung beschrieb die Bilanz
+  (`audio_N_silence_ms`, `audio_N_removed_ms`) für den Demux vor der Slot-Regel und nannte
+  die Funktion `emit_video_only_truncations`, die es seit 2026-10-08 nicht mehr gibt. Unter
+  der Slot-Regel hat Stille am Anfang und am Ende keinen Marker; das Urteil „als Anzeige
+  redundant" vom 2026-07-21 ist dafür nicht neu geprüft. Wortlaut der alten Fassung:
+
+  - **Die Reparaturbilanz des Demuxers erreicht diese Kette NICHT.** `TTESInfo`
+    parst pro Tonspur `audio_N_silence_ms` (eingefügte Stille) und
+    `audio_N_removed_ms` (entferntes Audio zur A/V-Korrektur) nach
+    `TTAudioTrackInfo::silenceMs`/`removedMs`, abrufbar über `audioSilenceMs(track)`
+    / `audioRemovedMs(track)`. **In der App ruft diese Getter niemand auf** (Stand
+    2026-07-21; einziger Aufrufer im Baum ist der Diag-Harness
+    `tools/diag/test_esinfo`). Das ist **kein Versehen in der Zeitkette**: die
+    Demux-Reparatur ist zeitachsentreu — Audiolöcher werden mit Stille aufgefüllt,
+    und für Videoverlust, den der Ton nicht teilt, wird genau die überschüssige
+    Tonzeit entfernt (`emit_video_only_truncations`, negative `silence_ms`-Zeile).
+    Nach der Reparatur laufen Bild und Ton also wieder synchron; die `.info`-Werte
+    sind die **Rechenschaftsbilanz** darüber, keine noch anzuwendende Korrektur.
+    Wer sie künftig doch in die Zeitrechnung einbezieht, korrigiert zweimal.
+    **Auch als Anzeige wären sie redundant** (geprüft 2026-07-21): Beide Ursachen
+    der Bilanz sind bereits markiert — eingefügte Stille stammt aus Audiolücken,
+    die als `audio_gap_frames` → Marker „Audio-Gap: X–Y (Ts)" erscheinen;
+    entfernter Ton stammt aus Videoverlust, der als `es_missing_ranges` → Marker
+    „Videoverlust: X–Y (T s) — Audio angepasst" erscheint. Beide Marker tragen
+    ihre Dauer, die Bilanz ist nur deren Summe. Die Spec
+    (`project_demux_defect_repair`) sah TTCut-seitig konsequenterweise nur die
+    Range-Felder vor. Damit sind Parser + Getter **Kandidaten für den nächsten
+    Dead-Code-Audit**; das `.info`-Feld selbst bleibt als Rechenschaft des
+    Demuxers sinnvoll.
+
 - **Recording name pasted into Python source** → **DONE (2026-10-11, branch
   `fix/demux-trailing-null-path`)**. Found by the security review before
   v0.86.0; the code is older (`9ac0c99b`, 2026-04-08) and was in v0.85.0.
@@ -2812,6 +2843,43 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     AC3 encoder smears its edges); with a chord of sines it does. Gate
     `screenshots_repair`.
   - **Open:** `TODO.md` — other layouts, stored repairs after a new demux.
+  - **Aus `TODO.md` verschoben (2026-10-11, Release v0.86.0) — der Stand
+    vor dem Bau, ungekürzt:**
+
+    - **Für „Loch im Ton"-Marker gibt es keine Reparatur.** Ein bleibender
+      Abbruch („Ton bricht ab") wird seit 2026-10-06 ausgeblendet
+      (`docs/completed-work.md`, „Tonreparatur: Ausblenden vor dem Abbruch").
+      Für ein Loch hilft das nicht: Stummschalten mit kurzer Blende endet so
+      hart wie das Loch selbst (am Loch bei 77493 hörte der Anwender zwischen
+      Original und Repariert keinen echten Unterschied). Vorgesehen ist das
+      Füllen aus der zweiten Tonspur (unten: „Idee des Anwenders: die AC3-Spur
+      aus der zweiten Spur reparieren"; eigenes Vorhaben).
+      Die Kanal-Vorwahl der Marker (alle Kanäle der Stelle,
+      `<AudioChannels>`) bleibt dafür in Code und Projektdatei.
+    - **Idee des Anwenders: die AC3-Spur aus der zweiten Spur reparieren.**
+      An einem Loch hat die MP2-Spur den fehlenden Ton. Gemessen auf 02x06
+      (Mitte aus L und R, um 8,6 ms verschoben, im Pegel angepasst): sie
+      trifft den Center der AC3-Spur direkt neben der Stelle auf 26,0 / 25,2 /
+      23,9 dB genau (Löcher 77493, 3617, 59024), bei 64477 nur auf 13,4 dB.
+      An der Störung bei 0:34 springt der Center um 7 dB, die MP2-Spur nicht —
+      dort ließe sich der Dialog wiederherstellen, den die heutige Reparatur
+      stummschaltet. Nichts davon gebaut oder gehört. **Achtung
+      (Anwender): die zweite Spur kann Hörfilm oder Fremdsprache sein.** Ob
+      die Kreuzkorrelation als Wächter dafür reicht, ist ungemessen. Offen
+      außerdem: die MP2-Spur ist Stereo, das Loch sitzt im Center einer
+      5.1-Spur; Pegel und Versatz müssen angeglichen werden. Nicht
+      untersucht.
+      **Entscheid des Anwenders (2026-10-05):** die Spenderspur wählt der
+      Anwender im Dialog selbst; vorbelegt ist die nächste andere Tonspur,
+      also nicht die zu reparierende. Hörproben (Loch 77493, Störung 0:34)
+      gehen dem Bau voraus.
+      **Hörproben, Urteil des Anwenders (2026-10-05,
+      dekodierter Ton als 5.1-WAV, nicht über die AC3-Neu-Kodierung):** Loch
+      77493 aus der MP2-Spur gefüllt: „scheint gut zu funktionieren". Störung
+      0:34: zwischen heutiger Reparatur (Stille) und Füllung aus der MP2-Spur
+      „kein Unterschied" — der dort erwartete Gewinn (Dialog bleibt erhalten)
+      ist nach Gehör nicht bestätigt; der Nutzen liegt bei den Löchern.
+
 - **Tonreparatur: Ausblenden vor dem Abbruch** → **DONE (2026-10-06, Zweig
   `feature/repair-fade-out`)**. Spec und Plan (nicht im Repo):
   `docs/superpowers/{specs,plans}/2026-10-05-audio-repair-fade-out*`.

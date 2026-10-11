@@ -1,6 +1,6 @@
 ---
-base_commit: f77658eb3ecb7bae56a15fff01f08bd83cacf622
-last_verified: 2026-10-10
+base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+last_verified: 2026-10-11
 sources:
   - build-package.sh
   - debian/rules

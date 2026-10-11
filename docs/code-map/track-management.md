@@ -1,6 +1,6 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-27
+base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+last_verified: 2026-10-11
 sources:
   - data/ttaudiolist.h
   - data/ttaudiolist.cpp
@@ -35,6 +35,7 @@ sources:
   - common/ttsettings.h
   - common/ttsettings.cpp
   - avstream/ttesinfo.cpp
+  - gui/ttstreampointwidget.cpp
 ---
 
 # Code Map: Track management (audio and subtitle tracks)
@@ -105,6 +106,7 @@ flowchart TD
     SORT -->|reordered subtitle entries| SL
     OAF -.->|sort while initial load| SORT
     LATCH -.->|latch + avDataReloaded| MW
+    LATCH -.->|resolve saved Order| REP
     ITEM -.->|audio appended, subtitle list changed| MW
     MW -->|current item| VIEW
     ITEM -->|appended / removed / swapped| VIEW
@@ -146,9 +148,10 @@ Direction measured with `mmdc` (2026-09-25): `TD` viewBox ratio 2.30, `LR` 3.07.
 | `ITEM` → `VIEW` | `audioItemAppended` → one row appended; `audioItemRemoved(int)` → row taken; `audioItemsSwapped` → **full rebuild** (per-row editor widgets die with `takeTopLevelItem`). `audioItemUpdated` is **not** connected to the views: a language/delay applied from the pending maps shows only after the pool-exit reload. Same for subtitles. |
 | `VIEW` → `ITEM` | `removeItem(row)`, `swapItems(row, row±1)`, `languageChanged(row, code)`, `delayChanged(row, ms)`. The row is looked up when the editor fires (`ttRowOfItemWidget`), not captured at creation, so it survives swaps and removals. The combo carries the code (`itemData`), the spin box ±9999 ms, mkvmerge sign (positive = later). |
 | `LANG` → `VIEW` | `populateLanguageCombo`: the fixed 30-code list of `languageCodes()` / `languageNames()`; a current code outside that list gets an entry of its own and is selected, so the combo shows what the track carries. |
-| `ITEM` → `REP` | `onRemoveAudioItem(i)`: repairs on track i dropped, higher indices −1. `onSwapAudioItems(a, b)`: indices a and b exchanged. Repairs are rebuilt via the full `TTAudioRepairItem` constructor, `isEnabled()` carried over. Subtitles have no repairs. |
-| `AL` / `SL` → `T0` | **Position 0 is the lead track** for every single-track reader: `TTCutTreeView` burst/acmod hints, `TTAVData` burst checks, preview drift (`TTCutPreviewTask`, delay of track 0), preview clip audio, playback audio and output channels (`TTCurrentFrame`), still-frame subtitle overlay (`TTMPEG2Window2::subtitleStream()`, pushed by `showSubtitleTrackZero`) and `--sub-file`/`--sub-delay` (subtitle 0, read at every Play). |
-| `AL` / `SL` → `CUT` | By list position: `cutAudioTracks` reads `audioStreamAt(i)` + `getDelayMs()` per index (delay → [audio-cut-timing.md](audio-cut-timing.md)); `TTH26xCutTask` collects `getLanguage()` per position for the mux ([output-mux.md](output-mux.md)); `cutSubtitleTracks` reads stream, language and delay per index. Output track order = list order. |
+| `ITEM` → `REP` | `onRemoveAudioItem(i)`: repairs on track i dropped, higher indices −1. `onSwapAudioItems(a, b)`: indices a and b exchanged. Both go through `remapAudioRepairTracks`, which copies each repair (method, values and `isEnabled()` stay) and sets the new track index. A repair still flagged `trackIsSavedOrder()` is not touched (its index is a saved `<Order>`, not a position). A donor fill's donor track is remapped the same way (unless `donorIsSavedOrder()`); when the donor is the removed track the fill is kept but disabled. The remap ends with `audioRepairsChanged`, which `TTStreamPointWidget::refreshRepairSuffixes` listens to. Subtitles have no repairs. |
+| `LATCH` -.-> `REP` | `onThreadPoolExit` calls `TTAVItem::resolveLoadedRepairs` per item, before `onReadProjectFileFinished` restores the markers: a repair whose `trackIsSavedOrder()` gets the list position of the track with that `<Order>` (`audioListItemAt(i).order()`), or is dropped with a warning when no loaded track has it; a donor fill's donor is resolved the same way, and the fill is disabled (kept, warning logged) when the donor is gone, is not a `donorCandidateTracks` entry, or its values point outside the donor track. Repairs planned in this session are left alone. |
+| `AL` / `SL` → `T0` | **Position 0 is the lead track** for every single-track reader: `TTCutTreeView` burst/acmod hints, `TTAVData` burst checks, preview drift (`TTAVData::onCutPreviewFinished`: delay of track 0 plus its `.info` start offset via `TTESInfo::effectiveAudioDelayMs`), preview clip audio, playback audio and output channels (`TTCurrentFrame`; the playback MKV takes track 0's `.info` start offset as its A/V offset, `buildPlaybackMuxParams`), still-frame subtitle overlay (`TTMPEG2Window2::subtitleStream()`, pushed by `showSubtitleTrackZero`) and `--sub-file`/`--sub-delay` (subtitle 0, read at every Play). |
+| `AL` / `SL` → `CUT` | By list position: `cutAudioTracks` reads `audioStreamAt(i)` + the effective delay per index (`getDelayMs()` plus the track's `.info` start offset, `TTESInfo::effectiveAudioDelayMs`; → [audio-cut-timing.md](audio-cut-timing.md)) and, per index, the repairs with `trackIndex() == i` (a donor fill also gets its donor's file); `TTH26xCutTask` collects `getLanguage()` per position for the mux ([output-mux.md](output-mux.md)); `cutSubtitleTracks` reads stream, language and delay per index. Output track order = list order. |
 | `AL` / `SL` → `SAVE` | `<Audio>` / `<Subtitle>` per track with `<Order>` = the **visible list position** `i` (not `mOrder`, which the reorder buttons do not touch), `<Language>` when non-empty, `<Delay>` when ≠ 0; `<Audio>` also carries `<Repair>` children filtered by `trackIndex() == i`. |
 
 ## Assumptions, contracts & pitfalls

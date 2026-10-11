@@ -1,6 +1,6 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-26
+base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+last_verified: 2026-10-11
 sources:
   - common/ttexception.cpp
   - data/tth26xcuttask.cpp
@@ -124,7 +124,7 @@ flowchart TD
     TAIL --> OUT
     BUF --> ODO["mOutputDisplayOrder<br/>(source display idx per AU)"]
     SC --> ODO
-    ODO --> CONS["ttavdata / ttcutpreviewtask<br/>ttcutpreview"]
+    ODO --> CONS["tth26xcuttask / ttcutpreviewtask<br/>ttpreviewclip"]
     CONS -->|"TTMkvVideoOptions::displayOrder"| MKV["TTMkvMergeProvider<br/>(MKV display PTS)"]
 ```
 
@@ -154,7 +154,7 @@ flowchart TD
 | `requestAbort()` (GUI thread) → `checkAbort()` (worker) | Cooperative abort, added by `feature/cut-abort` (`f5a22762`..`f9352969`). `requestAbort()` is a relaxed store on `std::atomic<bool> mAbortRequested`; the worker polls it at **8 sites** — `smartCutFrames()`'s entry check and its segment loop, `streamCopyFrames()`'s per-frame path **and** its 8 MB chunked bulk-write path, `decodeFramesIntoList()`, `runEncodePass()` (per frame sent) and `flushEncoder()` — plus `TTNaluParser::parseFile()` per NAL unit, reached because `initialize()` forwards `checkAbort()` through `TTNaluParser::setAbortCallback()`. Every poll returns through the function's **normal `false` error path**, so nothing else in the engine needed an abort-aware exit. The bulk-write path was chunked (`kChunk = 8 MB`) *for* this: an un-chunked `mmap`→`write` of a whole segment has nowhere to poll. |
 | `checkAbort()` → `mLastError` (**not** `setError()`) | A cancel must never read as an error. `checkAbort()` sets `mWasAborted = true` and assigns `mLastError = "aborted by user"` **directly**, deliberately bypassing `setError()`, which logs at ERROR level through `TTMessageLogger`. The same rule is why the *callers* throw the message-only `TTAbortException(msg)`: the `(file, line, msg)` overload logs at FATAL level on construction (`TTException::TTException(caller, line, msg)`, `common/ttexception.cpp`). A cancelled cut therefore produces no error, warning or fatal line at all. The same reasoning is now shared: `TTAbortableTask::abortNow()` (`data/ttabortabletask.cpp`) carries the identical comment and constructor choice for its other two subclasses (`TTAudioOnlyCutTask`, `TTMuxTask`). |
 | `mAbortRequested` / `mWasAborted` lifetimes | Deliberately asymmetric, and the asymmetry is load-bearing. `mAbortRequested` is an **input**, cleared in `initialize()` only — so a `requestAbort()` arriving *during* `initialize()` still stops the parse, and a cancel between `initialize()` and `smartCutFrames()` is not lost. `mWasAborted` is an **output**, cleared at `smartCutFrames()` entry; it is a plain `bool`, so `wasAborted()` may only be read after the run ends or across a happens-before edge, never polled live. Consequence for reuse: `initialize()` must **not** consult `wasAborted()` on a parse failure — on a reused engine that flag can still carry the previous run's value. It reads `mAbortRequested` directly instead (the `mAbortRequested.load(...)` check right after the `mParser.parseFile()` failure branch in `TTESSmartCut::initialize()`, `extern/ttessmartcut.cpp`). |
-| `TTESSmartCut::seamNotes()` → `ttavdata` → `statusReport` | Per-seam fallback notes (English `tr()` strings), filled whenever the HEVC RASL-preserving seam was wanted but a preflight or the rewrite rejected it. Cleared at the start of each `smartCutFrames`. Empty is the normal case — either every seam took the fix path or no CRA+RASL seam occurred. Surfaced in the cut progress window and the log, never as an error. |
+| `TTESSmartCut::seamNotes()` → `TTH26xCutTask::runCut` → `reportStep` | Per-seam fallback notes (English `tr()` strings), filled whenever the HEVC RASL-preserving seam was wanted but a preflight or the rewrite rejected it. Cleared at the start of each `smartCutFrames`. Empty is the normal case — either every seam took the fix path or no CRA+RASL seam occurred. Surfaced in the cut progress window and the log, never as an error. |
 | `TTESSmartCut::unrewrittenSourceFrames()` → `TTH26xCutTask` → `TTAVData::confirmUnrewrittenFrames` | Source display positions (`-1` = unknown) of re-encoded frames whose slices `ttRewriteEncoderPacketForSourceSps` could not rewrite and kept as encoded — each logged as "SPS unification: re-encoded frame not adjusted …". Asked **after** the whole cut (video, audio, mux) in `onH26xCutFinished`: "Keep result" / "Discard", plus a clipboard copy of the list; Discard deletes `TTH26xCutTask::createdFiles()` and closes the operation as `Cancelled` ("Cut result discarded"). `--auto-cut` logs and keeps; the preview path only logs. Empty in the normal case. |
 
 ## Variant matrix — which branch fires, and what it must guarantee

@@ -262,9 +262,10 @@ diag_tool(test_sps_basics_epb     SOURCES ${NALU_FULL_SRC} ${BITSTREAM_SRC})
 diag_tool(test_audiorepair     AV SOURCES ${AUDIOREPAIR_SRC})
 diag_tool(test_donorfill       AV SOURCES ${AUDIOREPAIR_SRC})
 # Drives TTAVData::cutAudioTracks() with a real TTAVItem/TTAudioStream (the
-# cut-segment-boundary error path needs the actual per-track loop, not just
-# TTAudioCutter::cut in isolation), so it needs the whole core
-# library (same rationale as test_subtitle_delay).
+# error path "reaches into cut segments with different channel layouts"
+# needs the actual per-track loop, not just TTAudioCutter::cut in
+# isolation), so it needs the whole core library (same rationale as
+# test_subtitle_delay).
 diag_tool(test_audiorepair_cut AV WIDGETS SOURCES)
 target_link_libraries(test_audiorepair_cut PRIVATE ttcut-core)
 # Audio ES input: frame time, low-rate MPEG, broken header, audio search
