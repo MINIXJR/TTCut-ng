@@ -4471,6 +4471,113 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   - `Bash(bear:*)` und `Bash(lupdate:*)` waren bereits drin.
   - Bei nächstem Subagent-Driven-Run verifizieren ob ausreichend.
 
+- **Acht Karten ganz am Code gelesen (erste Stufe der vollen Kartenprüfung)** →
+  **ERLEDIGT (2026-10-11)**, Zweig `docs/map-full-check`.
+  - Anlass: vor v0.86.0 waren alle 29 Karten frisch gestempelt, aber nur an
+    den Stellen geprüft, die eine Änderung berührt hatte; drei alte
+    Fehlaussagen waren dabei nur zufällig aufgefallen.
+  - Vorgehen: je Karte ein Agent mit dem Auftrag, jede Zeile der
+    Kantentabelle, jede Diagrammkante, jeden Vertrag, jeden Fallstrick und
+    jeden Redundanz-Eintrag an der genannten Funktion zu lesen. Messwerte
+    und datierte Urteile waren ausgenommen (am Code nicht prüfbar). Jede
+    Berichtigung wurde danach in der Hauptsitzung am Code gegengelesen; keine
+    musste zurückgenommen werden. Kontrolle: alle acht Diagramme rendern,
+    alle Tabellenzeilen haben die Spaltenzahl ihrer Tabelle, keine
+    Zeilennummern.
+  - Karten: `smart-cut`, `project-lifecycle`, `audio-cut-timing`,
+    `progress-reporting`, `detection-and-search`, `frame-order`, `mpeg2-cut`,
+    `ttcut-demux`. Jede hatte Fehlaussagen; von den Agenten als Berichtigung
+    gezählt: 15 (`project-lifecycle`), 9 (`audio-cut-timing`), 18
+    (`smart-cut`), 25 (`progress-reporting`), 13 (`detection-and-search`),
+    26 (`ttcut-demux`); `mpeg2-cut` 11 von 24 Tabellenzeilen und 4
+    Verträge, `frame-order` 18 von 26 Tabellenzeilen und 11 von 16
+    Verträgen.
+  - Die gewichtigsten Fehlaussagen, die der Code widerlegt:
+    - `frame-order`: viele Zeilen nannten den Navigationsindex für H.26x
+      „DECODE order“ — er ist für alle Codecs eine Anzeigeposition
+      (`TTH26xVideoStream::createIndexList`, `sortDisplayOrder`); die Kante
+      `onSetCutIn` → `TTCurrentFrame` gibt es nicht (`setCutIn` hat keinen
+      Empfänger).
+    - `smart-cut`: MMCO-Neutralisierung nur für PAFF (`isPAFF() ? 32 : 0`),
+      nicht für den ganzen Unification-Zweig; `forced-idr` wird nur im
+      H.264-Zweig von `setupEncoder` gesetzt; Abbruch-Abfrage an 7 Stellen,
+      nicht 8; `selectFramesByDisplayOrder` deckelt zusätzlich bei
+      `au < streamCopyLimit`.
+    - `progress-reporting`: `TTThreadTask::onStatusReport` teilt nicht durch
+      `mTotalSteps`; die Restzeit wird nur bei `Step` gesetzt;
+      `TTCutVideoTask::onUserAbort` ruft `setAbort(true)`.
+    - `mpeg2-cut`: `checkIFrameSequence` sucht vorwärts nach dem nächsten
+      Sequenzkopf und kopiert bis zum Kopf danach; `encode.avi` wird
+      nirgends geschrieben; der Abschluss läuft über `finishMpeg2Cut`.
+    - `ttcut-demux`: TTCut-ng bündelt Tonlücken mit der Einstellung
+      `extraFrameClusterGapSec` (Vorgabe 5 s), nicht mit 2×fps;
+      `first_video_pts` ist `SLOT_V0`, sobald die Slot-Tabelle steht;
+      neun genannte Funktionen und Gates gab es seit der Slot-Regel nicht
+      mehr.
+    - `project-lifecycle`: `closeProject` hat fünf Aufrufer, nicht vier;
+      `sortMarkerByOrder` gibt es nicht; `readXml` behandelt ein erstes
+      Element, das nicht `Version` heißt, anders als beschrieben.
+  - Nebenergebnis für `CLAUDE.md` (zwei Aussagen berichtigt): `forced-idr=1`
+    setzt `setupEncoder` nur für libx264. Für H.265 gemessen
+    (`tools/diag/test_smartcut_seam` auf `tux_hevc4k_cra_test.265`,
+    Schnitt 37–283 und 37–291, libx265 4.3): das erste Bild des neu
+    kodierten Endstücks ist `IDR_N_LP` (NAL-Typ 20), davor steht das EOB;
+    am Anfang steht ein CRA, weil die RASL-erhaltende Naht das IDR des
+    Encoders mit Absicht herabstuft (`rewriteHevcEncoderPacket`). Nicht
+    gemessen: der H.265-Anfang ohne diese Naht (Standardweg). Und
+    `seekToFrame()` springt nur außerhalb des Suchmodus (`mSearchMode`) auf
+    das Schlüsselbild davor.
+  - Aus den Karten herausgenommene Passagen über behobene Fehler
+    (wörtlich; in der Karte steht jetzt das heutige Verhalten):
+  - `docs/code-map/project-lifecycle.md`:
+    - Zeile `onFileSaveAs` → `onFileSave`: „until `ea7f763a` the empty dialog result was assigned and a project that had a save target lost it.“
+    - Zeile `onOpenProjectFileFinished` → recent list: „that is the whole refresh since `ea7f763a` (before, `insertRecentFile` walked `QApplication::topLevelWidgets()` and the signal had no receiver).“
+    - Fallstrick „A project that starts no video ends as aborted“ (`01c6116f`): „Before that the load stayed open for the rest of the session and the `TTCutProjectData` object was left behind — `readProjectFile` deletes a previous one now, which needed `mpProjectData` to be initialised at all (it was not).“
+  - `docs/code-map/mpeg2-cut.md`:
+    - Zeile `encodePart` → Temp-Dateien: „Until 2026-08-12 both names sat directly in the shared directory and the cleanup deleted every `encode.*` it found — a concurrent instance's files included. Reading back a foreign file yielded a header list without a sequence header and killed the process;“
+    - Fallstrick „`encodePart()` temp files“: „A hardcoded basename `encode.*` directly in the shared `TTSettings::tempDirPath()`, cleaned up by a glob that deleted every `encode.*` it found. Live, not latent: a second concurrent *process* (a second harness, a second TTCut-ng window) sharing the same temp dir collided — not same-process threading, which the old wording wrongly cited as the mitigation.“
+    - Zeile `onCutFinished` → `cutFinished` (`9da00f13`): „Until `9da00f13` the `emit` was missing entirely, so MPEG-2 cuts showed no completion dialog and a headless run never terminated.“
+    - dieselbe Zeile: „reading `mpCutList->at(0)` when it is empty would be an out-of-range `QList::at()` (`Q_ASSERT`-abort in debug, UB in release).“
+    - Zeile `encodePart` → `TTTranscodeProvider`: „since 2026-09-24 (before, everything but 24/25/30 fps read as 25)“
+    - Absatz zur Feldbild-Kodierung, Verbraucher-Reihenfolge: „`.info` is tried first and the parser list was only a fallback when `.info` was empty.“
+  - `docs/code-map/smart-cut.md`:
+    - Fallstrick „Who owns the engine“: „**Fixed (`bf6fd1dd`, 2026-08-12):** `operation()` must not clear-then-delete the shared engine at three separate call sites (init failure, catch, end of function) and had a fourth exit — the loop-top `isAborted()` throw — with none, leaking the engine and every decoded frame it held on a cancel landing *between* two preview clips (measured ~535 MB). Fixed by moving the clear-then-delete order into one `releaseEngine` lambda and covering every exit with a `qScopeGuard` (`engineGuard`); the explicit calls at the init-failure branch and at the end of the function are now idempotent no-ops once the guard has already run. `TTCutPreviewTask` also gained a destructor releasing `cutVideoTask` and `mpPreviewCutList`, neither of which had an owner before.“
+    - Fallstrick „`av_packet_alloc` failure“ (`851e2286`, 2026-08-15): „an allocation failure must not `break` out of the per-AU/per-frame loop; the function then fell through to its normal drain-and-`return true` path, silently truncating the segment while still reporting success. Both call sites now `setError(...)` and `return false` instead — the same shape `flushEncoder`'s own `av_packet_alloc` check already had.“
+  - `docs/code-map/progress-reporting.md`:
+    - Zeile Abbruch (`TTCutVideoTask::onUserAbort`): „a cut list with one long entry was effectively unabortable until `1f372cca`.“
+  - `docs/code-map/frame-order.md`:
+    - Fallstrick `skipCurrentFrame`: „Pitfall this replaces: the prior version dropped the packet on send-EAGAIN instead of retaining it, so under a B-hierarchy the decoder's output queue never drained via the correct API sequence — every remaining packet in the file was read and dropped one by one, the skip-loop's target decode-order tag never appeared, and one `decodeFrame()` call degraded into a full-file read-and-discard (measured: minutes on UHD HEVC).“
+    - Fallstrick `seekAndSkipToAU`: „**Pitfall this replaces (fixed `8582c27d`, 2026-09-11):** before this fix, `decodeFrameYUV` ran its own separate inline skip loop bounded only by `mBundle.index.size()` (the whole file) with no cancel poll at all — the same "full decode to EOF" failure class the `skipCurrentFrame()` EAGAIN fix above addresses, but reachable specifically through the frame-search path (`TTFrameSearchTask`, `TTSearchTask`, both outside this map's `sources:`), and on that path uncancellable mid-decode until the search tasks' abort flags were wired in as cancel tokens (`f61baed4`, same date). `decodeFrame` itself already had the tight bound at `base_commit`, just not yet factored into a function shared with `decodeFrameYUV`.“
+    - Fallstrick `moveToNextPIFrame`/`moveToPrevPIFrame`: „Pitfall (pre-v0.72.2): a plain `min` let the `-1` sentinel win every comparison, so standing on the **last I-frame** (no further I → `pos_i == -1`) yielded `-1`, and the return guard `(index >= 0) ? … : current_index` left the position unchanged — the P button did nothing even though P-frames still followed. `moveToPrevPIFrame`'s `max` was already immune (−1 loses a max) but was made explicit for symmetry.“
+    - Vertrag `TTVideoIndexList` (H.26x): „(Corrected 2026-09-04: this row claimed `displayOrder(i) == i` with no POC reordering — that has been false since navigation went display-order in `7f494e0`.)“
+    - Vorbehalt zu `deliveredDecodeIndex`: „(observed ±2 at non-GOP-boundary indices). Not a reliable absolute cross-component reference on its own.“
+    - Abschnitt „Fix direction (decided 2026-06-08)“: „The blocker is that H.26x has **no display-order source** (POC absent); obtaining it (implement POC vs. a decode-pass ground-truth vs. hybrid) is the open design decision.“
+    - Redundanz 3: „(binary-search into `mpeg2vs->extraIndices()`). Same logic, duplicated. Consolidation candidate: a method on `TTMpeg2VideoStream` that converts between raw index“
+    - Redundanz 1: „**Correction (2026-08-28):** the claim that the search sub-decoders adopted "via the same mechanism" was wrong — they, the quick-jump worker and the two analysis wrappers all called `setFrameIndex()` with“
+  - `docs/code-map/ttcut-demux.md`:
+    - Zeile PROBE: „Until `fix/frame-rate-source` the reference was the ES `avg_frame_rate`, which for a raw ES is always the raw demuxer default 25 (right for 25i by coincidence; 29.97i PAFF would have kept 59.94).“
+    - Zeile CONTAINER: „Since `d7a046b` used only as a **seek hint** for the end-window probe, no longer as the duration.“
+    - Zeile REPAIR: „The remux is the run's first long call and used to report nothing while it ran: `progress_set 0` stood above it and `progress_set 10` only after it returned, so a supervising wrapper showed 0 % for the whole phase.“
+    - Zeile Count-check: „which silently failed bash's integer test — the check was a no-op for every MPEG-2 run until the comma was stripped.“
+    - Zeile `corrupt_frame_ranges`: „a real recording had ffmpeg log post-wrap ticks that, subtracted naively, went massively negative and were silently dropped by an `f < 0` filter, losing 69 real corrupt-packet lines“
+    - Fallstrick „Holes come from sorted PTS“: „The DTS-jump detection it replaced took the PTS difference of the packets around the jump as the loss (05x06: 380 ms against 460 ms really missing, Tatort 2340 against 2500), which is what put the audio off behind a damage zone.“
+    - Zeile `audio_gap_frames`: „the former's local inline clustering (`emitGapCluster`) is gone;“
+    - Redundanz 6: „(Of these, `_splice_gap_step_or_warn`, `_emit_segment`, `progress_set_repair`, `_probe_segment_timing` and both gates left with the slot rule on 2026-10-08.)“
+    - Abschnitt „Reporting defects — FIXED 2026-07-12“: „**Duration/frame-count/drift/padding chain** (`f85b237` + `d7a046b`): `VIDEO_DURATION` is now the video PTS span (start_time to last PTS + one frame), not the container span. Frame count, padding target and drift are derived correctly; verified on Futurama (3419800 ms = 85495 frames, exact).“
+    - derselbe Abschnitt: „**Warning wording** (`f85b237`): grid-method hits are labelled "N pictures with doubled PTS (field-picture pairs or TS corruption)".“
+    - derselbe Abschnitt: „**GUI "Defekt:" mislabel** (`fc2a573`): the cluster dialog now confirms field pairs against the MPEG-2 parser and labels them "Feldpaare:"; the classification runs in `onOpenVideoFinished` where the parser list exists. All-confirmed field-pair sets import silently (no dialog).“
+  - Offen geblieben, bewusst nicht in dieser Stufe:
+    - In fünf der acht Karten (`mpeg2-cut`, `detection-and-search`,
+      `frame-order`, `progress-reporting`, `ttcut-demux`) haben einzelne
+      Diagrammkanten keine eigene Tabellenzeile; in `audio-cut-timing` fehlt
+      im Diagramm die Kante KEEP → ACMOD (`computeTargetAcmods` liest
+      `plan.keepList`). Bestand, nicht durch die Prüfung entstanden.
+    - Passagen über behobene Fehler, die Messwerte oder datierte Urteile
+      enthalten, stehen weiter in den Karten (u. a. `getCutEndObject` in
+      `mpeg2-cut`, Defekt A/B/E in `smart-cut`, „Root cause & knot“ in
+      `frame-order`).
+    - Die übrigen 21 Karten (zweite Stufe).
+
 ## Funktionsverzeichnis
 
 Kurzfassung ausgelieferter Funktionen, neueste zuerst. Ausführlich zu den

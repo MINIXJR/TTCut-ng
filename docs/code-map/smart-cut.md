@@ -1,5 +1,5 @@
 ---
-base_commit: 71c8367aa98cc1229f4e5910c5c339198796bfe2
+base_commit: 17201fe393526f3a3f5a7229d4daa5aa0aafd682
 last_verified: 2026-10-11
 sources:
   - common/ttexception.cpp
@@ -25,6 +25,9 @@ sources:
   - data/ttcutpreviewtask.h
   - data/ttavdata.cpp
   - gui/ttcutpreview.cpp
+  - extern/ttmkvmergeprovider.cpp
+  - extern/ttmkvmergeprovider.h
+  - common/ttmessagelogger.h
   - data/ttpreviewclip.cpp
   - data/ttpreviewclip.h
   - data/ttabortabletask.cpp
@@ -71,7 +74,7 @@ scope. (1) `decodeFramesIntoList` and `runEncodePass` (`extern/ttessmartcut.cpp`
 commit `851e2286`): an `av_packet_alloc` failure must not `break` out of the
 per-AU loop and let the function fall through to a normal `true` return,
 silently truncating the segment; both now call `setError()` and `return
-false` (`flushEncoder` already did). (2) `TTCutPreviewTask::operation()`
+false` (`flushEncoder` already returned `false` there, without `setError()`). (2) `TTCutPreviewTask::operation()`
 (`data/ttcutpreviewtask.cpp`, commit `bf6fd1dd`): the engine-leak gap the
 "Who owns the engine" pitfall below describes — see
 that bullet for the new shape and the *different* gap it left behind. The
@@ -95,9 +98,9 @@ flowchart TD
     OVR --> SEG["TTCutSegmentInfo[]<br/>(decode-order AU ranges)"]
     SEG --> PS["processSegment()"]
 
-    PS -->|"H.264 &amp;&amp; (PAFF or !pocBridgeable)"| UNI["SPS-Unification branch"]
+    PS -->|"H.264 &amp;&amp; (PAFF or !pocBridgeable<br/>or seamNeedsUnification)"| UNI["SPS-Unification branch"]
     PS -->|"H.265 &amp;&amp; CRA copy-start<br/>+ RASL + preflight ok"| HSF["HEVC RASL-preserving seam<br/>(planHevcSeamFix)"]
-    PS -->|"H.265 otherwise, or H.264<br/>progressive &amp; pocBridgeable"| STD["Standard branch"]
+    PS -->|"H.265 otherwise, or H.264 progressive<br/>&amp; pocBridgeable &amp; !seamNeedsUnification"| STD["Standard branch"]
 
     UNI --> RE["reencodeFrames()"]
     STD --> RE
@@ -108,7 +111,7 @@ flowchart TD
     RE --> CDR["computeDecodeRange()"]
     CDR --> DEC["decodeFramesIntoList()<br/>(libav decoder, thread_count=1)"]
     DEC --> SEL["selectFramesByDisplayOrder()<br/>display bounds + streamCopyLimit"]
-    SEL --> ENC["runEncodePass()<br/>(libx264/x265, bf=0, forced-idr)"]
+    SEL --> ENC["runEncodePass()<br/>(libx264/x265, bf=0, forced-idr for libx264)"]
     ENC --> TEP["transformEncoderPacket()<br/>SPS-unify, HEVC seam rewrite<br/>or reorder-patch"]
     TEP --> BUF["bufferAndWriteEncoderPacket()<br/>(1-packet pending buffer)"]
     BUF --> PDF["applyPocDomainFix()<br/>(patches the last packet)"]
@@ -117,7 +120,7 @@ flowchart TD
     WPP -->|"standard / unification"| EOS["EOS NAL<br/>(flush DPB)"]
     WPP -->|"HEVC RASL seam:<br/>no EOB, DPB survives"| SC
     EOS --> FND["frameNumDelta bridge"]
-    FND --> SC["streamCopyFrames()<br/>+ MMCO neutralize (unification only)"]
+    FND --> SC["streamCopyFrames()<br/>+ MMCO neutralize (unification + PAFF only)"]
     SC --> TAIL["reencodeTail()<br/>(forced-IDR closed sub-segment)"]
 
     SC --> OUT["output ES"]
@@ -134,7 +137,7 @@ flowchart TD
 |---|---|
 | UI cut list → `smartCutFrames` | **Display** positions (Direction A). Every index below this line is a **decode-order AU** index. Conversion is `TTDisplayOrderMap` and nothing else. |
 | `smartCutFrames` → `analyzeCutPoints` | Display pairs; `analyzeCutPoints` converts via `displayToDecode`. `endFrame` is the **max AU over a 32-frame trailing display window** — a frame displaying ≤ `endDisplay` can sit at a later AU under B-frame reorder. |
-| `analyzeCutPoints` → `TTCutSegmentInfo` | Four mutually exclusive shapes, encoded in the sentinel fields: pure stream-copy (`reencodeStartFrame < 0`), pure re-encode (`streamCopyStartFrame < 0`), mixed (both ≥ 0), mixed + tail (`needsReencodeAtEnd`). |
+| `analyzeCutPoints` → `TTCutSegmentInfo` | Three shapes, encoded in the sentinel fields: pure stream-copy (`reencodeStartFrame < 0`), pure re-encode (`streamCopyStartFrame < 0`), mixed (both ≥ 0). `needsReencodeAtEnd` (with `tailStartFrame ≥ 0`) is an additional flag on top of the first and third shape; the pure re-encode never carries it (the collapse sets it to `false`, the display upper bound replaces the tail). |
 | `smartCutFrames` → first-segment override | Only for segment 0, only when `streamCopyStartFrame ≥ 0`. Downgrades a Non-IDR re-encode to pure stream-copy **iff** the cut-in keyframe has no leading pictures (probe: any AU in `(startFrame, startFrame+16]` with `decodeToDisplay(au) < cutInDisplay`; `-1` counts as "before"). Decoder starts with an empty `delayed_pic[]`, so no IDR barrier is needed. |
 | `processSegment` → `reencodeFrames` | Head mode carries `startDisplay` (display lower bound) and `streamCopyStartFrame` (AU upper bound). Returns `adjustedStreamCopyStart` when the re-encode had to swallow the whole copy GOP. |
 | `selectFramesByDisplayOrder` → `ctx.framesToEncode` | Keep-predicate is **mode-dependent**: tail → `au ≥ startFrame && disp ≤ endDisplay`; pure re-encode → `startDisplay ≤ disp ≤ endDisplay`; head/mixed → `disp ≥ startDisplay && au < streamCopyLimit`. `AVFrame::pts` carries the **source AU index**, not a timestamp. |
@@ -144,15 +147,16 @@ flowchart TD
 | `reencode → stream-copy` seam, **HEVC RASL-preserving variant** | Carries the opposite of the standard seam: source VPS/SPS/PPS are written **before** the re-encode (not at the seam) and **no EOB** is emitted, so the DPB survives and the copy-start CRA's RASL pictures resolve against the re-encode standins instead of being discarded (`NoRaslOutputFlag`). Encoder VPS/SPS are dropped, the encoder PPS is moved to a free `pps_id`, and every encoder slice is rewritten in `rewriteHevcEncoderPacket` (IDR→CRA demotion on packet 0, POC anchoring into the source `poc_lsb` domain, RPS retain extension). An SPS **content** switch at the seam would flush the DPB by itself — that is why the source sets must rule from segment start. |
 | `processSegment` → `streamCopyFrames` (`frameNumDelta`) | Bridges the encoder's own `frame_num` sequence (0..N-1) to the source's — computed by `bridgeFrameNum(scStartAU, encLog2Fn)` for both branches. **EOS flushes the DPB but does not reset `PrevRefFrameNum`** — only an IDR does; hence an **IDR copy-start yields delta 0** (never patch an IDR's fn — H.264 7.4.3). Otherwise delta = `lastEncFrameNum - firstScFrameNum`, where `lastEncFrameNum = ((N-1) mod EncMaxFrameNum) + 1`. The modulo matters once `N > EncMaxFrameNum`; without it the decoder floods the DPB with dummy refs and temporal-direct B-frames lose their co-located picture. |
 | `frameNumDelta`: which `log2` width? | Unification branch uses **source** `mLog2MaxFrameNum` (slices were rewritten into the source domain); standard branch uses **encoder** `mEncoderLog2MaxFrameNum`. Swapping these silently corrupts the seam. |
+| `runEncodePass` / `flushEncoder` → `transformEncoderPacket` → `bufferAndWriteEncoderPacket` | Per encoder packet, after the one-shot `parseEncoderSpsFromPacket` (H.264 only). Three exclusive paths: HEVC seam fix active → `rewriteHevcEncoderPacket` (the first packet also captures the encoder SPS/PPS; failure sets `mHevcSeamRewriteFailed` and returns an empty array, which the caller turns into the rollback); H.264 SPS unification (once the encoder PPS is parsed) → `ttRewriteEncoderPacketForSourceSps`, a slice it cannot rewrite stays as encoded and its source display position goes to `mUnrewrittenFrames`; otherwise H.264 with `mReorderDelay > 0` → `ttPatchSpsNalsInAccessUnit`. H.265 without the seam fix is passed through unchanged. |
 | `applyPocDomainFix` → `ctx.pendingPacket` | Patches the last encoder `poc_lsb` so `PicOrderCntMsb` does not wrap into the first copied GOP. Only H.264, only `poc_type == 0`, only when a stream-copy follows. Reads source POC at the *actual* copy start (post-adjustment). |
-| `processSegment` → `streamCopyFrames` (segment i → i+1) | Between segments: EOS + `writeParameterSets` + a **cumulative** `frame_num` delta computed from the last non-B AU of segment *i* to the first copied AU of segment *i+1*, modulo `MaxFrameNum`. |
-| `streamCopyFrames` → output | Bulk-write (single `mmap` → `write`) **only** when no patching is needed. Any of `patchReorderFrames`, `frameNumDelta ≠ 0`, `neutralizeMmcoFrames > 0` forces the per-AU path. |
+| `smartCutFrames` → `processSegment` → `streamCopyFrames` (segment i → i+1) | Between segments, in the `smartCutFrames` segment loop: EOS + `writeParameterSets` + a **cumulative** `frame_num` delta (the `int& frameNumDelta` that `processSegment` passes on to `streamCopyFrames`) computed from the last non-B AU of segment *i* to the first copied AU of segment *i+1*, modulo `MaxFrameNum`. The delta is H.264 only; the EOS and parameter sets are written for H.265 too. |
+| `streamCopyFrames` → output | Bulk-write (one `mmap`ped AU range, written in 8 MB chunks) **only** when no patching is needed. Forcing the per-AU path: `patchReorderFrames > 0` and `frameNumDelta ≠ 0` (both only for H.264; `frameNumDelta` also needs a known `mLog2MaxFrameNum`), and `neutralizeMmcoFrames > 0` (any codec). |
 | `stream-copy → tail` seam | Clean by construction: the tail's first frame is a **forced IDR**, which resets `PrevRefFrameNum`. No `frameNumDelta`, no MMCO, no SPS unification needed across this boundary — unlike the head seam. |
-| `streamCopyFrames` / `runEncodePass` → `mOutputDisplayOrder` | One entry per written AU, in write order, holding the **source display index**. Any anomaly (encoder emits more packets than frames submitted) invalidates the whole vector; the muxer then falls back to legacy linear PTS. |
+| `streamCopyFrames` / `bufferAndWriteEncoderPacket` → `mOutputDisplayOrder` | One entry per written AU, in write order, holding the **source display index** (`bufferAndWriteEncoderPacket` is reached from `runEncodePass` and `flushEncoder`). Any anomaly invalidates the whole vector: a negative display index (`appendOutputDisplay`, e.g. an HEVC dropped-RASL slot) or an encoder that emits more packets than frames submitted; `outputDisplayOrder()` also returns an empty vector for a duplicate source display index. The muxer then falls back to legacy linear PTS. |
 | `mOutputDisplayOrder` → `TTMkvMergeProvider` | Output-local display rank, used to assign MKV display PTS. Empty vector = "trust the muxer's linear timeline instead". |
 | `smartCutFrames` → caller (failure) | The boolean return is **load-bearing**: `createH264PreviewClip` must not swallow it and keep looping over the remaining segments, muxing clips that were never written — on a badly damaged recording that piled up decoder/encoder instances until `pthread_create` failed and the GUI aborted (`ba064f15`, 2026-07-19). Callers must stop the whole preview/cut run on false, not just the current segment. |
-| `requestAbort()` (GUI thread) → `checkAbort()` (worker) | Cooperative abort, added by `feature/cut-abort` (`f5a22762`..`f9352969`). `requestAbort()` is a relaxed store on `std::atomic<bool> mAbortRequested`; the worker polls it at **8 sites** — `smartCutFrames()`'s entry check and its segment loop, `streamCopyFrames()`'s per-frame path **and** its 8 MB chunked bulk-write path, `decodeFramesIntoList()`, `runEncodePass()` (per frame sent) and `flushEncoder()` — plus `TTNaluParser::parseFile()` per NAL unit, reached because `initialize()` forwards `checkAbort()` through `TTNaluParser::setAbortCallback()`. Every poll returns through the function's **normal `false` error path**, so nothing else in the engine needed an abort-aware exit. The bulk-write path was chunked (`kChunk = 8 MB`) *for* this: an un-chunked `mmap`→`write` of a whole segment has nowhere to poll. |
-| `checkAbort()` → `mLastError` (**not** `setError()`) | A cancel must never read as an error. `checkAbort()` sets `mWasAborted = true` and assigns `mLastError = "aborted by user"` **directly**, deliberately bypassing `setError()`, which logs at ERROR level through `TTMessageLogger`. The same rule is why the *callers* throw the message-only `TTAbortException(msg)`: the `(file, line, msg)` overload logs at FATAL level on construction (`TTException::TTException(caller, line, msg)`, `common/ttexception.cpp`). A cancelled cut therefore produces no error, warning or fatal line at all. The same reasoning is now shared: `TTAbortableTask::abortNow()` (`data/ttabortabletask.cpp`) carries the identical comment and constructor choice for its other two subclasses (`TTAudioOnlyCutTask`, `TTMuxTask`). |
+| `requestAbort()` (GUI thread) → `checkAbort()` (worker) | Cooperative abort, added by `feature/cut-abort` (`f5a22762`..`f9352969`). `requestAbort()` is a relaxed store on `std::atomic<bool> mAbortRequested`; the worker polls it at **7 sites** — `smartCutFrames()`'s entry check and its segment loop, `streamCopyFrames()`'s per-frame path **and** its 8 MB chunked bulk-write path, `decodeFramesIntoList()`, `runEncodePass()` (per frame sent) and `flushEncoder()` — plus `TTNaluParser::parseFile()` per NAL unit, reached because `initialize()` forwards `checkAbort()` through `TTNaluParser::setAbortCallback()`. Every poll returns through the function's **normal `false` error path**, so nothing else in the engine needed an abort-aware exit. The bulk-write path was chunked (`kChunk = 8 MB`) *for* this: an un-chunked `mmap`→`write` of a whole segment has nowhere to poll. |
+| `checkAbort()` → `mLastError` (**not** `setError()`) | A cancel must never read as an error. `checkAbort()` sets `mWasAborted = true` and assigns `mLastError = "aborted by user"` **directly**, deliberately bypassing `setError()`, which logs at ERROR level through `TTMessageLogger`. The same rule is why the *callers* throw the message-only `TTAbortException(msg)`: the `(file, line, msg)` overload logs at ERROR level on construction (`TTException::TTException(caller, line, msg)` calls `errorMsg`, `common/ttexception.cpp`). A cancelled cut therefore produces no error, warning or fatal line at all. The same reasoning is now shared: `TTAbortableTask::abortNow()` (`data/ttabortabletask.cpp`) carries the identical comment and constructor choice for its other two subclasses (`TTAudioOnlyCutTask`, `TTMuxTask`). |
 | `mAbortRequested` / `mWasAborted` lifetimes | Deliberately asymmetric, and the asymmetry is load-bearing. `mAbortRequested` is an **input**, cleared in `initialize()` only — so a `requestAbort()` arriving *during* `initialize()` still stops the parse, and a cancel between `initialize()` and `smartCutFrames()` is not lost. `mWasAborted` is an **output**, cleared at `smartCutFrames()` entry; it is a plain `bool`, so `wasAborted()` may only be read after the run ends or across a happens-before edge, never polled live. Consequence for reuse: `initialize()` must **not** consult `wasAborted()` on a parse failure — on a reused engine that flag can still carry the previous run's value. It reads `mAbortRequested` directly instead (the `mAbortRequested.load(...)` check right after the `mParser.parseFile()` failure branch in `TTESSmartCut::initialize()`, `extern/ttessmartcut.cpp`). |
 | `TTESSmartCut::seamNotes()` → `TTH26xCutTask::runCut` → `reportStep` | Per-seam fallback notes (English `tr()` strings), filled whenever the HEVC RASL-preserving seam was wanted but a preflight or the rewrite rejected it. Cleared at the start of each `smartCutFrames`. Empty is the normal case — either every seam took the fix path or no CRA+RASL seam occurred. Surfaced in the cut progress window and the log, never as an error. |
 | `TTESSmartCut::unrewrittenSourceFrames()` → `TTH26xCutTask` → `TTAVData::confirmUnrewrittenFrames` | Source display positions (`-1` = unknown) of re-encoded frames whose slices `ttRewriteEncoderPacketForSourceSps` could not rewrite and kept as encoded — each logged as "SPS unification: re-encoded frame not adjusted …". Asked **after** the whole cut (video, audio, mux) in `onH26xCutFinished`: "Keep result" / "Discard", plus a clipboard copy of the list; Discard deletes `TTH26xCutTask::createdFiles()` and closes the operation as `Cancelled` ("Cut result discarded"). `--auto-cut` logs and keeps; the preview path only logs. Empty in the normal case. |
@@ -168,7 +172,7 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 | **PAFF** (field pairs) | SPS-Unification branch, always (`isPAFF ⇒ useSpsUnification`). Encoder emits MBAFF; source SPS params (`log2_max_frame_num`, `log2_max_pic_order_cnt_lsb`, `frame_mbs_only_flag`) are stamped back onto the encoder slices. EOS before copy; MMCO neutralized for 32 AUs; `ttPatchH264SpsReorderFrames(isPAFF=true)` raises `num_ref_frames`/`max_dec_frame_buffering` for the MBAFF→PAFF DPB transition. POC anchor stays `-1` (legacy linear numbering, byte-identical output). | **n/a** — `isPAFF()` is an H.264 concept; HEVC never enters this cell. |
 | **Progressive / MBAFF**, POC seam bridgeable | Standard branch **only when the copy-start keyframe is IDR or has no leading pictures**. Otherwise the `seamNeedsUnification` trigger (defect A fix, 2026-07-20: probe `kfHasLeadingPics`, non-IDR check on the copy-start AU) routes the seam through unification regardless of bridgeability. Standard seam: EOS → source SPS/PPS → `frameNumDelta` recalculated from the **encoder's** `log2_max_frame_num` → stream-copy. `applyPocDomainFix` bridges the POC seam. No MMCO neutralization. | Standard branch. EOS NAL type 37 → VPS+SPS+PPS → stream-copy. **No** `frame_num`, POC, MMCO or SPS patching at all — every one of those is gated on `NALU_CODEC_H264`. |
 | **Progressive**, POC seam **not** bridgeable | SPS-Unification branch (`!pocBridgeable`). Slices rewritten into the **source** POC domain; `mSpsUnificationPocAnchor` = source `poc_lsb` of the first *displayed* copy frame (min-display AU in the copy GOP, not the copy-start AU — its leading B pictures carry smaller POCs). | Cannot occur: `pocBridgeable` is only computed for H.264. |
-| **Non-IDR I-frame cut-in** (open GOP, DVB) | `needsReencodeAtStart = !isAtKeyframe \|\| !isAtIDR` → re-encode with `forced-idr=1` produces an IDR barrier. Exception: segment 0 without leading pics → override to pure stream-copy. | Same rule, same override. `findKeyframeBefore/After` accept IDR/CRA/I-slice alike. |
+| **Non-IDR I-frame cut-in** (open GOP, DVB) | `needsReencodeAtStart = !isAtKeyframe \|\| !isAtIDR` → re-encode with `forced-idr=1` produces an IDR barrier. Exception: segment 0 without leading pics → override to pure stream-copy. | Same rule, same override; the IDR comes without `forced-idr` (not set for libx265): each re-encode pass opens a fresh encoder and its first picture is an IDR (measured with `tools/diag/test_smartcut_seam` on `tux_hevc4k_cra_test.265`, libx265 4.3: `IDR_N_LP` at the tail; at the RASL-preserving head seam `rewriteHevcEncoderPacket` demotes it to CRA). `findKeyframeBefore/After` accept IDR/CRA/I-slice alike. |
 | **Open-GOP leading pictures** at cut-in | Excluded by the display lower bound `disp ≥ startDisplay` in `selectFramesByDisplayOrder`. | Same. HEVC RASL pictures map to `decodeToDisplay == -1` and are therefore treated as "displays before the cut-in". See `frame-order.md`. This concerns the **cut-in**; the RASL window at the **seam** is a different question and is preserved by the row above. |
 | **Cut-out mid-GOP** | Tail re-encode: stream-copy ends at `tailStartFrame-1` (whole GOPs only), tail GOP re-encoded as a forced-IDR closed sub-segment bounded by `disp ≤ endDisplay`. Collapses to a pure re-encode when `tailStart ≤ streamCopyStart`. | Identical (codec-agnostic path). |
 
@@ -177,8 +181,8 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 - **Bit layer (`avstream/ttbitstream`)** — the one reader/writer for all
   H.264/H.265 NAL syntax. Reader past the end of the data: sticky
   `error()`, missing bits read as 0, `ue()`/`se()` return 0 once the flag
-  is set; more than 31 leading zeros also set it, mid-buffer, without
-  advancing. A return value alone does not end every syntax loop (reference
+  is set; more than 31 leading zeros also set it, mid-buffer, after
+  the 32 zero bits were consumed. A return value alone does not end every syntax loop (reference
   list modification only exits on idc 3), so the slice loops in
   `ttNeutralizeMmcoInAU` and `ttRewriteEncoderSliceForSourceSps` stop on
   `error() || atEnd()`, and both check `error()` once more after the whole
@@ -194,8 +198,8 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   `poc_lsb`, the PAFF `mb_adaptive_frame_field_flag`) use `ttOverwriteBits`.
   **Scope limits, by design:** `ttNeutralizeMmcoInAU` does not parse
   `redundant_pic_cnt` (only Baseline/Extended profiles carry it) and
-  `ttRewriteEncoderSliceForSourceSps` does not parse B slices (the re-encode
-  runs with `bf=0`). Gates: `test_bitstream` (module + frozen legacy
+  `ttRewriteEncoderSliceForSourceSps` does not parse the L1 half of
+  `pred_weight_table` (B slices; the re-encode runs with `bf=0`). Gates: `test_bitstream` (module + frozen legacy
   reference), `test_h264_syntax_golden` (every helper against
   `tools/diag/testdata/h264-syntax/golden.txt`), `test_h264_truncated_slice`
   (termination).
@@ -217,26 +221,22 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   pointer for the duration of one `smartCutFrames()` call — it never deletes,
   since the engine stays owned by `operation()`.
 
-  **Fixed (`bf6fd1dd`, 2026-08-12):** `operation()` must not clear-then-delete
-  the shared engine at three separate call sites (init failure, catch, end of
-  function) and had a fourth exit — the loop-top `isAborted()` throw — with
-  none, leaking the engine and every decoded frame it held on a cancel landing
-  *between* two preview clips (measured ~535 MB). Fixed by moving the
-  clear-then-delete order into one `releaseEngine` lambda and covering every
-  exit with a `qScopeGuard` (`engineGuard`); the explicit calls at the
-  init-failure branch and at the end of the function are now idempotent
-  no-ops once the guard has already run. `TTCutPreviewTask` also gained a
-  destructor releasing `cutVideoTask` and `mpPreviewCutList`, neither of
-  which had an owner before.
+  `operation()` releases the shared engine in exactly one place: the
+  `releaseEngine` lambda clears `mpActiveSmartCut` under `mSmartCutMutex`
+  **before** it deletes the engine. A `qScopeGuard` (`engineGuard`) runs it on
+  every exit of `operation()`, including the loop-top `isAborted()` throw; the
+  explicit `releaseEngine` calls at the init-failure branch and at the end of
+  the function run earlier, so the guard then finds a null engine and does
+  nothing. `~TTCutPreviewTask` deletes `cutVideoTask` and `mpPreviewCutList`.
 
-  **New/still-open gap (pre-existing, documented in the source since the same
-  commit):** `createH264PreviewClip`'s **local fallback engine**
+  **Open gap:** `createH264PreviewClip`'s **local fallback engine**
   (`localSmartCut`, used only when `sharedSmartCut` failed to initialize) is
-  never published to `mpActiveSmartCut`, so `onUserAbort()` cannot reach it
-  and its `initialize()` — a full ES parse — is not cancellable. It runs once
-  per clip, so a recording damaged enough to fail the shared init produces N
-  uncancellable full-ES parses in a row, with a cancel only landing at the
-  clip-loop top in `operation()`.
+  published to `mpActiveSmartCut` only around its `smartCutFrames()` call, not
+  around its `initialize()`. `onUserAbort()` therefore cannot reach it during
+  that `initialize()` — a full ES parse — which is not cancellable. It runs
+  once per clip, so a recording damaged enough to fail the shared init
+  produces N uncancellable full-ES parses in a row, with a cancel only
+  landing at the clip-loop top in `operation()`.
 
 - **`analyzeCutPoints`** — assumes: a keyframe exists within the segment,
   otherwise it degrades to a full re-encode. The `endFrame` search window is
@@ -254,9 +254,9 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   `CLAUDE.md` describes SPS Unification as a PAFF-only mechanism. It is not —
   a progressive H.264 stream with a non-bridgeable POC seam, or with a
   bridgeable one but leading-pic-bearing non-IDR copy-start, takes the same
-  branch. Likewise the MMCO neutralization is documented under "PAFF notes"
-  but is emitted *only* by this branch, which is broader than PAFF and
-  narrower than "all H.264".
+  branch. Conversely the MMCO neutralization is emitted *only* by this
+  branch and, inside it, only for PAFF (`mmcoNeutralizeCount = isPAFF() ? 32 :
+  0`) — narrower than the branch itself.
 
 - **`pocDomainBridgeable`** — since `1893497` the encoder POC width is
   **measured up front** by `probeEncoderPocParams()` (one throwaway libx264
@@ -278,24 +278,25 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   applies to the interlaced case only.
 
 - **`selectFramesByDisplayOrder`** — guarantees: `AVFrame::pts` carries the
-  source AU index. The frame selection filters by the display lower bound
-  (`disp >= startDisplay`), not by any AU-index cutoff.
+  source AU index. The head/mixed selection filters by the display lower bound
+  (`disp >= startDisplay`) and caps at `au < streamCopyLimit`; it has no AU
+  lower bound (only the tail mode has `au >= startFrame`).
 
 - **`decodeFramesIntoList`** — assumes `thread_count = 1` on the decoder.
   Frame-threading reassigns PTS and would break the AU-index-in-`pts` contract.
 
 - **`runEncodePass`** — assumes `max_b_frames = 0`, which is what makes the
   packet↔frame 1:1 mapping (and therefore `mOutputDisplayOrder`) valid. The
-  encoder is recreated per segment because libx264's lookahead cannot restart
-  after a flush.
+  encoder is recreated per re-encode pass (`resetDecoderForSegment`, once per
+  `reencodeFrames` call, tail included) because libx264's lookahead cannot
+  restart after a flush.
 
-- **`decodeFramesIntoList` / `runEncodePass` — `av_packet_alloc` failure
-  (FIXED `851e2286`, 2026-08-15)** — an allocation failure must not `break`
-  out of the per-AU/per-frame loop; the function then fell through to its
-  normal drain-and-`return true` path, silently truncating the segment while
-  still reporting success. Both call sites now `setError(...)` and `return
-  false` instead — the same shape `flushEncoder`'s own `av_packet_alloc`
-  check already had.
+- **`decodeFramesIntoList` / `runEncodePass` — `av_packet_alloc` failure** —
+  an allocation failure calls `setError(...)` and returns `false` from the
+  per-AU/per-frame loop; it must not `break` out of it, because the function
+  would then fall through to its normal drain-and-`return true` path and
+  silently truncate the segment. `flushEncoder`'s own `av_packet_alloc` check
+  returns `false` too (without `setError`).
 
 - **`streamCopyFrames`** — **pitfall:** `neutralizeMmcoFrames > 0` sets
   `needsPatching`, which disables the bulk-write fast path *regardless of codec*,
