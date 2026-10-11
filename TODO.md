@@ -57,8 +57,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - **Warum ffmpeg 9.0.2 unter `+igndts` die ersten Tonpakete umstempelt**,
     ist ungeklärt. Der Ton liest seither das Original; der Remux bleibt für
     Bild, Dauer und Korrupt-Marker.
-  - **Wiki**: beschreibt noch Trim und Auffüllen; beim nächsten
-    `wiki-audit` nachziehen.
   - **Dateigrenze einer Mehrdatei-Aufnahme mitten in einem Ton-PES:** der
     über die Grenze geteilte Tonrahmen geht verloren (jede Datei wird für
     sich gelesen), sein Platz bekommt Stille und einen „Audio-Gap"-Marker.
