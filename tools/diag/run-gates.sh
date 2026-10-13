@@ -26,7 +26,9 @@
 # TempDirPath cannot leak in, and the log file a harness inspects is its own.
 # The CMake targets a gate needs are built first, so no stale binary from an
 # earlier session is ever run (tools/diag binaries are gitignored and
-# invisible to git status).
+# invisible to git status). The run prints the compiler warnings of that
+# build and the number of files it compiled, after the build and again below
+# the verdict line; the count does not change the exit code.
 #
 # Deliberately NOT in the table:
 #   need a display (refuse offscreen): test_dialog_then_cut,
@@ -1011,7 +1013,14 @@ if [ $BUILD -eq 1 ]; then
   { "${runner[@]}" cmake --build "$ROOT/build" && \
     { [ -z "$targets" ] || "${runner[@]}" cmake --build "$ROOT/build" --target $targets; }; } > "$RUN/build.log" 2>&1 \
     || { echo "BUILD FAILED - see $RUN/build.log"; tail -n 20 "$RUN/build.log"; exit 1; }
+  # The build is incremental: a file that was not compiled in this run does
+  # not repeat its warnings. The number of compiled files says how much the
+  # warning count covers - only after "rm -rf build" is it the whole tree.
+  build_note="build: $(grep -c 'warning:' "$RUN/build.log") compiler warnings in $(grep -cE 'Building (C|CXX) object' "$RUN/build.log") files compiled in this run ($RUN/build.log)"
+else
+  build_note="build: skipped (--no-build)"
 fi
+echo "$build_note"
 
 pass=0; fail=0; skip=0
 printf '%-8s %-24s %8s\n' VERDICT GATE TIME
@@ -1043,6 +1052,7 @@ while read -r name tier secs targets; do
 done < <(table)
 
 echo "---- $pass PASS, $fail FAIL, $skip SKIP  (logs: $RUN)"
+echo "$build_note"
 [ $fail -gt 0 ] && exit 1
 [ $skip -gt 0 ] && exit 2
 exit 0

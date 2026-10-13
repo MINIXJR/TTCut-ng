@@ -44,7 +44,7 @@ int main(int argc, char** argv)
     for (int i = 3; i + 1 < argc; i += 2)
         keep.append(qMakePair(atoi(argv[i]), atoi(argv[i+1])));
 
-    fprintf(stderr, "=== segments (%d) ===\n", keep.size());
+    fprintf(stderr, "=== segments (%d) ===\n", static_cast<int>(keep.size()));
     for (const auto& s : keep)
         fprintf(stderr, "  %d .. %d\n", s.first, s.second);
 

@@ -34,7 +34,10 @@ static QString writeSrt(const QString& dir, const QString& name, const QByteArra
 {
   const QString path = QDir(dir).absoluteFilePath(name);
   QFile f(path);
-  f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    check(false, "cannot write " + path);
+    return path;
+  }
   f.write(data);
   return path;
 }
@@ -85,7 +88,8 @@ int main(int argc, char** argv)
       }
       tgt.close();
     }
-    QFile f(out); f.open(QIODevice::ReadOnly);
+    QFile f(out);
+    if (!f.open(QIODevice::ReadOnly)) check(false, "H1: cannot read " + out);
     const QString written = QString::fromUtf8(f.readAll());
     check(written == "1\r\n00:00:01,000 --> 00:00:02,000\r\nEins\r\n\r\n",
           "H1: a keep segment after the last cue writes nothing - got: "

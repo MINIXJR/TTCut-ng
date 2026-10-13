@@ -68,8 +68,10 @@ The generated executable is `build/ttcut-ng`.
 `tools/diag/run-gates.sh` builds and runs every self-verdicting harness and
 gate script that needs only repository fixtures (`--quick` for the
 material-free tier, `--list` for the table) and prints one PASS/FAIL/SKIP
-line per gate. Run it before every merge to `master`; the release skill
-runs it in step 5.
+line per gate. It also prints the compiler warnings of its build and the
+number of files that build compiled: the build is incremental, so the count
+covers the whole tree only after `rm -rf build`. Run it before every merge
+to `master`; the release skill runs it in step 5.
 
 ## Architecture
 

@@ -3971,6 +3971,30 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **18 Bauwarnungen in sieben Prüfprogrammen; der Gate-Läufer nennt die
+  Warnungszahl** → **DONE (2026-10-13, Zweig `fix/h26x-au-without-slice`)**.
+  - Gefunden, als das Bauverzeichnis an dem Tag ganz neu übersetzt wurde:
+    13-mal ein ignoriertes Ergebnis von `QFile::open` /
+    `QTemporaryFile::open`, 4-mal `%d` mit `qsizetype`, ein Kommentar mit
+    `\` am Zeilenende — in `test_audio_es_input`, `test_audio_order_reset`,
+    `test_framerate_hint`, `test_h26x_framerate`, `test_mpeg2order`,
+    `test_segshape`, `test_subtitle_core`. Compiler und Qt waren seit dem
+    2026-09-23 unverändert; seit wann die Warnungen bestanden, ist nicht
+    gemessen.
+  - Warum unbemerkt: der Bau ist inkrementell, eine nicht neu übersetzte
+    Datei wiederholt ihre Warnungen nicht; und der Release-Vollbau
+    (`cmake --build build`) enthält die Prüfprogramme nicht — die übersetzt
+    erst `run-gates.sh`, dessen Bauprotokoll niemand auswertete.
+  - Behoben: ein gescheitertes Öffnen lässt das Prüfprogramm mit einer
+    Meldung scheitern statt mit leeren Daten weiterzulaufen; die Formate
+    bekommen `int`. Vollständiger Neubau (`all` + `diag`, 1174 Schritte):
+    0 Warnungen.
+  - `run-gates.sh` gibt nach dem Bau und unter der Urteilszeile aus:
+    „build: N compiler warnings in M files compiled in this run". Ausprobiert
+    mit einer absichtlichen Warnung (1 in 1), ohne (0 in 1), ohne Änderung
+    (0 in 0) und mit `--no-build` („skipped"). Der Rückgabewert bleibt davon
+    unberührt.
+
 - **Gate-Läufer: ein Gate je Programm** → **DONE (2026-10-10, branch
   `chore/one-gate-per-program`)**. The gate table had grown to 150 rows; 36
   of them were one of several ways to run the same program (the abort
