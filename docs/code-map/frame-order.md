@@ -1,6 +1,6 @@
 ---
-base_commit: 4fa1aba8d44cf9ff01c9743653a786b01a4ff13d
-last_verified: 2026-10-11
+base_commit: f10b1558f14e42f3abdc0b7d71fae3ed6c68efe0
+last_verified: 2026-10-13
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttframepositiontext.h
@@ -154,7 +154,7 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 
 - **`TTCutItem::mCutInIndex / mCutOutIndex`** — assumes: stores whatever integer TTCurrentFrame had as `currentPosition` at the moment the user pressed Set Cut-In / Set Cut-Out. No conversion is performed. For every codec this is a display position (navigation is display-order). `TTESSmartCut::analyzeCutPoints` converts it to a decode-order AU via `mDisplayMap.displayToDecode()` before it reaches `TTNaluParser::accessUnitAt()`, which only takes decode-order AU indices.
 
-- **`TTNaluParser::mAccessUnits`** — assumes: populated in bitstream (decode) order. `TTAccessUnit::index == decodeIndex` (a sequential decode-order counter), NOT a POC-sorted display index (the header comment "display order based on POC" is wrong). **POC is NOT computed at all (verified 2026-06-08): `currentAU.poc` is hard-set to `-1` everywhere; `pic_order_cnt_type` is read from the SPS but no per-frame POC is derived.** So there is currently no display-order information available from the parser without either implementing POC or a decode pass. `findKeyframeBefore(n)` and `findKeyframeAfter(n)` scan linearly in decode order. Display order is not derived here; it comes from `TTDisplayOrderMap` (built from the libav parser's `output_picture_number`).
+- **`TTNaluParser::mAccessUnits`** — assumes: populated in bitstream (decode) order. `TTAccessUnit::index == decodeIndex` (a sequential decode-order counter), NOT a POC-sorted display index (the header comment "display order based on POC" is wrong). **POC is NOT computed at all (verified 2026-06-08): `currentAU.poc` is hard-set to `-1` everywhere; `pic_order_cnt_type` is read from the SPS but no per-frame POC is derived.** So there is currently no display-order information available from the parser without either implementing POC or a decode pass. An access unit ends at an AUD or at a slice with `first_mb_in_slice == 0` **only once it holds a slice**; NAL units collected without one (an AUD + SEI whose slice lost its start code) stay and open the next access unit — the split libav's parser makes, so parser and `TTFrameIndexer` count the same pictures (gate `au_without_slice`). `findKeyframeBefore(n)` and `findKeyframeAfter(n)` scan linearly in decode order. Display order is not derived here; it comes from `TTDisplayOrderMap` (built from the libav parser's `output_picture_number`).
 
 - **`TTFFmpegWrapper::seekToFrame(n)`** — does NOT seek to the keyframe of the GOP that displays at position n. `n` is a decode-order AU index into `mBundle.index`: it seeks to the keyframe of the GOP that **decodes at or before** AU n (one further keyframe back unless `mSearchMode` is set, for DPB prefill). `decodeFrame` passes `targetAU = displayToTargetAU(displayPos)`, so the user-visible position is mapped before this call; seeking by a display position directly would land on the wrong GOP.
 

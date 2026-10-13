@@ -44,7 +44,11 @@ static QStringList loadAndReport(const QString& video, const QString& workDir,
   const QString project = QDir(workDir).absoluteFilePath(tag + ".ttcut");
   {
     QFile p(project);
-    p.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
+    if (!p.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+      check(false, "cannot write " + project);
+      *finished = false;
+      return QStringList();
+    }
     QTextStream(&p)
       << "<!DOCTYPE TTCut-Projectfile>\n<TTCut-Projectfile>\n <Version>1.0</Version>\n <Video>\n"
       << "  <Order>0</Order>\n  <Name>" << copy << "</Name>\n"

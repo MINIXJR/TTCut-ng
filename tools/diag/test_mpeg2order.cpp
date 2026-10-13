@@ -34,21 +34,23 @@ int main(int argc, char** argv)
     addGop(valid); addPic(valid, 2); addPic(valid, 0); addPic(valid, 1);
     addGop(valid); addPic(valid, 1); addPic(valid, 0);
     QFile fv("/tmp/mpeg2order_valid.bin");
-    fv.open(QIODevice::WriteOnly); fv.write(valid); fv.close();
+    if (!fv.open(QIODevice::WriteOnly)) { printf("FAIL: cannot write %s\n", qPrintable(fv.fileName())); return 1; }
+    fv.write(valid); fv.close();
 
     QVector<int> expect{2, 0, 1, 4, 3};
     QVector<int> got = TTMkvMergeProvider::buildMpeg2DisplayOrder(fv.fileName());
-    if (got == expect) printf("PASS: valid stream -> %d entries as expected\n", got.size());
-    else { printf("FAIL: valid stream, got %d entries\n", got.size()); fails++; }
+    if (got == expect) printf("PASS: valid stream -> %d entries as expected\n", static_cast<int>(got.size()));
+    else { printf("FAIL: valid stream, got %d entries\n", static_cast<int>(got.size())); fails++; }
 
     QByteArray broken;
     addGop(broken); addPic(broken, 0); addPic(broken, 0); addPic(broken, 2);
     QFile fb("/tmp/mpeg2order_broken.bin");
-    fb.open(QIODevice::WriteOnly); fb.write(broken); fb.close();
+    if (!fb.open(QIODevice::WriteOnly)) { printf("FAIL: cannot write %s\n", qPrintable(fb.fileName())); return 1; }
+    fb.write(broken); fb.close();
 
     got = TTMkvMergeProvider::buildMpeg2DisplayOrder(fb.fileName());
     if (got.isEmpty()) printf("PASS: broken permutation -> empty list (fallback)\n");
-    else { printf("FAIL: broken stream returned %d entries\n", got.size()); fails++; }
+    else { printf("FAIL: broken stream returned %d entries\n", static_cast<int>(got.size())); fails++; }
 
     QFile::remove(fv.fileName()); QFile::remove(fb.fileName());
     return fails;

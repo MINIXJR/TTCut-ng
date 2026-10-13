@@ -753,38 +753,25 @@ void TTNaluParser::buildAccessUnits()
 
     int auCount = 0;
     int currentGop = 0;
+    bool currentHasSlice = false;
 
     for (int i = 0; i < mNalUnits.size(); i++) {
         const TTNalUnit& nal = mNalUnits[i];
 
         // Check for AU boundary
-        // An AU starts with:
+        // An AU that holds a slice ends at:
         // - AUD (Access Unit Delimiter)
         // - Or a slice NAL where first_mb_in_slice == 0 (first slice of picture)
-        // - Or parameter sets followed by a slice
+        // An AU without a slice does not end: a slice whose start code was
+        // destroyed by a transmission error leaves only AUD (+ SEI) behind,
+        // and those NAL units belong to the next picture. libav splits the
+        // same way; TTESSmartCut needs this parser and libav's packets to
+        // count the same pictures.
 
-        bool isAUStart = false;
+        const bool isAUStart = currentHasSlice &&
+            (nal.isAUD || (nal.isSlice && nal.firstMbInSlice == 0));
 
-        if (nal.isAUD) {
-            isAUStart = true;
-        } else if (nal.isSlice && nal.firstMbInSlice == 0) {
-            // First slice of a new picture
-            if (!currentAU.nalIndices.isEmpty()) {
-                // Check if we already have slices in current AU
-                bool hasSlice = false;
-                for (int idx : currentAU.nalIndices) {
-                    if (mNalUnits[idx].isSlice) {
-                        hasSlice = true;
-                        break;
-                    }
-                }
-                if (hasSlice) {
-                    isAUStart = true;
-                }
-            }
-        }
-
-        if (isAUStart && !currentAU.nalIndices.isEmpty()) {
+        if (isAUStart) {
             // Save current AU
             currentAU.startOffset = mNalUnits[currentAU.nalIndices.first()].fileOffset;
             int lastIdx = currentAU.nalIndices.last();
@@ -802,6 +789,7 @@ void TTNaluParser::buildAccessUnits()
             currentAU.sliceType = -1;
             currentAU.poc = -1;
             currentAU.isFieldCoded = false;
+            currentHasSlice = false;
 
             // Check for new GOP
             if (nal.isKeyframe) {
@@ -812,6 +800,7 @@ void TTNaluParser::buildAccessUnits()
 
         // Add NAL to current AU
         currentAU.nalIndices.append(i);
+        if (nal.isSlice) currentHasSlice = true;
 
         // Update AU properties from slice info
         if (nal.isKeyframe) {

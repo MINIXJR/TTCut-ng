@@ -68,7 +68,11 @@ int main(int argc, char** argv)
         : static_cast<TTH26xVideoStream*>(new TTH264VideoStream(fi));
 
     QTemporaryFile cap;
-    cap.open();
+    if (!cap.open()) {
+      check(false, name + ": cannot create the file that captures the log");
+      delete s;
+      continue;
+    }
     fflush(stderr);
     const int saved = dup(2);
     dup2(cap.handle(), 2);

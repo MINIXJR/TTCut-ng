@@ -180,7 +180,7 @@ static void checkBrokenHeader(const QString& dir)
     return;
   }
   QFile f(in);
-  f.open(QIODevice::ReadWrite);
+  if (!f.open(QIODevice::ReadWrite)) { check(false, "H3: cannot open " + in); return; }
   QByteArray d = f.readAll();
   const int off = 1000 * 576;                          // frame 1000 of 2500
   d[off + 2] = char((uchar(d[off + 2]) & 0x0F) | 0xF0); // bit rate index 15 (invalid)
@@ -201,7 +201,7 @@ static void checkAudioSearch(const QString& dir)
   for (const char* name : {"rec.264", "rec.aac", "rec.eac3", "rec.m4a", "rec.dts",
                            "rec.mp2", "rec_2.mpa", "rec.mp3", "rec_deu.ac3"}) {
     QFile f(sub + "/" + name);
-    f.open(QIODevice::WriteOnly);
+    if (!f.open(QIODevice::WriteOnly)) { check(false, "H2: cannot create " + f.fileName()); return; }
     f.close();
   }
   QStringList found;
@@ -226,7 +226,10 @@ static void checkAudioChangeMarker(const QString& dir, int rate)
     return;
   }
   QFile out(in), a(st), b(ch);
-  out.open(QIODevice::WriteOnly); a.open(QIODevice::ReadOnly); b.open(QIODevice::ReadOnly);
+  if (!out.open(QIODevice::WriteOnly) || !a.open(QIODevice::ReadOnly) || !b.open(QIODevice::ReadOnly)) {
+    check(false, QString("H4 %1 Hz: cannot open the material").arg(rate));
+    return;
+  }
   out.write(a.readAll()); out.write(b.readAll()); out.close();
 
   TTAudioStream* s = openAudio(in);
@@ -267,13 +270,15 @@ static void checkAudioChangeTransition(const QString& dir)
   }
   auto bytes = [](const QString& path) {
     QFile f(path);
-    f.open(QIODevice::ReadOnly);
-    return f.readAll();
+    return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
   };
   const int frameBytes = 1536;                         // 384 kbit/s at 48 kHz
   const QByteArray d51 = bytes(a), d50 = bytes(b), d20 = bytes(c);
   QFile out(in);
-  out.open(QIODevice::WriteOnly);
+  if (d51.isEmpty() || d50.isEmpty() || d20.isEmpty() || !out.open(QIODevice::WriteOnly)) {
+    check(false, "transition: cannot read the material or write " + in);
+    return;
+  }
   out.write(d51);
   out.write(d50.left(2 * frameBytes));                 // 2 frames 5.0: transition
   out.write(d20);

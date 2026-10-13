@@ -26,7 +26,9 @@
 # TempDirPath cannot leak in, and the log file a harness inspects is its own.
 # The CMake targets a gate needs are built first, so no stale binary from an
 # earlier session is ever run (tools/diag binaries are gitignored and
-# invisible to git status).
+# invisible to git status). The run prints the compiler warnings of that
+# build and the number of files it compiled, after the build and again below
+# the verdict line; the count does not change the exit code.
 #
 # Deliberately NOT in the table:
 #   need a display (refuse offscreen): test_dialog_then_cut,
@@ -161,6 +163,7 @@ demux_slotplan         unit  120  -
 demux_slot_e2e         unit  300  -
 demux_trailing_nulls   unit  60   -
 demux_glyph_lookup     unit  60   -
+au_without_slice       unit  600  test_au_count_match
 vdr_example_names      unit  120  -
 ocr_glyphs_selftest    unit  60   -
 ffmpeg_edge_packets    unit  120  -
@@ -479,6 +482,11 @@ gate_demux_slotplan()        { need "$DEMUX"; "$D/gate_demux_slotplan.sh"; }
 gate_demux_slot_e2e()        { need "$DEMUX" "$AUDIOFIX"; "$D/gate_demux_slot_e2e.sh"; }
 gate_demux_trailing_nulls()  { need "$DEMUX"; "$D/gate_demux_trailing_nulls.sh"; }
 gate_demux_glyph_lookup()    { need "$DEMUX"; "$D/gate_demux_glyph_lookup.sh"; }
+# A picture without a slice NAL (slice start code damaged) must not make the
+# recording uncuttable; one generated recording per codec.
+gate_au_without_slice() { cases 300 au_without_slice_h264 au_without_slice_hevc; }
+case_au_without_slice_h264() { need "$DEMUX" "$AUDIOFIX"; "$D/gate_au_without_slice.sh" h264; }
+case_au_without_slice_hevc() { need "$DEMUX" "$AUDIOFIX"; "$D/gate_au_without_slice.sh" hevc; }
 gate_vdr_example_names()     { need "$DEMUX"; "$D/gate_vdr_example_names.sh" "$W"; }
 # Edge-repair rules and line bands of the subtitle glyph repair (needs Pillow).
 gate_ocr_glyphs_selftest() {
@@ -1005,7 +1013,14 @@ if [ $BUILD -eq 1 ]; then
   { "${runner[@]}" cmake --build "$ROOT/build" && \
     { [ -z "$targets" ] || "${runner[@]}" cmake --build "$ROOT/build" --target $targets; }; } > "$RUN/build.log" 2>&1 \
     || { echo "BUILD FAILED - see $RUN/build.log"; tail -n 20 "$RUN/build.log"; exit 1; }
+  # The build is incremental: a file that was not compiled in this run does
+  # not repeat its warnings. The number of compiled files says how much the
+  # warning count covers - only after "rm -rf build" is it the whole tree.
+  build_note="build: $(grep -c 'warning:' "$RUN/build.log") compiler warnings in $(grep -cE 'Building (C|CXX) object' "$RUN/build.log") files compiled in this run ($RUN/build.log)"
+else
+  build_note="build: skipped (--no-build)"
 fi
+echo "$build_note"
 
 pass=0; fail=0; skip=0
 printf '%-8s %-24s %8s\n' VERDICT GATE TIME
@@ -1037,6 +1052,7 @@ while read -r name tier secs targets; do
 done < <(table)
 
 echo "---- $pass PASS, $fail FAIL, $skip SKIP  (logs: $RUN)"
+echo "$build_note"
 [ $fail -gt 0 ] && exit 1
 [ $skip -gt 0 ] && exit 2
 exit 0

@@ -48,9 +48,9 @@
 // a fresh XDG_CONFIG_HOME and QT_QPA_PLATFORM=offscreen:
 //
 //   cp $TMP/two_tracks.ttcut $TMP/work/roundtrip.ttcut
-//   XDG_CONFIG_HOME=$TMP/config QT_QPA_PLATFORM=offscreen \
-//     tools/diag/test_audio_order_reset $TMP/work/roundtrip.ttcut \
-//       $TMP/probe.srt $TMP/work
+//   XDG_CONFIG_HOME=$TMP/config QT_QPA_PLATFORM=offscreen
+//     tools/diag/test_audio_order_reset $TMP/work/roundtrip.ttcut
+//       $TMP/probe.srt $TMP/work                         (one command line)
 //
 // Expected (fixed build): step 0 shows the .ttcut order (eng first — project
 // order wins), steps 2-5 and phase B all report [kept].

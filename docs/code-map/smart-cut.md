@@ -1,6 +1,6 @@
 ---
-base_commit: 4fa1aba8d44cf9ff01c9743653a786b01a4ff13d
-last_verified: 2026-10-11
+base_commit: f10b1558f14e42f3abdc0b7d71fae3ed6c68efe0
+last_verified: 2026-10-13
 sources:
   - common/ttexception.cpp
   - data/tth26xcuttask.cpp
@@ -207,7 +207,13 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 - **`TTESSmartCut::smartCutFrames`** — assumes: the injected or self-built
   `TTDisplayOrderMap` has exactly `frameCount()` entries; hard-fails otherwise
   (a misaligned map cannot cut accurately). Guarantees: all indices below it are
-  decode-order AU indices.
+  decode-order AU indices. The two counts come from two splitters —
+  `TTNaluParser::buildAccessUnits` and libav's packets (`TTFrameIndexer`).
+  They agree on a picture whose slice start code is destroyed: the parser
+  closes an access unit only once it holds a slice, so the left-over AUD + SEI
+  open the next one, as in libav's packet (gate `au_without_slice`, H.264 and
+  HEVC). In a stream copy those damaged bytes are written with the next
+  picture. Any other disagreement still ends in the hard failure.
 
 - **Who owns the engine on the abort path** — the two callers differ, and
   getting it wrong leaks the whole engine with every decoded frame it still
