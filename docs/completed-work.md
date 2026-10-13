@@ -144,6 +144,48 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Smart Cut (H.264 / H.265)
 
+- **Ein Bild ohne Slice machte die ganze Aufnahme unschneidbar** → **DONE
+  (2026-10-13, Zweig `fix/h26x-au-without-slice`)**, Spec
+  `docs/superpowers/specs/2026-10-13-au-without-slice-design.md`.
+  - Anlass: „The Rookie 07x12" (H.264 720p50, 5 VDR-Dateien, 500 s
+    Signalverlust) — jeder Schnitt endete mit „display-order map unavailable
+    or misaligned (map 184960 vs 184961 AUs)".
+  - Gemessen (master `5ea3d899`, frischer Demux): die zwei Bild-Zerleger
+    unterscheiden sich an genau einer Stelle. AU 139452 (Dateiposition
+    3810673552, in `es_missing_ranges` 139093-139964) bestand nur aus AUD und
+    einer SEI von 16866 Bytes; vor den Slice-Bytes steht `00 04 00 01` statt
+    eines Startcodes. `TTNaluParser::buildAccessUnits` begann bei jedem AUD
+    ein neues Bild und zählte dieses mit; libav (`TTFrameIndexer`, daraus die
+    Anzeige-Tabelle) hängt die Bytes vor das nächste Paket (54134 = 16872 +
+    37262). Alle übrigen 184960 Startpositionen deckten sich.
+  - Ein einzelner solcher Fehler in einer sonst heilen Aufnahme reicht:
+    erzeugte TS mit AUDs (libx264 und libx265), ein Slice-Startcode auf
+    `00 04 01` gesetzt, durch `ttcut-demux` → Parser 500, Indexer 499, Schnitt
+    rc 1; die unbeschädigte TS zählt gleich. `ttcut-demux` meldet die Stelle
+    von selbst (`es_missing_ranges=251-252:20`), ein eigener Marker war
+    deshalb nicht nötig.
+  - Änderung: ein AU endet an einem AUD oder an einem Slice mit
+    `first_mb_in_slice == 0` nur noch, wenn es schon ein Slice enthält; die
+    Einheiten ohne Slice gehören zum nächsten Bild — die Zerlegung, die libav
+    macht. Gilt für H.264 und H.265 (eine Funktion).
+  - Belege: Gate `au_without_slice` (Fälle h264/hevc, je drei Prüfungen;
+    am alten Stand je zwei rot: 500 gegen 499, Schnitt rc 1), Prüfprogramm
+    `test_au_count_match`. AU-Auflistung vorher/nachher an Aufnahmen mit
+    AUDs (jedes Bild beginnt mit einem): Moon Crash (PAFF, 158531 Bilder),
+    ServusTV (MBAFF, 162530), Designermode (HEVC 2160p50, 178224) gleich,
+    beide Zerleger zählen dort gleich; 07x12 gleich bis auf die zwei AUs,
+    die eines wurden. Die sieben Tux-Videos sind ebenfalls gleich, tragen
+    aber keine AUDs und prüfen damit nur den Zweig „erstes Slice". 07x12 mit
+    dem Korpus-Projekt geschnitten (45616–144623, enthält die Stelle): rc 0,
+    99008 Bilder, 1980,17 s; die SEI (16863 Bytes) und das Slice (37215
+    Bytes) stehen unverändert in der Ausgabe; Dekodierung des Abschnitts
+    zwischen den Schlüsselbildern 139114 und 139768: 203 Fehlerzeilen in der
+    Quelle, 203 in der MKV, je Art gleich viele.
+  - Nicht geprüft: der Ton der geschnittenen 07x12; ein Schnitt der drei
+    Vergleichsaufnahmen mit dem neuen Stand; ob die zwei Zerleger noch auf
+    andere Weise verschieden zählen können — die Prüfung in `smartCutFrames`
+    bleibt dafür stehen.
+
 - **Bit-Stream-API in `extern/` vereinheitlichen** → **DONE (2026-09-23,
   Zweig `refactor/bitstream-unification`)**, Spec
   `docs/superpowers/specs/2026-09-23-bitstream-unification-design.md`.

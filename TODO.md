@@ -39,10 +39,15 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     — bei so einer Datei sitzt der Schnitt einen Rahmen daneben.
     `ttcut-demux` erzeugt solche Dateien nicht mehr (Stille-Rahmen mit dem
     Kopf der Spur); eine fremde ES kann so beginnen.
-  - **„The Rookie 07x12" lässt sich nicht schneiden**: TTCut-ng meldet
-    „display-order map … misaligned" (bestand schon vorher). Der Ton der ES
-    ist geprüft (ganze Aufnahme −21 bis +19 ms), die Kette bis zur MKV dort
-    nicht.
+  - **„The Rookie 07x12": nach dem Schnitt offen** (die Aufnahme lässt sich
+    seit 2026-10-13 schneiden, siehe `docs/completed-work.md`, „Ein Bild
+    ohne Slice …"). Der Ton der ES ist geprüft (ganze Aufnahme −21 bis
+    +19 ms), der Ton der geschnittenen MKV nicht. In den Störzonen der MKV
+    liest ffprobe rückwärts laufende DTS: 105 Stellen, alle in den Minuten
+    30–32 des Schnitts (dort liegen die Störzonen), 0 in einem heilen
+    Abschnitt (600–630 s). Sie liegen auch vor der Stelle mit dem Bild ohne
+    Slice, hängen also nicht an ihr. Ob ein Abspieler daran stolpert, ist
+    nicht geprüft; Ursache nicht untersucht.
   - **Nicht nachgemessen:** die Untertitel-Zeitachse nach dem neuen Bezug
     (H.264/H.265: Bild 0 ist das erste Paket, 140 ms später als bisher auf
     „Das Erste HD"); die Schwellen des Urteils „SEVERELY DAMAGED" gegen die

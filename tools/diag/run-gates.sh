@@ -161,6 +161,7 @@ demux_slotplan         unit  120  -
 demux_slot_e2e         unit  300  -
 demux_trailing_nulls   unit  60   -
 demux_glyph_lookup     unit  60   -
+au_without_slice       unit  600  test_au_count_match
 vdr_example_names      unit  120  -
 ocr_glyphs_selftest    unit  60   -
 ffmpeg_edge_packets    unit  120  -
@@ -479,6 +480,11 @@ gate_demux_slotplan()        { need "$DEMUX"; "$D/gate_demux_slotplan.sh"; }
 gate_demux_slot_e2e()        { need "$DEMUX" "$AUDIOFIX"; "$D/gate_demux_slot_e2e.sh"; }
 gate_demux_trailing_nulls()  { need "$DEMUX"; "$D/gate_demux_trailing_nulls.sh"; }
 gate_demux_glyph_lookup()    { need "$DEMUX"; "$D/gate_demux_glyph_lookup.sh"; }
+# A picture without a slice NAL (slice start code damaged) must not make the
+# recording uncuttable; one generated recording per codec.
+gate_au_without_slice() { cases 300 au_without_slice_h264 au_without_slice_hevc; }
+case_au_without_slice_h264() { need "$DEMUX" "$AUDIOFIX"; "$D/gate_au_without_slice.sh" h264; }
+case_au_without_slice_hevc() { need "$DEMUX" "$AUDIOFIX"; "$D/gate_au_without_slice.sh" hevc; }
 gate_vdr_example_names()     { need "$DEMUX"; "$D/gate_vdr_example_names.sh" "$W"; }
 # Edge-repair rules and line bands of the subtitle glyph repair (needs Pillow).
 gate_ocr_glyphs_selftest() {

@@ -5,6 +5,13 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **A recording with one unreadable picture can be cut again (H.264/H.265).**
+  When a transmission error destroys the start code in front of a picture's
+  data, the picture is left as a delimiter without data. TTCut-ng counted it
+  as a picture in one place and not in another and then refused every cut of
+  the whole recording ("display-order map unavailable or misaligned"). Both
+  places count alike now. `ttcut-demux` reports the lost picture in the
+  `.info` as before.
 - **A project name typed without extension was saved under two names.** The
   first save wrote the file as typed, while the title and the remembered
   name already carried `.ttcut`; the next save then wrote a second file.

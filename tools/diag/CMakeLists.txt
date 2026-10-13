@@ -302,6 +302,7 @@ diag_tool(test_audioprogress   AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_ac3_reencode    AV SOURCES ${AUDIOCUT_SRC} ${AUDIOREPAIR_SRC} ${AC3REENC_SRC})
 diag_tool(test_rawmap          AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_frameindex_dump AV SOURCES ${WRAPPER_SRC})
+diag_tool(test_au_count_match  AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_probe_video     AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_adopt_paff      AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_index_bundle_adopt AV SOURCES ${WRAPPER_SRC})
@@ -545,7 +546,7 @@ add_custom_target(diag DEPENDS
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_track_persist test_track_language test_track_gui test_preview_clip_index test_preview_window_in_cut test_preview_drift_rows test_repair_window_edge test_marker_delete_repair test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_aspect_hint test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
   test_audiorepair_cut test_repairdialog_model test_audio_es_input test_donorfill_app
-  test_frameindex_dump test_h26x_idr_before test_h26x_framerate test_framerate_hint test_mpeg2_decoder_contract test_subtitle_core test_logging test_navigator_refresh test_adopt_paff test_index_bundle_adopt test_rawmap
+  test_frameindex_dump test_au_count_match test_h26x_idr_before test_h26x_framerate test_framerate_hint test_mpeg2_decoder_contract test_subtitle_core test_logging test_navigator_refresh test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args
   test_mpv_channels test_mkvmux_inputs test_mkvmux test_mux_script test_partial_track
   test_mka_interleave test_mpeg2_framerate test_project_missing_video
