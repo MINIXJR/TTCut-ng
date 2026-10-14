@@ -52,79 +52,79 @@
 <context>
     <name>TTAVData</name>
     <message>
-        <location filename="../data/ttavdata.cpp" line="195"/>
+        <location filename="../data/ttavdata.cpp" line="200"/>
         <source>exception in createAVDataItem!</source>
         <translation>Ausnahme in createAVDataItem!</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="380"/>
+        <location filename="../data/ttavdata.cpp" line="385"/>
         <source>Affected regions:</source>
         <translation>Betroffene Regionen:</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="387"/>
+        <location filename="../data/ttavdata.cpp" line="392"/>
         <source>errors</source>
         <translation>Fehler</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="392"/>
+        <location filename="../data/ttavdata.cpp" line="397"/>
         <source>more regions</source>
         <translation>weitere Regionen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="401"/>
+        <location filename="../data/ttavdata.cpp" line="406"/>
         <source>Stream Integrity Warning</source>
         <translation>Stream-Integritätswarnung</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="675"/>
+        <location filename="../data/ttavdata.cpp" line="680"/>
         <source>Import as Stream Points</source>
         <translation>Als Landezonen übernehmen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="500"/>
+        <location filename="../data/ttavdata.cpp" line="505"/>
         <source>Audio data error: %1–%2 (%3)</source>
         <translation>Ton-Datenfehler: %1–%2 (%3)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="654"/>
+        <location filename="../data/ttavdata.cpp" line="659"/>
         <source>%1 defective frames in %2 groups detected.
 </source>
         <translation>%1 defekte Frames in %2 Gruppen erkannt.
 </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="665"/>
+        <location filename="../data/ttavdata.cpp" line="670"/>
         <source>more groups</source>
         <translation>weitere Gruppen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="668"/>
+        <location filename="../data/ttavdata.cpp" line="673"/>
         <source>Defective Frames Detected</source>
         <translation>Defekte Frames erkannt</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="914"/>
+        <location filename="../data/ttavdata.cpp" line="919"/>
         <source>Audio</source>
         <translation>Ton</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="996"/>
+        <location filename="../data/ttavdata.cpp" line="1001"/>
         <source>Subtitle</source>
         <translation>Untertitel</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1092"/>
+        <location filename="../data/ttavdata.cpp" line="1097"/>
         <source>starting thread pool</source>
         <translation>Starte Thread-Pool</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1142"/>
+        <location filename="../data/ttavdata.cpp" line="1147"/>
         <source>Tracks not opened</source>
         <translation>Spuren nicht geöffnet</translation>
     </message>
     <message numerus="yes">
-        <location filename="../data/ttavdata.cpp" line="1143"/>
+        <location filename="../data/ttavdata.cpp" line="1148"/>
         <source>%n track(s) could not be opened and were skipped:
 
 %1</source>
@@ -138,7 +138,7 @@
         </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1153"/>
+        <location filename="../data/ttavdata.cpp" line="1158"/>
         <source>No frame rate from a .info file and none in the video stream (SPS timing).
 Assumed %1 fps for:
 
@@ -153,27 +153,27 @@ Angenommen: %1 fps für:
 Schnitte und Tonpositionen sind falsch, wenn die echte Bildrate abweicht. Die Aufnahme mit ttcut-demux demuxen, um eine .info-Datei mit der Bildrate zu erhalten.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1170"/>
+        <location filename="../data/ttavdata.cpp" line="1175"/>
         <source>exiting thread pool</source>
         <translation>Thread-Pool wird beendet</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1573"/>
+        <location filename="../data/ttavdata.cpp" line="1578"/>
         <source>Preview cancelled</source>
         <translation>Vorschau abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1575"/>
+        <location filename="../data/ttavdata.cpp" line="1580"/>
         <source>Preview not possible</source>
         <translation>Vorschau nicht möglich</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1618"/>
+        <location filename="../data/ttavdata.cpp" line="1623"/>
         <source>Cut %1: audio burst at the end (%2 dB)</source>
         <translation>Schnitt %1: Audio-Burst am Ende (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1621"/>
+        <location filename="../data/ttavdata.cpp" line="1626"/>
         <source>Cut %1: audio burst at the start (%2 dB)</source>
         <translation>Schnitt %1: Audio-Burst am Anfang (%2 dB)</translation>
     </message>
@@ -198,36 +198,36 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">Audio-Burst Warnung</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1662"/>
+        <location filename="../data/ttavdata.cpp" line="1667"/>
         <source>Cut anyway</source>
         <translation>Trotzdem schneiden</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1663"/>
+        <location filename="../data/ttavdata.cpp" line="1668"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1803"/>
-        <location filename="../data/ttavdata.cpp" line="1815"/>
-        <location filename="../data/ttavdata.cpp" line="1957"/>
-        <location filename="../data/ttavdata.cpp" line="2459"/>
-        <location filename="../data/ttavdata.cpp" line="2657"/>
+        <location filename="../data/ttavdata.cpp" line="1808"/>
+        <location filename="../data/ttavdata.cpp" line="1820"/>
+        <location filename="../data/ttavdata.cpp" line="1962"/>
+        <location filename="../data/ttavdata.cpp" line="2464"/>
+        <location filename="../data/ttavdata.cpp" line="2662"/>
         <source>Cut cancelled</source>
         <translation>Schnitt abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1850"/>
+        <location filename="../data/ttavdata.cpp" line="1855"/>
         <source>Initializing MPEG-2 cut...</source>
         <translation>Initialisiere MPEG-2-Schnitt...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1850"/>
+        <location filename="../data/ttavdata.cpp" line="1855"/>
         <source>Cutting MPEG-2 video...</source>
         <translation>Schneide MPEG-2-Video...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2178"/>
+        <location filename="../data/ttavdata.cpp" line="2183"/>
         <source>Cut result discarded</source>
         <translation>Schnittergebnis verworfen</translation>
     </message>
@@ -236,34 +236,34 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">der Reparaturbereich %1-%2 überschneidet eine Schnittgrenze – Reparaturbereich oder Schnittpunkte anpassen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3183"/>
+        <location filename="../data/ttavdata.cpp" line="3188"/>
         <source>Audio track %1: %2</source>
         <translation>Tonspur %1: %2</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3207"/>
+        <location filename="../data/ttavdata.cpp" line="3212"/>
         <source>Audio track %1: the audio cut itself failed (see the log for the libav error)</source>
         <translation>Tonspur %1: der Tonschnitt selbst ist fehlgeschlagen (libav-Fehler siehe Log)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3215"/>
+        <location filename="../data/ttavdata.cpp" line="3220"/>
         <source>Audio track %1: repairs applied: %2 (frames replaced: %3)</source>
         <translation>Tonspur %1: angewendete Reparaturen: %2 (ersetzte Frames: %3)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3219"/>
+        <location filename="../data/ttavdata.cpp" line="3224"/>
         <source>, outside the cut: %1</source>
         <translation>, außerhalb des Schnitts: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3223"/>
+        <location filename="../data/ttavdata.cpp" line="3228"/>
         <source>, disabled: %1</source>
         <translation>, deaktiviert: %1</translation>
     </message>
     <message>
         <location filename="../data/ttabortabletask.cpp" line="79"/>
-        <location filename="../data/ttavdata.cpp" line="1909"/>
-        <location filename="../data/ttavdata.cpp" line="1916"/>
+        <location filename="../data/ttavdata.cpp" line="1914"/>
+        <location filename="../data/ttavdata.cpp" line="1921"/>
         <location filename="../data/tth26xcuttask.cpp" line="268"/>
         <source>Cutting audio track %1 of %2...</source>
         <translation>Schneide Audiospur %1 von %2...</translation>
@@ -279,13 +279,13 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>Schneiden fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2519"/>
+        <location filename="../data/ttavdata.cpp" line="2524"/>
         <location filename="../data/tth26xcuttask.cpp" line="390"/>
         <source>Muxing failed: %1</source>
         <translation>Multiplexen fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2518"/>
+        <location filename="../data/ttavdata.cpp" line="2523"/>
         <source>MKV muxing failed</source>
         <translation>MKV-Multiplexen fehlgeschlagen</translation>
     </message>
@@ -294,27 +294,27 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">Nur %1 von %2 Tonspur(en) konnten geschnitten werden – die fertigen Spuren wurden behalten, der Grund steht im Protokoll</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2277"/>
+        <location filename="../data/ttavdata.cpp" line="2282"/>
         <source>The cut finished but its cut list is empty - cannot mux without knowing what was cut.</source>
         <translation>Der Schnitt ist fertig, aber seine Schnittliste ist leer – ohne zu wissen, was geschnitten wurde, kann nicht gemuxt werden.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2488"/>
+        <location filename="../data/ttavdata.cpp" line="2493"/>
         <source>Muxing failed: the mux task was gone</source>
         <translation>Multiplexen fehlgeschlagen: die Mux-Aufgabe war nicht mehr vorhanden</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2579"/>
+        <location filename="../data/ttavdata.cpp" line="2584"/>
         <source>Cut complete</source>
         <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2659"/>
+        <location filename="../data/ttavdata.cpp" line="2664"/>
         <source>Cut failed</source>
         <translation>Schnitt fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2660"/>
+        <location filename="../data/ttavdata.cpp" line="2665"/>
         <source>The cut could not be completed:
 
 %1</source>
@@ -323,12 +323,12 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
 %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3090"/>
+        <location filename="../data/ttavdata.cpp" line="3095"/>
         <source>deleting existing audio cut file: %1</source>
         <translation>Lösche vorhandene Audio-Schnittdatei: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="370"/>
+        <location filename="../data/ttavdata.cpp" line="375"/>
         <source>%1 decode errors detected in %2 region(s) during demux.
 
 This MPEG-2 stream has defective GOPs that may cause A/V sync issues.
@@ -339,18 +339,18 @@ Dieser MPEG-2-Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursac
 Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet und repariert solche Lücken.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1152"/>
+        <location filename="../data/ttavdata.cpp" line="1157"/>
         <source>Frame rate assumed</source>
         <translation>Bildrate angenommen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1306"/>
-        <location filename="../data/ttavdata.cpp" line="1372"/>
+        <location filename="../data/ttavdata.cpp" line="1311"/>
+        <location filename="../data/ttavdata.cpp" line="1377"/>
         <source>Project Not Loaded</source>
         <translation>Projekt nicht geladen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1307"/>
+        <location filename="../data/ttavdata.cpp" line="1312"/>
         <source>The project %1 was not loaded:
 
 %2 and %3 cannot be cut into one output.
@@ -361,7 +361,7 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
 %4</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1373"/>
+        <location filename="../data/ttavdata.cpp" line="1378"/>
         <source>The project %1 was not loaded:
 
 %2</source>
@@ -370,17 +370,17 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
 %2</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1628"/>
+        <location filename="../data/ttavdata.cpp" line="1633"/>
         <source>Cut %1: starts in %2, the cut is %3 from frame %4</source>
         <translation>Schnitt %1: beginnt in %2, der Schnitt ist ab Frame %4 %3</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1633"/>
+        <location filename="../data/ttavdata.cpp" line="1638"/>
         <source>Cut %1: ends in %2, the cut is %3 up to frame %4</source>
         <translation>Schnitt %1: endet in %2, der Schnitt ist bis Frame %4 %3</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1657"/>
+        <location filename="../data/ttavdata.cpp" line="1662"/>
         <source>Please check these cut boundaries:
 
 </source>
@@ -389,7 +389,7 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
 </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1659"/>
+        <location filename="../data/ttavdata.cpp" line="1664"/>
         <source>
 
 Use the preview to move a cut point if needed.</source>
@@ -398,27 +398,27 @@ Use the preview to move a cut point if needed.</source>
 In der Vorschau lässt sich ein Schnittpunkt bei Bedarf verschieben.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1660"/>
+        <location filename="../data/ttavdata.cpp" line="1665"/>
         <source>Cut Warnings</source>
         <translation>Schnitt-Warnungen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1676"/>
+        <location filename="../data/ttavdata.cpp" line="1681"/>
         <source>frame at an unknown position</source>
         <translation>Frame an unbekannter Position</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1681"/>
+        <location filename="../data/ttavdata.cpp" line="1686"/>
         <source>source frame %1 (%2)</source>
         <translation>Quell-Frame %1 (%2)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1683"/>
+        <location filename="../data/ttavdata.cpp" line="1688"/>
         <source>source frame %1</source>
         <translation>Quell-Frame %1</translation>
     </message>
     <message numerus="yes">
-        <location filename="../data/ttavdata.cpp" line="1697"/>
+        <location filename="../data/ttavdata.cpp" line="1702"/>
         <source>%n re-encoded frame(s) could not be adjusted to the source stream and may show artefacts:</source>
         <translation>
             <numerusform>%n neu kodierter Frame konnte nicht an den Quellstrom angepasst werden und kann Bildfehler zeigen:</numerusform>
@@ -426,12 +426,12 @@ In der Vorschau lässt sich ein Schnittpunkt bei Bedarf verschieben.</translatio
         </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1703"/>
+        <location filename="../data/ttavdata.cpp" line="1708"/>
         <source>... and %1 more</source>
         <translation>... und %1 weitere</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1707"/>
+        <location filename="../data/ttavdata.cpp" line="1712"/>
         <source>
 
 The log file lists them as &quot;SPS unification: re-encoded frame not adjusted&quot;:
@@ -442,49 +442,49 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
 %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1710"/>
+        <location filename="../data/ttavdata.cpp" line="1715"/>
         <source>Re-encoded Frames Not Adjusted</source>
         <translation>Neu kodierte Frames nicht angepasst</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1712"/>
+        <location filename="../data/ttavdata.cpp" line="1717"/>
         <source>Keep result</source>
         <translation>Ergebnis behalten</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1713"/>
+        <location filename="../data/ttavdata.cpp" line="1718"/>
         <source>Discard</source>
         <translation>Verwerfen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1714"/>
+        <location filename="../data/ttavdata.cpp" line="1719"/>
         <source>Copy to clipboard</source>
         <translation>In die Zwischenablage kopieren</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1978"/>
+        <location filename="../data/ttavdata.cpp" line="1983"/>
         <location filename="../data/tth26xcuttask.cpp" line="291"/>
         <source>Only %1 of %2 audio track(s) could be cut - the finished streams were kept.</source>
         <translation>Nur %1 von %2 Tonspur(en) konnten geschnitten werden – die fertigen Ströme wurden behalten.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1983"/>
+        <location filename="../data/ttavdata.cpp" line="1988"/>
         <location filename="../data/tth26xcuttask.cpp" line="296"/>
         <source>See the log for the reason.</source>
         <translation>Den Grund finden Sie im Log.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2085"/>
+        <location filename="../data/ttavdata.cpp" line="2090"/>
         <source>Initializing H.264/H.265 cut...</source>
         <translation>H.264/H.265-Schnitt wird initialisiert...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2085"/>
+        <location filename="../data/ttavdata.cpp" line="2090"/>
         <source>Cutting H.264/H.265 video...</source>
         <translation>Schneide H.264/H.265 Video...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3156"/>
+        <location filename="../data/ttavdata.cpp" line="3161"/>
         <source>the repair range %1-%2 reaches into cut segments with different channel layouts - adjust the repair range or the cut points</source>
         <translation>der Reparaturbereich %1-%2 reicht in Schnittsegmente mit unterschiedlicher Kanalbelegung – Reparaturbereich oder Schnittpunkte anpassen</translation>
     </message>
@@ -499,7 +499,7 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <translation>Schneide Video (Smart Cut)...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1984"/>
+        <location filename="../data/ttavdata.cpp" line="1989"/>
         <location filename="../data/tth26xcuttask.cpp" line="192"/>
         <location filename="../data/tth26xcuttask.cpp" line="297"/>
         <source>Cutting failed</source>
@@ -521,12 +521,12 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <translation>H.264/H.265 Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2718"/>
+        <location filename="../data/ttavdata.cpp" line="2723"/>
         <source>Initializing audio cut...</source>
         <translation>Audio-Schnitt initialisieren...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2724"/>
+        <location filename="../data/ttavdata.cpp" line="2729"/>
         <source>Cutting audio tracks...</source>
         <translation>Audiospuren werden geschnitten...</translation>
     </message>
@@ -1481,17 +1481,17 @@ p, li { white-space: pre-wrap; }
         <translation>⬦ ▶</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="466"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="472"/>
         <source>Add range to cut list</source>
         <translation>Bereich zur Schnittliste hinzufügen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="506"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="512"/>
         <source>Update range in cut list</source>
         <translation>Bereich in der Schnittliste aktualisieren</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="554"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="560"/>
         <source>Load logo file...</source>
         <translation>Logo-Datei laden...</translation>
     </message>
@@ -1838,32 +1838,32 @@ Nicht gespeicherte Änderungen gehen verloren.</translation>
         <translation>Projekt speichern</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="582"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="586"/>
         <source>error save project file: %1</source>
         <translation>Fehler beim Speichern der Projektdatei %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="603"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="607"/>
         <source>Save project-file as</source>
         <translation>Projekt speichern unter</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="664"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="668"/>
         <source>Exit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="665"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="669"/>
         <source>Save changes before closing?</source>
         <translation>Änderungen vor dem Schließen speichern?</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="791"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="795"/>
         <source>Keyboard Shortcuts</source>
         <translation>Tastenkürzel</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="867"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="871"/>
         <source>Audio and video length differ by %1 seconds.
 
 Video: %2
@@ -1878,49 +1878,49 @@ Audio: %3
 Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="873"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="877"/>
         <source>Length Mismatch</source>
         <translation>Längenunterschied</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="964"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="968"/>
         <source>Marker (manual)</source>
         <translation>Marker (manuell)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="971"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1099"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1104"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="975"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1103"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1108"/>
         <source>Stream Points</source>
         <translation>Stream-Punkte</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="972"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="976"/>
         <source>No video stream loaded.</source>
         <translation>Kein Videostream geladen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1013"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1017"/>
         <source>Aspect ratio (sequence headers): stream has no sequence headers (not MPEG-2) - skipped</source>
         <translation>Seitenverhältnis (Sequenzköpfe): Der Strom hat keine Sequenzköpfe (kein MPEG-2) – übersprungen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1030"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1034"/>
         <source>Pillarbox detection: the stream has no frame index - skipped</source>
         <translation>Pillarbox-Erkennung: Der Strom hat kein Bildverzeichnis – übersprungen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1057"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1061"/>
         <source>Audio anomaly scan: no AC3 track loaded - skipped</source>
         <translation>Tonanomalie-Suche: keine AC3-Spur geladen - übersprungen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1082"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1086"/>
         <source>Audio analysis (silence, format changes): no audio track loaded - skipped</source>
         <translation>Tonanalyse (Stille, Formatwechsel): Keine Tonspur geladen – übersprungen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1100"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1104"/>
         <source>No analysis could be run on this stream:
 
 %1</source>
@@ -1929,7 +1929,7 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1105"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1109"/>
         <source>No detection methods enabled. Check Settings tab.</source>
         <translation>Keine Erkennungsmethoden aktiviert. Prüfen Sie die Einstellungen.</translation>
     </message>
@@ -1942,17 +1942,17 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
         <translation type="vanished"> (Reparatur ABGESCHALTET – sie passt nicht mehr zur Tondatei)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1425"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1429"/>
         <source>Stream point analysis cancelled</source>
         <translation>Streampunkt-Analyse abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1426"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1430"/>
         <source>Stream point analysis complete</source>
         <translation>Streampunkt-Analyse abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1575"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1579"/>
         <location filename="../gui/ttcutmainwindow_headless.cpp" line="417"/>
         <source>
 
@@ -1964,12 +1964,12 @@ Quelle:  %1
 Ergebnis:  %2  (%3 entfernt)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1584"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1588"/>
         <source>Cutting Failed</source>
         <translation>Schneiden fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1585"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1589"/>
         <source>The cut did not complete.
 
 %1</source>
@@ -1978,12 +1978,12 @@ Ergebnis:  %2  (%3 entfernt)</translation>
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2445"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2449"/>
         <source>Loading logo profile (%1/%2 frames)...</source>
         <translation>Lade Logo-Profil (%1/%2 Frames)...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2459"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2463"/>
         <source>Logo profile loaded: %1</source>
         <translation>Logo-Profil geladen: %1</translation>
     </message>
@@ -2003,53 +2003,53 @@ Dieser MPEG-2-Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursac
 Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet und repariert solche Lücken.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2101"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2109"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2105"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2113"/>
         <source>Cancelled</source>
         <translation>Abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2103"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2107"/>
         <source>Finished after %1</source>
         <translation>Fertig nach %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2150"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2154"/>
         <source>calculating...</source>
         <translation>wird berechnet...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2155"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2159"/>
         <source>almost done</source>
         <translation>gleich fertig</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2167"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2171"/>
         <source>about %1</source>
         <translation>etwa %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2181"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2185"/>
         <source>Video</source>
         <translation>Video</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2182"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2186"/>
         <source>Audio</source>
         <translation>Audio</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2183"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2187"/>
         <source>Muxing</source>
         <translation>Multiplexen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2300"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2304"/>
         <source>Searching... %1 frames checked</source>
         <translation>Suche... %1 Frames geprüft</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2270"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2274"/>
         <source>Searching black frame from frame %1...</source>
         <translation>Suche Schwarzbild ab Frame %1...</translation>
     </message>
@@ -2059,12 +2059,12 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <translation>Audio Files (%1);;All Files (*)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1298"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1302"/>
         <source>Delete marker</source>
         <translation>Marker löschen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1299"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1303"/>
         <source>An audio repair is planned for this marker. Deleting the marker removes the repair as well.
 
 Delete marker and repair?</source>
@@ -2073,12 +2073,12 @@ Delete marker and repair?</source>
 Marker und Reparatur löschen?</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1317"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1321"/>
         <source>Delete all markers</source>
         <translation>Alle Marker löschen</translation>
     </message>
     <message numerus="yes">
-        <location filename="../gui/ttcutmainwindow.cpp" line="1318"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1322"/>
         <source>%n audio repair(s) are planned for these markers. Deleting the markers removes the repairs as well.
 
 Delete markers and repairs?</source>
@@ -2092,102 +2092,102 @@ Marker und Reparaturen löschen?</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2345"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2349"/>
         <source>Black frame search aborted</source>
         <translation>Schwarzbild-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2345"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2349"/>
         <source>No black frame found</source>
         <translation>Kein Schwarzbild gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2367"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2371"/>
         <source>Searching scene change from frame %1...</source>
         <translation>Suche Szenenwechsel ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2378"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2382"/>
         <source>Scene change search aborted</source>
         <translation>Szenenwechsel-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2378"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2382"/>
         <source>No scene change found</source>
         <translation>Kein Szenenwechsel gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2388"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2392"/>
         <source>Select the logo area in the video frame...</source>
         <translation>Logo-Bereich im Videobild auswählen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2402"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2406"/>
         <source>Load logo file</source>
         <translation>Logo-Datei laden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2450"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2454"/>
         <source>Loading logo profile...</source>
         <translation>Lade Logo-Profil...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2463"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2467"/>
         <source>Logo profile could not be loaded: %1</source>
         <translation>Logo-Profil konnte nicht geladen werden: %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2481"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2485"/>
         <source>Logo profile removed</source>
         <translation>Logo-Profil entfernt</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2492"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2496"/>
         <source>Logo file not found: %1</source>
         <translation>Logo-Datei nicht gefunden: %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2525"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2529"/>
         <source>Creating logo profile (%1/%2 frames)</source>
         <translation>Erstelle Logo-Profil (%1/%2 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2554"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2558"/>
         <source>Logo profile created (%1 frames)</source>
         <translation>Logo-Profil erstellt (%1 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2557"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2561"/>
         <source>Logo profile could not be created</source>
         <translation>Logo-Profil konnte nicht erstellt werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2581"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2585"/>
         <source>Searching logo change from frame %1...</source>
         <translation>Suche Logo-Wechsel ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2592"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2596"/>
         <source>Logo search aborted</source>
         <translation>Logo-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2592"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2596"/>
         <source>No logo state change found</source>
         <translation>Keine Logo-Statusänderung gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="756"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="760"/>
         <source>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Previous/Next frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame (vim-style)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %1 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Shift+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %2 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %3 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Page Up/Down&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %4 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Home / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to first frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;End / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to last frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame Types&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Ctrl+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous I-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Ctrl+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous P- or I-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame (B, P, or I)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame (same as B)&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Cutting&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-in point&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-out point&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Mouse&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mouse wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate faster&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
         <translation>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vorheriger/Nächster Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (Vim-Stil)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%1 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Shift+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%2 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%3 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Bild auf/ab&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%4 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Pos1 / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum ersten Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ende / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum letzten Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame-Typen&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Ctrl+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Ctrl+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger P- oder I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (B, P oder I)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (wie B)&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Schneiden&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-In setzen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-Out setzen&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Maus&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Frames navigieren&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Rad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Schneller navigieren&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1596"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1600"/>
         <source>Audio Cut Complete</source>
         <translation>Audio-Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1597"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1601"/>
         <source>Audio cutting has finished.
 
 %1</source>
@@ -2222,18 +2222,18 @@ Marker und Reparaturen löschen?</numerusform>
         <translation>Als Landezonen übernehmen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2402"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2406"/>
         <source>PGM Logo (*.pgm)</source>
         <translation>PGM Logo (*.pgm)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1605"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1609"/>
         <location filename="../gui/ttcutmainwindow_headless.cpp" line="422"/>
         <source>Cutting Complete</source>
         <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1606"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1610"/>
         <location filename="../gui/ttcutmainwindow_headless.cpp" line="423"/>
         <source>Video cutting has finished successfully.
 
@@ -2245,7 +2245,7 @@ Ausgabedatei:
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2197"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2201"/>
         <source>&amp;%1 %2</source>
         <translation>&amp;%1 %2</translation>
     </message>
@@ -2632,7 +2632,7 @@ Ausgabedatei:
     </message>
     <message>
         <location filename="../data/ttcutpreviewtask.cpp" line="391"/>
-        <location filename="../data/ttcutpreviewtask.cpp" line="639"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="640"/>
         <source>The preview could not be created:
 
 %1</source>
@@ -2651,7 +2651,7 @@ Ausgabedatei:
         <translation>Vorschau-Schnitte fertig</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="534"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="535"/>
         <source>The preview could not be created: this recording is too damaged for frame-accurate cutting.
 
 %1</source>
@@ -3787,7 +3787,7 @@ Ausgabedatei:
 <context>
     <name>TTCutTask</name>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="237"/>
+        <location filename="../data/ttcutvideotask.cpp" line="238"/>
         <source>No cut stream specified!</source>
         <translation>Kein Schnitt-Stream angegeben!</translation>
     </message>
@@ -3795,184 +3795,184 @@ Ausgabedatei:
 <context>
     <name>TTCutTreeView</name>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="57"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="58"/>
         <source>Notice</source>
         <translation>Hinweis</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="211"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="212"/>
         <source>Audio drift is calculated during preview (first audio track)</source>
         <translation>Audio-Drift wird bei der Vorschau berechnet (erste Audiospur)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="688"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="697"/>
         <source>Burst start+end</source>
         <translation>Burst Anfang+Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="690"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="699"/>
         <source>Burst end</source>
         <translation>Burst Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="692"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="701"/>
         <source>Burst start</source>
         <translation>Burst Anfang</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="695"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="704"/>
         <source>Audio burst at end: %1 dB (context: %2 dB)</source>
         <translation>Audio-Burst am Ende: %1 dB (Kontext: %2 dB)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="698"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="707"/>
         <source>Audio burst at start: %1 dB (context: %2 dB)</source>
         <translation>Audio-Burst am Anfang: %1 dB (Kontext: %2 dB)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="724"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="733"/>
         <source>Aspect start+end</source>
         <translation>Format Anfang+Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="726"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="735"/>
         <source>Aspect start</source>
         <translation>Format Anfang</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="728"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="737"/>
         <source>Aspect end</source>
         <translation>Format Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="731"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="740"/>
         <source>Starts in %1, the cut is %2 from frame %3 (+%4)</source>
         <translation>Beginnt in %1, der Schnitt ist ab Frame %3 %2 (+%4)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="737"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="746"/>
         <source>Ends in %1, the cut is %2 up to frame %3 (-%4)</source>
         <translation>Endet in %1, der Schnitt ist bis Frame %3 %2 (-%4)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="783"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="792"/>
         <source>AC3 start+end</source>
         <translation>AC3 Anfang+Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="785"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="794"/>
         <source>AC3 start</source>
         <translation>AC3 Anfang</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="787"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="796"/>
         <source>AC3 end</source>
         <translation>AC3 Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="791"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="800"/>
         <source>Audio format change at start: %1 → %2</source>
         <translation>Audioformatwechsel am Anfang: %1 → %2</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="795"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="804"/>
         <source>Audio format change at end: %1 → %2</source>
         <translation>Audioformatwechsel am Ende: %1 → %2</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="799"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="808"/>
         <source>
 (Will be normalized during cut)</source>
         <translation>
 (Wird beim Schnitt normalisiert)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="821"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="830"/>
         <source>Move &amp;up</source>
         <translation>Nach &amp;oben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="821"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="830"/>
         <source>Move selected cut one position upward</source>
         <translation>Verschiebt den ausgewählten Eintrag eine Position nach oben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="824"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="833"/>
         <source>&amp;Delete</source>
         <translation>&amp;Entfernen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="824"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="833"/>
         <source>Remove selected cut from list</source>
         <translation>Entfernt den ausgewählten Eintrag aus der Liste</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="827"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="836"/>
         <source>Duplicate Cut</source>
         <translation>Schnitt duplizieren</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="827"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="836"/>
         <source>Duplicate the selected cut</source>
         <translation>Dupliziert den ausgewählten Schnittpunkt</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="830"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="839"/>
         <source>Move d&amp;own</source>
         <translation>Nach &amp;unten</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="830"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="839"/>
         <source>Move selected cut one position downward</source>
         <translation>Verschiebt den ausgewählten Eintrag eine Position nach unten</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="833"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="842"/>
         <source>Edit &amp;cut</source>
         <translation>Schnitt &amp;bearbeiten</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="833"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="842"/>
         <source>Edit selected cut</source>
         <translation>Öffnet den ausgewählten Schnitt zum Bearbeiten</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="836"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="845"/>
         <source>Preview cut</source>
         <translation>Vorschau</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="836"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="845"/>
         <source>Preview selected cut</source>
         <translation>Vorschau des ausgewählten Schnittpunktes</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="839"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="848"/>
         <source>Cut selected entries</source>
         <translation>Auswahl schneiden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="839"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="848"/>
         <source>Cut the selected entries</source>
         <translation>Schneidet nur die ausgewählten Einträge</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="842"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="851"/>
         <source>Goto Cut-In</source>
         <translation>Gehe zu Cut-In</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="842"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="851"/>
         <source>Goto selected cut-in position</source>
         <translation>Zeigt die Cut-In Position des ausgewählten Eintrags an</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="845"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="854"/>
         <source>Goto Cut-Out</source>
         <translation>Gehe zu Cut-Out</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="845"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="854"/>
         <source>Goto selected cut-out position</source>
         <translation>Zeigt die Cut-Out Position des ausgewählten Eintrags an</translation>
     </message>
@@ -3990,7 +3990,7 @@ Ausgabedatei:
         <translation>Schnitt 1 von %1</translation>
     </message>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="178"/>
+        <location filename="../data/ttcutvideotask.cpp" line="179"/>
         <source>Cut %1 of %2</source>
         <translation>Schnitt %1 von %2</translation>
     </message>
@@ -4510,12 +4510,12 @@ Unterstützte Formate:
 <context>
     <name>TTQuickJumpWorker</name>
     <message>
-        <location filename="../gui/ttquickjumpworker.cpp" line="41"/>
+        <location filename="../gui/ttquickjumpworker.cpp" line="57"/>
         <source>Decoding thumbnails</source>
         <translation>Vorschaubilder werden dekodiert</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpworker.cpp" line="125"/>
+        <location filename="../gui/ttquickjumpworker.cpp" line="142"/>
         <source>Thumbnails complete</source>
         <translation>Vorschaubilder fertig</translation>
     </message>

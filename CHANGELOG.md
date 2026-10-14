@@ -2,9 +2,18 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.86.1 (2026-10-14)
+
+**Bugfix release: a recording with one unreadable picture can be cut again; runs without a window leave the settings alone**
 
 ### Fixed
+- **A recording with one unreadable picture can be cut again (H.264/H.265).**
+  When a transmission error destroys the start code in front of a picture's
+  data, the picture is left as a delimiter without data. TTCut-ng counted it
+  as a picture in one place and not in another and then refused every cut of
+  the whole recording ("display-order map unavailable or misaligned"). Both
+  places count alike now. `ttcut-demux` reports the lost picture in the
+  `.info` as before.
 - **A run without a window no longer changes your settings.** `--auto-cut`
   and `--screenshots` saved on exit like a normal session: one test cut
   left the main window un-maximized at the next start, switched the encoder
@@ -13,13 +22,6 @@ All notable changes to TTCut-ng are documented in this file.
   progress display at the start of the next H.264 cut. Such a run now reads
   your settings as before and writes into a temporary copy that is deleted at
   its end.
-- **A recording with one unreadable picture can be cut again (H.264/H.265).**
-  When a transmission error destroys the start code in front of a picture's
-  data, the picture is left as a delimiter without data. TTCut-ng counted it
-  as a picture in one place and not in another and then refused every cut of
-  the whole recording ("display-order map unavailable or misaligned"). Both
-  places count alike now. `ttcut-demux` reports the lost picture in the
-  `.info` as before.
 - **A project name typed without extension was saved under two names.** The
   first save wrote the file as typed, while the title and the remembered
   name already carried `.ttcut`; the next save then wrote a second file.
@@ -48,6 +50,11 @@ All notable changes to TTCut-ng are documented in this file.
   script without the helper next to it fell back to a fixed path of the
   author's source tree. It now takes the helper next to the script, else the
   one in `PATH`. The installed package was not affected.
+
+### Changed
+- **An unknown command-line option ends the program at once.** `ttcut-ng`
+  prints "Unknown option" and exits with code 1 before it loads anything;
+  before, the main window opened anyway.
 
 ## v0.86.0 (2026-10-11)
 
