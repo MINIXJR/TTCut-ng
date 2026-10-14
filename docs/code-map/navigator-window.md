@@ -1,5 +1,5 @@
 ---
-base_commit: b4e0150e545aa53e16ad6ca9dff5b9bfe8dbe50a
+base_commit: 65e8c5eec4917440663915389594602e5fa6734a
 last_verified: 2026-10-14
 sources:
   - gui/ttstreamnavigator.h
