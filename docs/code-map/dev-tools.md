@@ -1,5 +1,5 @@
 ---
-base_commit: 763fc714e12f17eb84aff76595a20fcbf5eb9dd4
+base_commit: a76f84b83b94052ce266a11576cc6a72e54d2d44
 last_verified: 2026-10-14
 sources:
   - build-package.sh
