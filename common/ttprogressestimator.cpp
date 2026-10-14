@@ -208,7 +208,8 @@ TTProgressEstimator::Result TTProgressEstimator::update(int stagePercent)
   // for THIS call's future-stage weights/remaining-time only. This is a
   // read-only blend: it is never written back into mCorrection itself,
   // which keeps updating solely at stage close as before. Stages with an
-  // empty calibKey (video) have estimatedMs < 0, so no in-flight ratio is
+  // empty calibKey (today only an audio stage whose file has no suffix,
+  // TTAVData's audioCalibKey) have estimatedMs < 0, so no in-flight ratio is
   // available there - effectiveCorrection just falls back to mCorrection.
   double effectiveCorrection = mCorrection;
   if (mStages[mCurrentIdx].estimatedMs > 0 && proj > 0) {

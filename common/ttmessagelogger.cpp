@@ -89,12 +89,13 @@ void TTMessageLogger::setLogFilePath(const QString& path)
 
 void TTMessageLogger::setLogFilePathLocked(const QString& path)
 {
-    // Empty → fall back to XDG default, THEN compare. Ohne diese Konvertierung
-    // VOR dem Idempotenz-Check würde z.B. TTSettings::load() (das pro App-Start
-    // dreimal mit "" aufruft, wenn der User keinen Pfad gesetzt hat) jedes Mal
-    // mLogFileOpenAttempted zurücksetzen und damit eine erneute Logrotation
-    // bei der nächsten writeMsg auslösen — Resultat: pro App-Start mehrere
-    // .log.N-Backups einer einzigen Session.
+    // Empty -> fall back to the XDG default, THEN compare. TTSettings::load()
+    // passes the stored path through configure() on every load, and it loads
+    // more than once per start (first use of the singleton, the main window's
+    // constructor). With an empty stored path and no conversion before the
+    // idempotence check, every load would reset mLogFileOpenAttempted and the
+    // next writeMsg would rotate again - several .log.N backups of a single
+    // session.
     QString newPath = path.isEmpty() ? defaultLogPath() : path;
     if (newPath == mLogFilePath) return;
 

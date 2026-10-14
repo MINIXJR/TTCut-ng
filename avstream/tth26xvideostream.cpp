@@ -163,10 +163,10 @@ int TTH26xVideoStream::createHeaderList()
         QString("%1 header list created: %2 frames, %3 GOPs")
             .arg(codecLabel()).arg(n).arg(mFrameIndexBundle.gops.size()));
 
-    // total (bytes), not a literal 100: TTThreadTask::onStatusReport() divides
-    // this by mTotalSteps (== total, set from the Start value above) to derive
-    // the individual task's own percentage() - a literal 100 here would make
-    // that division collapse to ~0% once total is in the hundreds-of-MB range.
+    // total (bytes), not a literal 100: the value keeps the unit of the Start
+    // report above. TTThreadTaskPool::onStatusReport() counts a task as
+    // complete on Finished whatever value it carries; the value only shows in
+    // the pool's debug line.
     emit statusReport(StatusReportArgs::Finished,
         tr("%1 header list created").arg(codecLabel()), total);
 

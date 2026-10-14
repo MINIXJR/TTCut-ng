@@ -8,7 +8,8 @@
 // per-operation - TTCutVideoTask::operation() takes it from
 // cutItem.avDataItem()->videoStream(), the long-lived object the display
 // widgets share. Every mAbort check clears the flag as it throws
-// (ttmpeg2videostream.cpp:121, 244, 568), so the flag only disappears if a
+// (ttmpeg2videostream.cpp: createIndexList, createHeaderListFromMpeg2,
+// transferCutObjects), so the flag only disappears if a
 // check is still reached. Cancel a preview after the stream has finished its
 // work - easy, its phases last about a second - and the flag stays set on an
 // object that outlives the operation. The next cut then aborts itself midway,

@@ -217,10 +217,10 @@ void TTCutPreviewTask::operation()
   for (int i = 0; i < numPreview; i++) {
     if (isAborted())
       // Message-only constructor deliberately: the (caller, line) overload
-      // logs at fatal level on construction (TTException::TTException(caller,
-      // line, msg) -> log->fatalMsg(), common/ttexception.cpp:31-37), which
-      // would record a deliberate user cancel as the most severe class of
-      // log event (same fix as TTH26xCutTask::abortNow(), Task 6).
+      // writes an error line on construction (TTException::TTException(caller,
+      // line, msg) -> log->errorMsg(), common/ttexception.cpp), which would
+      // record a deliberate user cancel as an error (same fix as
+      // TTH26xCutTask::abortNow(), Task 6).
   		throw TTAbortException("Task gets abort signal!");
 
     onStatusReport(this, StatusReportArgs::Step, tr("Creating preview clip %1 of %2").
@@ -456,13 +456,14 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
 
   // Local fallback engine, used only when the shared one failed to initialise
   // (operation() then leaves sharedSmartCut null). KNOWN GAP, pre-existing:
-  // this engine is never published to mpActiveSmartCut, so onUserAbort() cannot
-  // reach it and its initialize() — a full ES parse — is not cancellable. It is
-  // reached for EVERY clip, so a recording damaged enough to fail the shared
-  // init produces N uncancellable full-ES parses in a row, with a cancel only
-  // landing at the clip-loop top in operation(). Registering it would mean
-  // publishing/clearing it under mSmartCutMutex around both the initialize()
-  // and the smartCutFrames() call below, the same shape the shared engine uses.
+  // this engine is published to mpActiveSmartCut only around the
+  // smartCutFrames() call below, so onUserAbort() cannot reach its
+  // initialize() — a full ES parse, not cancellable. It is reached for EVERY
+  // clip, so a recording damaged enough to fail the shared init produces N
+  // uncancellable full-ES parses in a row, with a cancel only landing at the
+  // clip-loop top in operation(). Closing the gap would mean publishing it
+  // under mSmartCutMutex around the initialize() as well, the same shape the
+  // shared engine uses.
   TTESSmartCut localSmartCut;
   TTESSmartCut* smartCut = sharedSmartCut;
   if (!smartCut) {
