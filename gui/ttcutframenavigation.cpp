@@ -425,8 +425,6 @@ void TTCutFrameNavigation::onSetCutIn()
 
   szTemp1 += szTemp2;
   laCutInPosition->setText(szTemp1);
-
-  emit setCutIn(cutInPosition);
 }
 
 void TTCutFrameNavigation::onSetCutOut()

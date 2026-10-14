@@ -22,7 +22,7 @@ class ITTCalibrationStore;
 struct TTStagePlan
 {
   int     stage;      // StatusReportArgs::ProgressStage
-  QString calibKey;   // calibration key; empty = no persistence (video, pool)
+  QString calibKey;   // calibration key; empty = no persistence (an audio file without suffix)
   double  workUnits;  // stage work amount (media seconds, frames, ...); > 0
 };
 

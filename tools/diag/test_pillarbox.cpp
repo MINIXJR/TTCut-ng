@@ -1,7 +1,8 @@
 // Diagnostic harness for the stream-point pillarbox ("4:3 in 16:9") detection.
-// Replays the exact pixel test from TTStreamPointVideoWorker::isPillarboxFrame
-// on frames decoded through TTFFmpegWrapper, so a failing detection can be
-// pinned to either the decode path or the worker plumbing around it.
+// Runs its own copy of the pixel test of the former
+// TTStreamPointVideoWorker::isPillarboxFrame on frames decoded through
+// TTFFmpegWrapper. The program classifies with classifyAspectSample()
+// (data/ttaspectdetect.cpp) today; this copy has not been compared with it.
 //
 // usage: test_pillarbox <es-file> [firstFrame] [lastFrame] [step] [threshold]
 //
@@ -15,7 +16,7 @@
 // printed number and the classified image came from different index spaces,
 // which produced a wrong reference frame in this project's aspect-scan work.
 //
-// Build via `make test_pillarbox` in tools/diag (needs a root `make` first).
+// Build: cmake --build build --target test_pillarbox
 #include <QCoreApplication>
 #include <QImage>
 #include <QString>

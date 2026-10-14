@@ -131,8 +131,8 @@ _probe_field() {
 # number gets DEN=1. Args: VALUE NUM_VAR DEN_VAR
 _parse_fraction() {
     local -n _num=$2 _den=$3
-    _num=$(echo "$1" | cut -d'/' -f1)
-    _den=$(echo "$1" | cut -d'/' -f2)
+    _num=${1%%/*}
+    if [[ "$1" == */* ]]; then _den=${1#*/}; else _den=1; fi
     _den="${_den:-1}"
 }
 

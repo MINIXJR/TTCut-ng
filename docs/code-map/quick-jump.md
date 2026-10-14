@@ -1,6 +1,6 @@
 ---
-base_commit: b820b48a860aecf045df1e64312efa5251dcf3b3
-last_verified: 2026-10-11
+base_commit: b4e0150e545aa53e16ad6ca9dff5b9bfe8dbe50a
+last_verified: 2026-10-14
 sources:
   - gui/ttcutmainwindow.cpp
   - gui/ttcutsettingsnavigation.cpp

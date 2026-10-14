@@ -28,7 +28,7 @@
 // processing events, so the queued finished() cannot be delivered yet, and
 // only then issues the cancel.
 //
-// Two cases, and the second is the guard rail:
+// Three cases; the second and third are guard rails:
 //   1. cancel after finish  - expected: finished×1, aborted×0, cleanUp×1
 //   2. cancel before start  - expected: aborted×1 (must keep working)
 //   3. cancel during a RE-RUN of the same task - expected: aborted×1

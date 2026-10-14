@@ -132,7 +132,7 @@ QList<TTAudioAnomalyScanTask::Finding> TTAudioAnomalyScanTask::evaluate(
 
   // Step 2: candidate LFE-active islands - contiguous runs of active 5.1
   // frames, gap-tolerant, same clustering shape as TTAVData's defect
-  // clusters (ttavdata.cpp emitCluster/emitGapCluster).
+  // clusters (ttClusterIndices in TTAVData::showExtraFrameClusterDialog).
   QList<int> activeIdx;
   activeIdx.reserve(n);
   for (int f = 0; f < n; ++f)

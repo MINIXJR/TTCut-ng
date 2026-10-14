@@ -149,7 +149,7 @@ struct TTNalUnit {
 // Groups NAL units that belong to the same picture
 // ----------------------------------------------------------------------------
 struct TTAccessUnit {
-    int index;                   // Frame index (display order based on POC)
+    int index;                   // Frame index in decode (bitstream) order, == decodeIndex
     int decodeIndex;             // Decode order index
     QList<int> nalIndices;       // Indices of NAL units in this AU
 

@@ -466,7 +466,7 @@ void TTCutTreeView::onGotoCutOut()
   emit gotoCutOut(mpAVData->cutItemAt(index).cutOutIndex());
 }
 
-//! Creates the cut list from current selection
+//! Row of the current cut-list item, -1 when there is none
 int TTCutTreeView::currentCutIndex() const
 {
   if (mpAVData == 0 || videoCutList->currentItem() == 0) return -1;

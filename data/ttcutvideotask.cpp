@@ -118,10 +118,10 @@ void TTCutVideoTask::operation()
 
     if (isAborted())
       // Message-only constructor deliberately: the (caller, line) overload
-      // logs at fatal level on construction (TTException::TTException(caller,
-      // line, msg) -> log->fatalMsg(), common/ttexception.cpp:30-36), which
-      // would record a deliberate user cancel as the most severe class of
-      // log event. Same fix as Task 6's TTH26xCutTask::abortNow().
+      // writes an error line on construction (TTException::TTException(caller,
+      // line, msg) -> log->errorMsg(), common/ttexception.cpp), which would
+      // record a deliberate user cancel as an error. Same fix as Task 6's
+      // TTH26xCutTask::abortNow().
       //
       // This outer, per-segment check is coarse and in practice loses the
       // race to the inner, message-only TTAbortException throws in
@@ -148,7 +148,8 @@ void TTCutVideoTask::operation()
     // (mpCutStream->setAbort(true)), but the stream is NOT per-operation: it
     // comes from the AV item and is the long-lived object the display widgets
     // share. Every mAbort check clears the flag as it throws
-    // (ttmpeg2videostream.cpp:121, 244, 568), so it only disappears if a check
+    // (ttmpeg2videostream.cpp: createIndexList, createHeaderListFromMpeg2,
+    // transferCutObjects), so it only disappears if a check
     // is still reached - and a cancel that arrives after the stream has
     // finished its work reaches none. Reported from the GUI: cancel a preview,
     // and the NEXT preview produced nothing while the one after that worked -

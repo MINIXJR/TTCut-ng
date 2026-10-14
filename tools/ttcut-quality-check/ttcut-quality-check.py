@@ -38,7 +38,8 @@ TESTS
 
   6. Audio Waveform     - Extracts audio around each internal cut boundary
                           and checks for clicks/pops (impulse noise).
-                          A click is a 1ms spike >30dB from both neighbors.
+                          A click is a 1ms chunk whose level differs by
+                          >30dB from both neighbors (a spike or a dropout).
                           Natural level changes (program switch) are reported
                           as info but do not trigger failure.
 
@@ -341,8 +342,9 @@ def parse_info_file(info_path: str) -> dict:
     real DVB material (Comedy Central SD576i25, 150 field pairs): the list is
     elementwise identical to what TTCut-ng's own MPEG-2 parser reports as
     extra indices. For PAFF H.264 it is NOT: top and bottom field are separate
-    AUs there, so the positions would have to be translated first. total_aus
-    is carried along so the caller can refuse the list in that case.
+    AUs there, so the positions would have to be translated first; main()
+    ignores the list on PAFF material instead (extra_frames_are_raw_aus).
+    total_aus is read but not used by any caller.
     """
     result = {"fps": None, "av_offset_ms": 0, "extra_frames": [], "total_aus": 0,
               "extra_frames_are_raw_aus": False}
@@ -1143,8 +1145,8 @@ def test_audio_waveform(cut_mkv: str, cuts: list[tuple[int, int]],
             # level changes. A program change at the boundary (e.g. ad → content)
             # can cause a natural level difference which is not a glitch.
             #
-            # Method: look for single-sample spikes (1ms chunks where the level
-            # jumps >30dB from BOTH neighbors = impulse noise / click).
+            # Method: look for 1ms chunks whose level differs by >30dB from
+            # BOTH neighbors, up or down (impulse noise / click, or a dropout).
             max_jump = 0.0
             has_click = False
             silence_floor = -80.0  # dBFS — below this, fluctuations are inaudible quantization noise

@@ -7,6 +7,7 @@
 /*----------------------------------------------------------------------------*/
 #include <QCoreApplication>
 #include <QFile>
+#include <QTemporaryDir>
 #include <QVector>
 #include <cstdio>
 #include "extern/ttmkvmergeprovider.h"
@@ -29,11 +30,14 @@ int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
     int fails = 0;
+    // A directory of its own per run: two runs at once must not share files.
+    QTemporaryDir dir;
+    if (!dir.isValid()) { printf("FAIL: cannot create a temporary directory\n"); return 1; }
 
     QByteArray valid;
     addGop(valid); addPic(valid, 2); addPic(valid, 0); addPic(valid, 1);
     addGop(valid); addPic(valid, 1); addPic(valid, 0);
-    QFile fv("/tmp/mpeg2order_valid.bin");
+    QFile fv(dir.filePath("mpeg2order_valid.bin"));
     if (!fv.open(QIODevice::WriteOnly)) { printf("FAIL: cannot write %s\n", qPrintable(fv.fileName())); return 1; }
     fv.write(valid); fv.close();
 
@@ -44,7 +48,7 @@ int main(int argc, char** argv)
 
     QByteArray broken;
     addGop(broken); addPic(broken, 0); addPic(broken, 0); addPic(broken, 2);
-    QFile fb("/tmp/mpeg2order_broken.bin");
+    QFile fb(dir.filePath("mpeg2order_broken.bin"));
     if (!fb.open(QIODevice::WriteOnly)) { printf("FAIL: cannot write %s\n", qPrintable(fb.fileName())); return 1; }
     fb.write(broken); fb.close();
 
@@ -52,6 +56,5 @@ int main(int argc, char** argv)
     if (got.isEmpty()) printf("PASS: broken permutation -> empty list (fallback)\n");
     else { printf("FAIL: broken stream returned %d entries\n", static_cast<int>(got.size())); fails++; }
 
-    QFile::remove(fv.fileName()); QFile::remove(fb.fileName());
     return fails;
 }

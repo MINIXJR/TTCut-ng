@@ -3971,6 +3971,42 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **Kleinkram aus den Lesebefunden und der Durchsicht** → **DONE
+  (2026-10-14, Zweig `chore/small-findings`)**.
+  - Veraltete Kommentare berichtigt, jeder am heutigen Code gegengelesen:
+    `TTException(caller, line, msg)` schreibt `errorMsg`, nicht `fatalMsg`
+    (`ttcutvideotask.cpp`, `ttcutpreviewtask.cpp`); die Rückfall-Engine der
+    Vorschau ist um `smartCutFrames()` herum veröffentlicht, nur
+    `initialize()` nicht; `ttClusterIndices` statt der gelöschten
+    `emitCluster`/`emitGapCluster`; der Finished-Wert in
+    `TTH26xVideoStream::createHeaderList` geht in keinen Prozentwert ein
+    (der Pool setzt eine fertige Aufgabe auf ihren Start-Wert); ein leerer
+    `calibKey` kommt heute nur bei einer Tondatei ohne Endung vor
+    (`ttprogressestimator.cpp` und `.h`); `TTAccessUnit::index` ist die
+    Dekodierreihenfolge; Funktionsnamen statt Zeilennummern für die
+    `mAbort`-Prüfungen in `ttmpeg2videostream.cpp`; „three cases" in
+    `test_abort_after_finish`; `test_pillarbox` benutzt eine eigene Kopie
+    des früheren `isPillarboxFrame`-Tests, nicht `classifyAspectSample`
+    (nicht miteinander verglichen); `Muxer\OutputContainer` liest und
+    schreibt niemand mehr; der deutsche Kommentar in `ttmessagelogger.cpp`
+    auf Englisch und mit der heutigen Zahl der `load()`-Aufrufe;
+    `currentCutIndex`; in `ttcut-quality-check.py` „Klick" = Pegelsprung
+    nach oben oder unten, `total_aus` liest niemand (PAFF behandelt
+    `main()` über `extra_frames_are_raw_aus`).
+  - Signal `TTCutFrameNavigation::setCutIn` entfernt: sein einziger
+    Empfänger war ein leerer Platzhalter in `TTCurrentFrame`, den
+    `7e3a2d21` (2026-05-02) mit der Verbindung entfernt hat.
+  - `_parse_fraction` in `ttcut-demux`: eine Zahl ohne `/` bekommt den
+    Nenner 1 (vorher `50` → `50/50`; heute unerreichbar, `ffprobe` schreibt
+    `N/D`). Gate `demux_framerate`: neuer Fall „plain number", vorher rot.
+  - `test_mpeg2order` schreibt in ein eigenes `QTemporaryDir` statt unter
+    festen Namen nach `/tmp` (zwei gleichzeitige Läufe teilten sich die
+    Dateien).
+  - Nicht geändert: `docs/code-audit/build-verdicts.py:82` nennt die
+    gelöschten `detect_*_gaps_multifile`. Die Datei ist laut ihrem Kopf die
+    Herkunftsaufzeichnung der Urteilsdatei vom 2026-09-03 und bildet sie
+    Byte für Byte nach; der Verweis ist für diesen Stand richtig.
+
 - **18 Bauwarnungen in sieben Prüfprogrammen; der Gate-Läufer nennt die
   Warnungszahl** → **DONE (2026-10-13, Zweig `fix/h26x-au-without-slice`)**.
   - Gefunden, als das Bauverzeichnis an dem Tag ganz neu übersetzt wurde:

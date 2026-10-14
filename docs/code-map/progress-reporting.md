@@ -1,6 +1,6 @@
 ---
-base_commit: f10b1558f14e42f3abdc0b7d71fae3ed6c68efe0
-last_verified: 2026-10-13
+base_commit: b4e0150e545aa53e16ad6ca9dff5b9bfe8dbe50a
+last_verified: 2026-10-14
 sources:
   - common/istatusreporter.h
   - common/istatusreporter.cpp

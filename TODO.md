@@ -76,8 +76,7 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     Startversatz-Nachweis hängt am Komma am Zeilenende von ffprobes CSV;
     `plan_audio_slots` liest bei leerer Slot-Datei die Tonliste als Slots
     (der Aufrufer fängt den Fall ab); `-p` begrenzt `s N` eines kaputten
-    Plans nicht; `docs/code-audit/build-verdicts.py:82` nennt die
-    gelöschten `detect_*_gaps_multifile`.
+    Plans nicht.
 
 - **Zwei überlagerte Widgets in „Aktueller Frame" — sind sie nötig?**
   (2026-08-26, vertagt auf User-Entscheid: „aber nicht heute")
@@ -552,34 +551,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
     ruft danach trotzdem `checkIFrameSequence(iFramePos, …)`, das einen
     Sequenzkopf in die Ausgabe kopieren kann, obwohl `cut()` den Transfer
     überspringt.
-  - **Signal ohne Empfänger.** `TTCutFrameNavigation::setCutIn` wird
-    gesendet (`onSetCutIn`), aber nirgends verbunden — Kandidat für den
-    nächsten Dead-Code-Lauf.
-  - **Veraltete Quellkommentare** (der Code daneben ist richtig):
-    - `data/ttcutvideotask.cpp`, `data/ttcutpreviewtask.cpp`:
-      `TTException(caller, line, msg)` „logs at fatal level … →
-      `log->fatalMsg()`“, mit Zeilennummern — es ist `errorMsg`.
-    - `data/ttcutpreviewtask.cpp`, `createH264PreviewClip`: „this engine is
-      never published to `mpActiveSmartCut`“ — sie wird um den Aufruf von
-      `smartCutFrames()` herum veröffentlicht, nur `initialize()` läuft
-      unveröffentlicht.
-    - `data/ttaudioanomalyscantask.cpp`: nennt
-      `emitCluster`/`emitGapCluster` in `ttavdata.cpp`, die es nicht mehr
-      gibt.
-    - `avstream/tth26xvideostream.cpp`, `createHeaderList`:
-      `TTThreadTask::onStatusReport()` teile durch `mTotalSteps` — das Feld
-      wird nirgends gelesen.
-    - `common/ttprogressestimator.cpp`, `update()`: „empty calibKey
-      (video)“ — die Videostufen haben inzwischen einen Schlüssel.
-    - `avstream/ttnaluparser.h`, `TTAccessUnit::index`: „display order
-      based on POC“ — der Parser setzt die Dekodierreihenfolge.
-    - `data/ttcutvideotask.cpp`, `tools/diag/test_stale_abort.cpp`:
-      „ttmpeg2videostream.cpp:121, 244, 568“ — Zeilennummern, die nicht
-      mehr stimmen müssen.
-    - `tools/diag/test_abort_after_finish.cpp`: Kopf sagt „Two cases“, es
-      sind drei; `tools/diag/test_pillarbox.cpp`: Kopf nennt
-      `TTStreamPointVideoWorker::isPillarboxFrame`, das es im Programm
-      nicht mehr gibt (`classifyAspectSample`).
   - **Aus der zweiten Stufe (21 Karten), von mir nachgelesen:**
     - **Versatz-Spalte nach abgebrochener Vorschau.** `onCutPreview`
       verbindet `cutAudioDriftCalculated`, nur `onCutPreviewFinished`
@@ -592,14 +563,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
       laufen lässt. Gelesen dazu: `TTCutTreeView::onAudioDriftUpdated`
       schreibt die gelieferten Werte der Reihe nach in die ersten Zeilen
       der ganzen Schnittliste, gleich welche Zeilen der Auftrag umfasste.
-    - Veraltete Kommentare: `common/ttsettings.cpp`, `load()` („The Muxer
-      block below still reads that key“ — `Muxer\OutputContainer` liest
-      niemand mehr); `common/ttmessagelogger.cpp` („dreimal mit "" aufruft“
-      — `load()` ruft `configure` einmal); `gui/ttcuttreeview.cpp` über
-      `currentCutIndex` („Creates the cut list from current selection“);
-      `tools/ttcut-quality-check/ttcut-quality-check.py` (Klick = „spike“,
-      der Code nimmt den Betrag; `total_aus` „carried along so the caller
-      can refuse the list“, niemand liest es).
   - **Aus der zweiten Stufe, nur von den Agenten gelesen (von mir nicht
     nachgelesen):**
     - Abbruch während eines Projektladens: `TTOpenVideoTask::onUserAbort`
@@ -952,14 +915,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
   unter Last zu spät, und der Lauf ist der Fall „Abbruch nach dem Ende“)
   oder ob ein Abbruch im letzten Augenblick eines laufenden mplex verloren
   geht.
-
-- **`_parse_fraction` in `ttcut-demux`: Zahl ohne `/`** (gefunden 2026-09-27,
-  Abschluss-Review `fix/frame-rate-source`): Der Kommentar verspricht „a plain
-  number gets DEN=1“, aber `cut -d/ -f2` liefert ohne `/` die ganze Eingabe —
-  `_parse_fraction 50` ergibt 50/50. Heute unerreichbar (`ffprobe` schreibt
-  Bildraten immer als `N/D`); beim nächsten Commit an der Funktion richtig
-  stellen (Nenner nur setzen, wenn ein `/` vorkommt) und in
-  `gate_demux_framerate.sh` einen Fall `50 25/1 tt` ergänzen.
 
 - **Verification-Test-Policy: Tux-Videos bevorzugen**
   - Bei Cut-Verification + Pipeline-Validation IMMER zuerst die Tux-Test-Videos verwenden

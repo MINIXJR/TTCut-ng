@@ -769,8 +769,9 @@ void TTSettings::load()
   // H265Muxer), and setEncoderCodec() only re-syncs it when the codec
   // CHANGES. Taken from the legacy global Muxer\OutputContainer instead, a
   // fresh configuration cut MPEG-2 to MKV (measured 2026-08-16, gate
-  // tools/diag/gate_audiofix.sh; gate tools/diag/test_container_sync). The
-  // Muxer block below still reads that key for round-trip compatibility.
+  // tools/diag/gate_audiofix.sh; gate tools/diag/test_container_sync).
+  // Nothing reads or writes Muxer\OutputContainer any more; an old
+  // configuration file keeps the key unread.
   syncWorkingSetToCodec(mEncoderCodec);
   settings.endGroup();
 

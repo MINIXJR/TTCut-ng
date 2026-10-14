@@ -43,5 +43,6 @@ check 50/1       25/1       unknown     50/1       "field order unknown: unchang
 check 25/1       ""         tt          25/1       "no avg_frame_rate: unchanged"
 check 50/1       ""         tt          50/1       "no avg_frame_rate, field rate: unchanged, no awk error"
 check 50/1       25/1       ""          50/1       "no field order: unchanged"
+check 50         25/1       tt          25/1       "plain number, no /: denominator 1"
 echo "---- $PASS PASS, $FAIL FAIL"
 [ "$FAIL" -eq 0 ]
