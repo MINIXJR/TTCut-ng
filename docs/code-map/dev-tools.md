@@ -1,5 +1,5 @@
 ---
-base_commit: 65e8c5eec4917440663915389594602e5fa6734a
+base_commit: 763fc714e12f17eb84aff76595a20fcbf5eb9dd4
 last_verified: 2026-10-14
 sources:
   - build-package.sh
@@ -111,7 +111,7 @@ flowchart TD
 | `SVG` → `SHOT` → `TDATA` | From the Tux artwork: 120 s H.264 at 720×576, 25 fps (`tux_test.264`), an AC3 track of seven segments that alternate tone and silence and stereo (192 kbit/s) and 5.1 (384 kbit/s) (`tux_test.ac3`), a hand-written `.info` (`frame_rate=25/1`, one audio track, language `deu`) and a project from the template `tools/ttcut-test.ttcut` (three cuts, placeholders replaced by absolute paths). Video and audio are rebuilt only when missing or older than the SVG; `.info` and project are rewritten on every run. For the repair dialog's pictures the script adds a second pair of tracks — `tux_repair.ac3`, 120 s of 5.1 with a chord in the centre, quiet tones around it and a silent LFE, carrying a C+LFE burst at 20 s, a stop at 50.003 s (0.5 s) and a hole of 17 ms at 80 s, and `tux_repair.mp2`, the stereo downmix of the undisturbed sound — and a project from `tools/ttcut-repair-test.ttcut` (the same video, both tracks, one cut); the pair is rebuilt when missing or older than the script. |
 | `TDATA` → `APP`, `SHOT` ⇢ `APP` | Two runs into one temporary directory: `ttcut-ng --screenshots <dir> --project <file>` with the Tux project (the usual set; a run that leaves no picture ends the script), then the same with the repair project and `--screenshot-set repair`. `--repair-only` skips the first run. Both start with `QT_QPA_PLATFORM=xcb` (a window opens on the desktop) unless `TTCUT_QPA_PLATFORM` names another platform (`offscreen`: no window). `main` stores directory, project and set in `TTSettings` (the set is not persisted) and calls `TTCutMainWindow::runScreenshotMode` after 500 ms. Without `--project` the mode quits at once. The script keeps the run's output in a log, shows the lines containing "Screenshot", and ends with exit 1 when the run's exit status is not 0. `TTCUT_BINARY` replaces the program (gate `screenshots_script`). |
 | `APP` → `PNG` | Window fixed to 1920×1080, project loaded (wait up to 30 s; a timeout is a warning, the run goes on), then one PNG per step: main window, frame pair, navigation, cut list, controls, landing zones after `onAnalyzeStreamPoints`, quick-jump dialog, every settings page, every cut-dialog tab, about dialog (`TTCutAboutDlg`), integrity warning, go-to-frame dialog, cut-complete box. The mode ends with `QApplication::quit()`. With the set `repair` none of these is taken: `captureRepairDialogs` runs the analysis (or waits for the scan started after loading), then opens `TTAudioRepairDialog` on the first anomaly marker of each kind — `LfeBurst` → `ttcutng-repair-mute.png`, `LastingStop` → `ttcutng-repair-fadeout.png`, `Hole` → `ttcutng-repair-fill.png` — and ends with exit status 1 when a kind has no marker or the project no AC3 track. |
-| `APP` → `DOCPNG` | Last step of the usual set: `ttcutng-main.png` is copied to `docs/MainWindow.png` next to the binary's parent directory — a **tracked** file outside the output directory, on every such run. The set `repair` does not touch it (gate `screenshots_repair` checks that). |
+| `APP` ⇢ `DOCPNG` | No edge since 2026-10-14: the screenshot mode no longer copies `ttcutng-main.png` to `docs/MainWindow.png`. The README picture is taken over from the wiki on purpose (release skill, step 5.5, `cp …/ttcutng-main.png docs/MainWindow.png`). Gate `screenshots_repair` runs both sets offscreen and checks that neither changes the file. |
 | `PNG` → `WIKI` | The script compares each `ttcutng-*.png` byte for byte with the file of the same name in the output directory (default: the wiki's `images`) and copies only those that differ; the temporary directory is removed. No image at all is an error (exit 1). |
 | `TDATA` → `GATES` | One gate per program: a table row and a function `gate_<name>`; where a program is run in several ways the gate is `cases <limit> <case>…` over functions `case_<name>`, each run as a process of its own with its own work directory, settings and time limit — all cases run, the gate reports the worst outcome (out of time, failed, prerequisite missing, passed) and its log one verdict line per case (gate `cases_verdict` checks that rule). After its build and again below the verdict line the runner prints the compiler warnings of that build and the number of files it compiled (the build is incremental — a file not compiled in the run does not repeat its warnings); the count does not change the exit code. `run-gates.sh` (`TESTDATA`) and ten harnesses read `tools/testdata/tux_test.*`; the gate `screenshots_repair` runs the script with `--repair-only` and `offscreen` and expects the three repair pictures, all different, and nothing else; the directory is gitignored, so those gates need one screenshot-script run first. |
 | `SVG` → `MTV` → `CACHE` | The artwork is found relative to the script. Per variant a video stream, a 1 kHz stereo audio track (AC3 or MP2, 192 kbit/s) and a video-plus-audio project (the `.rec` directory is the exception: it carries the PAL stream's audio muxed into its two TS segments and a video-only project), all on one 120 s timeline (three colour segments with a moving Tux, three 1 s black gaps, a logo in the third segment, a test pattern) or the 30 s "duplicate" timeline (the same 10 s sequence twice). Eight variants: HEVC 4K, H.264 1080p progressive, 1080i MBAFF, 1080i PAFF, MPEG-2 576i, 720p, 576i with field pictures, a two-segment `.rec` directory; six duplicates. An output is reused when it exists, is not empty and is **newer than the script**; `--force` regenerates. A reused variant still gets its project rewritten — except the `.rec` directory, whose marker file `info` ends the run before any project is written. |
@@ -138,13 +138,16 @@ flowchart TD
   of the package content; the last one (2026-10-02, before and after the
   editor-state rules): same 16 files, all but the program and the Debian
   changelog with equal checksums.
-- **The screenshot mode has a side effect outside its output directory**
-  (`docs/MainWindow.png`); after a run `git status` shows the file as
-  modified unless the main window is unchanged.
 - **Offscreen works, equality is not measured** — `QT_QPA_PLATFORM=offscreen`
   runs the mode to the end (21 images in 7 s, 2026-10-02) without a window;
   whether the images equal those of an `xcb` run is not measured, so the
-  script stays on `xcb`. The images in the wiki are no reference for the
+  script stays on `xcb`. Offscreen loads no platform theme by itself: Fusion
+  with light colours (window `#efefef`) instead of the desktop's Breeze
+  dark (`#202326`). With `QT_QPA_PLATFORMTHEME=kde` it gets Breeze dark;
+  measured 2026-10-14 against the wiki pictures: brightness equal, settings
+  pages and cut dialog equal in size, main window, frames, landing zones,
+  nav panel, controls and some boxes of a different height (not
+  investigated). The images in the wiki are no reference for the
   script's own fixture: they were taken from other material.
 - **Screenshots depend on the fixed window size, the fixture and the
   settings of the user who runs it**, not on the screen; the cut dialog

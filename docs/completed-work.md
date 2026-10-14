@@ -4041,6 +4041,22 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     gelöschten `detect_*_gaps_multifile`. Die Datei ist laut ihrem Kopf die
     Herkunftsaufzeichnung der Urteilsdatei vom 2026-09-03 und bildet sie
     Byte für Byte nach; der Verweis ist für diesen Stand richtig.
+  - Screenshot-Lauf: Schritt 16 von `runScreenshotMode` kopierte das
+    Hauptfenster-Bild bei jedem vollen Lauf nach `docs/MainWindow.png`
+    (versioniert), offscreen ein helles Bild. Gestrichen; das README-Bild
+    übernimmt der Release-Skill (Schritt 5.5) bewusst aus dem Wiki. Gate
+    `screenshots_repair` macht jetzt auch einen vollen Lauf und prüft die
+    Datei (vorher rot, Bytes danach zurückgelegt). Warum hell: unter
+    `offscreen` lädt Qt kein Plattform-Thema (gemessen mit einem
+    Prüfprogramm: Fusion, Fenster `#efefef`; Wayland/xcb: Breeze, `#202326`);
+    mit `QT_QPA_PLATFORMTHEME=kde` dunkel, Helligkeit aller 24 Bilder wie im
+    Wiki, einige Fensterteile verschieden hoch (nicht untersucht).
+  - Am selben Tag nachgezogen (Zweig `chore/small-findings-2`): die
+    Deklaration `TTEncodeParameter::print` ohne Definition und ohne Aufrufer
+    entfernt; `ttcut-quality-check.py` liest `es_total_aus` nicht mehr (der
+    Wert landete in `total_aus`, das niemand benutzte); der Release-Skill
+    (Repo `claude-skills`) wertet in Schritt 5 die Warnungszeile des
+    Gate-Läufers aus.
 
 - **18 Bauwarnungen in sieben Prüfprogrammen; der Gate-Läufer nennt die
   Warnungszahl** → **DONE (2026-10-13, Zweig `fix/h26x-au-without-slice`)**.

@@ -47,8 +47,6 @@ class TTEncodeParameter
     int       end() { return mEndIndex; }
     void      setEnd(int value) { mEndIndex = value; }
 
-    void      print(char* prefix);
-
   private:
     QFileInfo mAviFileInfo;
     QFileInfo mMpeg2FileInfo;

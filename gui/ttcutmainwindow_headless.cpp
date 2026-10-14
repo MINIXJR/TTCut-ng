@@ -429,10 +429,10 @@ void TTCutMainWindow::runScreenshotMode()
     doneBox.close();
   }
 
-  // 16. Copy main window as docs/MainWindow.png
-  QString docsPath = QFileInfo(QApplication::applicationDirPath() + "/../docs/MainWindow.png").absoluteFilePath();
-  QFile::remove(docsPath);
-  QFile::copy(outDir.filePath("ttcutng-main.png"), docsPath);
+  // No copy into docs/MainWindow.png: the README picture is taken over from
+  // the wiki on purpose (release skill, step 5.5). Copying it here wrote a
+  // tracked file on every run, an offscreen run's light Fusion picture
+  // included (gate screenshots_repair).
 
   if (TTSettings::instance()->logUI())
     qDebug() << "Screenshot mode complete:" << outDir.absolutePath();
