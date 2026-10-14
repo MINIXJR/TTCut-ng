@@ -839,6 +839,20 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
     nur den abgespielten Bereich muxen, oder mpv die ES mit erzwungener
     Framerate direkt füttern. Prio low.
 
+- **Screenshot-Skript ohne Fenster im dunklen Thema** (Vorschlag 2026-10-14,
+  nicht beauftragt). `tools/ttcut-screenshots.sh` startet das Programm unter
+  `xcb`, es öffnet also Fenster auf dem Desktop; unter `offscreen` kamen
+  bisher helle Bilder heraus. Gemessen am 2026-10-14: `offscreen` lädt kein
+  Plattform-Thema (Fusion, Fenster `#efefef`), mit `QT_QPA_PLATFORMTHEME=kde`
+  bekommt es Breeze dunkel (`#202326`) wie Wayland/xcb. Ein voller Lauf so
+  gegen die Wiki-Bilder: Helligkeit aller 24 Bilder gleich, Einstellungsseiten
+  und Schnittdialog auch gleich groß; Hauptfenster, Bildpaar, Landezonen,
+  Navigation, Steuerleiste und einige Meldungsfenster verschieden hoch
+  (Ursache nicht untersucht). Zu entscheiden: ob das Skript unter `offscreen`
+  das Thema des Desktops setzt und `offscreen` zur Vorgabe wird — vorher die
+  Höhenunterschiede klären (Messung steht in `docs/code-map/dev-tools.md`,
+  Fallstrick „Offscreen works").
+
 - **Screenshot-Modus: Vorschau-Dialog fehlt** (2026-07-26, beim v0.76.0-Release
   aufgefallen)
   - Der `--screenshots`-Modus deckt inzwischen alle Dialoge ab außer dem
