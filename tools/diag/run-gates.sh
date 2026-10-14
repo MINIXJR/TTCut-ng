@@ -186,6 +186,7 @@ seqheader_missing      tux   300  test_seqheader_missing
 headerlist_eof         tux   300  test_headerlist_eof
 project_incompatible   tux   600  -
 autocut_exit           tux   600  -
+headless_settings      tux   600  -
 mplex_target           tux   600  -
 chapter_file           tux   600  -
 segshape               tux   600  test_segshape
@@ -764,6 +765,29 @@ gate_autocut_exit() {
     | grep -F "could not be completed" \
     || { echo "FAIL: the video-task failure was not reported as a failed cut"; exit 1; }
   echo "PASS: exit 0 for the completed cut, 1 for the four runs without output"; }
+# A run without a window works on a throwaway copy of the settings: it reads
+# them (the log goes to the stored LogFilePath) and leaves the file byte for
+# byte unchanged. Before 2026-10-14 one --auto-cut rewrote 16 lines of the
+# user's file - main window no longer maximized, EncoderCodec, the cut and
+# mux directories, RecentFiles, the H.264 progress calibration (21.7 -> 3015).
+gate_headless_settings() {
+  need "$V264" "$A264"
+  local conf="$XDG_CONFIG_HOME/TTCut-ng/TTCut-ng.conf" rc
+  mkdir -p "$(dirname "$conf")" "$W/out"
+  printf '%s\n' '[MainWindow]' 'height=1412' 'maximized=true' 'width=2400' 'x=0' 'y=0' '' \
+    '[Settings]' 'Encoder\EncoderCodec=0' 'LogFile\CreateLogFile=true' \
+    "LogFile\\LogFilePath=$W/marker.log" '' \
+    '[progressCalibration]' 'videok\h264=21.731677912063464' > "$conf"
+  cp "$conf" "$W/before.conf"
+  ttcut_project_xml "$V264" "$A264" - 100:399 > "$W/p.ttcut"
+  LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/p.ttcut" --auto-cut "$W/out/cut.mkv"; rc=$?
+  [ "$rc" -eq 0 ] || { echo "FAIL: --auto-cut exited $rc"; exit 1; }
+  echo "PASS: --auto-cut exited 0"
+  if cmp -s "$W/before.conf" "$conf"; then echo "PASS: the settings file is unchanged"
+  else echo "FAIL: the run changed the settings file:"; diff "$W/before.conf" "$conf"; exit 1; fi
+  grep -qF "Auto-cut: cut complete" "$W/marker.log" 2>/dev/null \
+    || { echo "FAIL: no log at the stored LogFilePath $W/marker.log - the settings were not read"; exit 1; }
+  echo "PASS: the log went to the stored LogFilePath (settings were read)"; }
 # The MPG target chosen in the cut dialog (stored as Mpeg2Target) must reach
 # mplex. Before code-audit run 7 every run got -f8: target 3 (Generic MPEG2)
 # produced the DVD file byte for byte, NAV packets included.

@@ -5,6 +5,14 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **A run without a window no longer changes your settings.** `--auto-cut`
+  and `--screenshots` saved on exit like a normal session: one test cut
+  left the main window un-maximized at the next start, switched the encoder
+  codec, replaced the cut and output directories and the recent files, and
+  stored an encode/copy cost ratio about 140 times too high, which skews the
+  progress display at the start of the next H.264 cut. Such a run now reads
+  your settings as before and writes into a temporary copy that is deleted at
+  its end.
 - **A recording with one unreadable picture can be cut again (H.264/H.265).**
   When a transmission error destroys the start code in front of a picture's
   data, the picture is left as a delimiter without data. TTCut-ng counted it
