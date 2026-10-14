@@ -3971,6 +3971,41 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **Ein Lauf ohne Fenster schrieb in die Einstellungen des Anwenders** →
+  **DONE (2026-10-14, Zweig `fix/headless-settings-readonly`)**, Spec
+  `docs/superpowers/specs/2026-10-14-headless-settings-readonly-design.md`.
+  - Gefunden 2026-10-11 (sieben Läufe von `acm-cut.sh` hatten drei
+    Verzeichnisschlüssel und `RecentFiles` der echten `TTCut-ng.conf`
+    verstellt). Nachgemessen am 2026-10-14 auf einer Kopie seiner Datei,
+    master `c242e33e`, ein `--auto-cut` über das Tux-H.264-Video (100–399):
+    16 geänderte Zeilen — Hauptfenster nicht mehr maximiert,
+    `Encoder\EncoderCodec` 0 → 1, `LastDirPath`, `CutOptions\DirPath`,
+    `Muxer\MuxOutputDir`, `RecentFiles`, `videok/h264` 21,7 → 3015 (das
+    Verhältnis Neu-Kodieren zu Kopieren, mit dem Smart Cut am Anfang des
+    nächsten Schnitts seinen Prozentwert gewichtet; jeder erfolgreiche
+    Schnitt schreibt es neu).
+    Auch ein gescheiterter Lauf änderte Fenster, Codec, Verzeichnis und
+    `RecentFiles`.
+  - Schreiber (gelesen): `TTSettings::save()` und Fenstergeometrie in
+    `closeEvent` (über `QApplication::quit()` in `endAutoCut`, gewollt wegen
+    `closeProject()`), `TTCalibrationStore::setFactor`, Zeitsprung- und
+    Einstellungsdialog.
+  - Änderung: `main()` wertet die Befehlszeile vor dem ersten
+    `TTSettings::instance()` aus; bei `--auto-cut` mit `--project` und bei
+    `--screenshots` kopiert es die Einstellungsdatei in ein `QTemporaryDir`
+    und lenkt `QSettings::setPath` (nativ und INI) dorthin. Gelesen wird wie
+    bisher, geschrieben in die Kopie. Lässt sich die Kopie nicht anlegen,
+    endet der Lauf mit 1. Verworfen: ein Schalter an jedem Schreiber;
+    `XDG_CONFIG_HOME` in den zwei Wrappern.
+  - Belege: Gate `headless_settings` (Datei Byte für Byte gleich, Log am
+    gespeicherten `LogFilePath` = Kopie gelesen) am alten Stand rot, danach
+    grün; `autocut_exit` grün; `tools/ttcut-screenshots.sh` (beide
+    Durchgänge, 24 Bilder) mit einer Kopie seiner Einstellungen: Datei
+    unverändert. Den Screenshot-Lauf vor der Änderung habe ich nicht
+    gemessen; er endet über denselben `closeEvent`.
+  - Folge: Die Fortschritts-Kalibrierung lernt aus Läufen ohne Fenster
+    nichts mehr. Nicht Teil davon: die Log-Rotation in `XDG_CACHE_HOME`.
+
 - **Kleinkram aus den Lesebefunden und der Durchsicht** → **DONE
   (2026-10-14, Zweig `chore/small-findings`)**.
   - Veraltete Kommentare berichtigt, jeder am heutigen Code gegengelesen:

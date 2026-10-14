@@ -18,6 +18,10 @@
 #include <QFileInfo>
 #include <QTimer>
 #include <QtGlobal>
+#include <QDir>
+#include <QFile>
+#include <QSettings>
+#include <QTemporaryDir>
 
 // class declaration for the main window class
 #include "ttcentredtitlestyle.h"
@@ -31,8 +35,10 @@
 #include <QCommandLineParser>
 #include <QTimer>
 
+#include <cstdio>
 #include <cstdlib>
 #include <clocale>
+#include <memory>
 
 // ---------------------------------------------------------------------------
 // Qt message handler: route qDebug/qInfo/qWarning/qCritical/qFatal through
@@ -90,6 +96,62 @@ int main( int argc, char **argv )
     // "Unknown Organization" — which is where TTQuickJumpDialog's size used to
     // land, in a second file next to the real one.
     a.setOrganizationName("TTCut-ng");
+
+    // Command line options
+    QCommandLineParser parser;
+    parser.setApplicationDescription("TTCut-ng - Frame-accurate video cutter");
+    parser.addHelpOption();
+
+    QCommandLineOption screenshotOpt("screenshots",
+        "Capture all widget screenshots to <dir> and exit.", "dir");
+    QCommandLineOption projectOpt("project",
+        "Load project file <file>.", "file");
+    QCommandLineOption autoCutOpt("auto-cut",
+        "Load --project, perform A/V cut, write MKV to <out>, and exit. "
+        "For headless QC regression.", "out");
+    QCommandLineOption screenshotSetOpt("screenshot-set",
+        "With --screenshots: take only this set of pictures. \"repair\": the audio "
+        "repair dialog, once per kind of anomaly marker of the project.", "set");
+    parser.addOption(screenshotOpt);
+    parser.addOption(screenshotSetOpt);
+    parser.addOption(projectOpt);
+    parser.addOption(autoCutOpt);
+    parser.addPositionalArgument("file", "Video or project file to open.");
+    parser.process(a);
+
+    // A run without a window reads the user's settings but must not change
+    // them: on quit, closeEvent saves the settings and the window geometry,
+    // a completed cut stores its progress calibration, and the screenshot run
+    // opens dialogs that keep their own state. Measured 2026-10-14: one
+    // --auto-cut rewrote 16 lines of the file (main window no longer
+    // maximized, EncoderCodec, cut and mux directories, RecentFiles, the
+    // H.264 calibration 21.7 -> 3015). So such a run works on a copy: every
+    // QSettings("TTCut-ng", "TTCut-ng") below - TTSettings, the calibration
+    // store, window and dialog state - opens the copy, which goes with the
+    // temporary directory when main() returns. Gate headless_settings.
+    // Before the first TTSettings::instance(), which loads the settings.
+    const bool headless = parser.isSet(screenshotOpt)
+                       || (parser.isSet(autoCutOpt) && parser.isSet(projectOpt));
+    std::unique_ptr<QTemporaryDir> settingsCopy;
+    if (headless) {
+      const QString userFile = QSettings("TTCut-ng", "TTCut-ng").fileName();
+      settingsCopy = std::make_unique<QTemporaryDir>();
+      const QString copyFile = settingsCopy->path() + "/TTCut-ng/TTCut-ng.conf";
+      const bool copied = settingsCopy->isValid()
+          && QDir().mkpath(QFileInfo(copyFile).absolutePath())
+          && (!QFile::exists(userFile) || QFile::copy(userFile, copyFile));
+      if (!copied) {
+        // The log is not configured yet; stderr is all there is.
+        fprintf(stderr, "TTCut-ng: cannot copy the settings %s to a temporary directory - "
+                        "not running without a window, the run would change them\n",
+                qPrintable(userFile));
+        return 1;
+      }
+      QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, settingsCopy->path());
+      QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsCopy->path());
+      qInfo().noquote() << "Run without a window: settings read from" << userFile
+                        << "- changes go to a temporary copy and are discarded";
+    }
 
     // Force the lazy TTSettings singleton to construct and run its first
     // load() before any UI code reads a persisted value.
@@ -175,28 +237,6 @@ int main( int argc, char **argv )
     // saved size was silently pointless. The window's size is decided in
     // TTCutMainWindow's constructor: the stored value, or 80% of the screen
     // when there is none.
-
-    // Command line options
-    QCommandLineParser parser;
-    parser.setApplicationDescription("TTCut-ng - Frame-accurate video cutter");
-    parser.addHelpOption();
-
-    QCommandLineOption screenshotOpt("screenshots",
-        "Capture all widget screenshots to <dir> and exit.", "dir");
-    QCommandLineOption projectOpt("project",
-        "Load project file <file>.", "file");
-    QCommandLineOption autoCutOpt("auto-cut",
-        "Load --project, perform A/V cut, write MKV to <out>, and exit. "
-        "For headless QC regression.", "out");
-    QCommandLineOption screenshotSetOpt("screenshot-set",
-        "With --screenshots: take only this set of pictures. \"repair\": the audio "
-        "repair dialog, once per kind of anomaly marker of the project.", "set");
-    parser.addOption(screenshotOpt);
-    parser.addOption(screenshotSetOpt);
-    parser.addOption(projectOpt);
-    parser.addOption(autoCutOpt);
-    parser.addPositionalArgument("file", "Video or project file to open.");
-    parser.process(a);
 
     // Screenshot mode
     if (parser.isSet(screenshotOpt)) {

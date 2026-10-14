@@ -884,22 +884,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
   Halbbild-Paar im Bereich (`extraIndices()`); Sonde dafür lag in
   `CLAUDE_TMP/TTCut-ng/run13/` (`probe_mpeg2_decoder seek`).
 
-- **`--auto-cut` schreibt in die Einstellungsdatei des Anwenders** (gefunden
-  2026-10-11). `--auto-cut` endet über `QApplication::quit()`, und
-  `closeEvent` speichert die Einstellungen (`endAutoCut`,
-  `gui/ttcutmainwindow_headless.cpp`). `tools/diag/acm-cut.sh` und
-  `qc-autocut.sh` geben dem Lauf ein eigenes `XDG_CACHE_HOME`, aber kein
-  eigenes `XDG_CONFIG_HOME`. Gemessen: nach sieben Läufen von `acm-cut.sh`
-  standen in `~/.config/TTCut-ng/TTCut-ng.conf` die Schlüssel
-  `Common\LastDirPath`, `CutOptions\DirPath` und `Muxer\MuxOutputDir` auf
-  dem Ausgabeverzeichnis des letzten Laufs, und `RecentFiles` enthielt nur
-  noch die fünf zuletzt geschnittenen Testprojekte. Zu entscheiden: ob ein
-  Lauf ohne Fenster überhaupt Einstellungen speichern soll, und ob die
-  Wrapper mit einer Kopie der Einstellungen arbeiten (die Encoder-Werte des
-  Anwenders gelten dann weiter, geschrieben wird in die Kopie). Der
-  Screenshot-Lauf (`tools/ttcut-screenshots.sh`) teilt dieselbe Datei
-  (`Screenshot\Dir`).
-
 - **Gate `encode_tempdir` schlägt unter CPU-Last gelegentlich fehl**
   (gefunden 2026-10-11 im vollen Gate-Lauf: 1 von 12 Läufen mit
   „mplexabort: expected exactly one Canceled, got 0“). Gemessen: das Gate
