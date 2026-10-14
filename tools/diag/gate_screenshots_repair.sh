@@ -6,7 +6,11 @@
 # that the three pictures of the audio repair dialog come out - one per view:
 # mute (C+LFE burst), fade-out (lasting stop), fill (hole) -, that they
 # differ from each other, that nothing else is written and that the tracked
-# docs/MainWindow.png is left alone.
+# docs/MainWindow.png is left alone. Then the usual set, which until
+# 2026-10-14 copied its main-window picture over docs/MainWindow.png on every
+# run (offscreen: a light Fusion picture into the repository); it must leave
+# the file alone as well. The file's bytes are kept aside and put back if a
+# run changes them, so the gate never leaves the working tree different.
 #
 #   usage: gate_screenshots_repair.sh <workdir>
 set -u
@@ -33,4 +37,15 @@ OTHERS=$(ls "$OUT" | grep -vc '^ttcutng-repair-')
 if [ "$OTHERS" -eq 0 ]; then echo "PASS: nothing but the repair pictures is written"; else echo "FAIL: $OTHERS other file(s) written"; RC=1; fi
 if [ "$(git -C "$ROOT" status --porcelain docs/MainWindow.png)" = "$BEFORE" ]; then echo "PASS: docs/MainWindow.png is left alone"
 else echo "FAIL: the run changed docs/MainWindow.png"; RC=1; fi
+
+DOCPNG="$ROOT/docs/MainWindow.png"
+cp -p "$DOCPNG" "$W/MainWindow.before.png"
+OUT2="$W/out-usual"
+rm -rf "$OUT2"; mkdir -p "$OUT2"
+if ! TTCUT_QPA_PLATFORM=offscreen "$ROOT/tools/ttcut-screenshots.sh" "$OUT2" > "$W/run-usual.log" 2>&1; then
+  echo "FAIL: ttcut-screenshots.sh (usual set) failed"; tail -n 15 "$W/run-usual.log"; RC=1
+elif [ -f "$OUT2/ttcutng-main.png" ]; then echo "PASS: the usual set took the main-window picture"
+else echo "FAIL: the usual set wrote no ttcutng-main.png"; RC=1; fi
+if cmp -s "$DOCPNG" "$W/MainWindow.before.png"; then echo "PASS: the usual set leaves docs/MainWindow.png alone"
+else echo "FAIL: the usual set changed docs/MainWindow.png (put back)"; cp -p "$W/MainWindow.before.png" "$DOCPNG"; RC=1; fi
 exit $RC

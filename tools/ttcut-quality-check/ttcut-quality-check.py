@@ -333,9 +333,9 @@ def parse_info_file(info_path: str) -> dict:
 
     Extra-frame positions come from ttcut-demux's PTS analysis. The key was
     renamed: es_extra_frames (ambiguous numbering, no longer written) became
-    es_doubled_pts_aus, with es_total_aus as its check value. Both are read
-    here -- the new key wins, the old one keeps .info files from older demux
-    runs working.
+    es_doubled_pts_aus. Both are read here -- the new key wins, the old one
+    keeps .info files from older demux runs working. Its check value
+    es_total_aus is not read: nothing here would use it.
 
     Numbering: the new key counts RAW access units, one per PES packet. For
     MPEG-2 that is the same numbering the cut frame indices use -- measured on
@@ -344,9 +344,8 @@ def parse_info_file(info_path: str) -> dict:
     extra indices. For PAFF H.264 it is NOT: top and bottom field are separate
     AUs there, so the positions would have to be translated first; main()
     ignores the list on PAFF material instead (extra_frames_are_raw_aus).
-    total_aus is read but not used by any caller.
     """
-    result = {"fps": None, "av_offset_ms": 0, "extra_frames": [], "total_aus": 0,
+    result = {"fps": None, "av_offset_ms": 0, "extra_frames": [],
               "extra_frames_are_raw_aus": False}
     section = None
     with open(info_path) as f:
@@ -372,8 +371,6 @@ def parse_info_file(info_path: str) -> dict:
                         int(x.strip()) for x in val.split(",") if x.strip()
                     )
                     result["extra_frames_are_raw_aus"] = True
-            elif section == "warnings" and key == "es_total_aus":
-                result["total_aus"] = int(val) if val.strip().isdigit() else 0
             elif section == "warnings" and key == "es_extra_frames":
                 # Legacy key from .info files written before the rename. Only
                 # used when the current key was absent, so a file carrying both
