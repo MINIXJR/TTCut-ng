@@ -1,6 +1,6 @@
 ---
-base_commit: f8ed8f9e71e2dcdb0065f36dee8655d90ccbe540
-last_verified: 2026-10-11
+base_commit: b4e0150e545aa53e16ad6ca9dff5b9bfe8dbe50a
+last_verified: 2026-10-14
 sources:
   - tools/ttcut-quality-check/ttcut-quality-check.py
   - debian/rules
