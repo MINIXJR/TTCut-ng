@@ -70,8 +70,16 @@ gate script that needs only repository fixtures (`--quick` for the
 material-free tier, `--list` for the table) and prints one PASS/FAIL/SKIP
 line per gate. It also prints the compiler warnings of its build and the
 number of files that build compiled: the build is incremental, so the count
-covers the whole tree only after `rm -rf build`. Run it before every merge
-to `master`; the release skill runs it in step 5.
+covers the whole tree only after `rm -rf build`.
+
+When to run it (user decision 2026-10-14 — full runs are not to be repeated
+without need):
+- While working: only the gates the change touches (`run-gates.sh <name> …`).
+- One full run before a merge to `master`, and only when program code,
+  scripts or gates changed.
+- No full run when only documentation, map stamps or the order of commits
+  change, and no second one when only such changes follow the first.
+- The release skill runs it in step 5.
 
 ## Architecture
 
