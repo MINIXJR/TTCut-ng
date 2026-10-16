@@ -98,9 +98,17 @@ signals:
 // -----------------------------------------------------------------------------
 class TTAudioStream : public TTAVStream
 {
+  Q_OBJECT
+
 public:
   explicit TTAudioStream(const QFileInfo &f_info, int s_pos=0);
   ~TTAudioStream() override;
+
+  //! The header list walk, the same for MPEG audio and AC3: find a sync
+  //! word, read the header behind it, skip a header that yields no frame,
+  //! chain abs_frame_time and jump over the frame. The codecs supply the
+  //! steps below.
+  int createHeaderList() override;
 
   // header list
   TTAudioHeaderList* headerList();
@@ -116,6 +124,20 @@ public:
   bool isCutOutPoint(int) override {return true;}
 
 protected:
+  //! Moves the stream buffer behind the next sync word.
+  virtual void searchNextSyncByte() = 0;
+  //! Bytes from the start of the frame up to where readHeader() leaves the
+  //! buffer, sync word included.
+  virtual int headerBytes() const = 0;
+  //! A new header read behind the sync word just found, nullptr when the
+  //! end of the file cut it off; a frame_length below headerBytes() means
+  //! the header yields no frame.
+  virtual TTAudioHeader* readHeader() = 0;
+  //! True for a header the list must end at, checked before the frame
+  //! length and only for a header right behind the previous frame. None by
+  //! default.
+  virtual bool endsHeaderList(const TTAudioHeader*) { return false; }
+
   // header list
   TTAudioHeaderList* header_list;
 

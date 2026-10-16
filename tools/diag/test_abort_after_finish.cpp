@@ -45,6 +45,7 @@
 // went too far).
 #include <QCoreApplication>
 #include <QThread>
+#include <QThreadPool>
 
 #include <atomic>
 #include <cstdio>
@@ -165,24 +166,45 @@ int main(int argc, char** argv)
   // ---- case 2: cancel arrives before the task ever ran ---------------------
   // Load-bearing: TTCutMainWindow wires aborted -> deleteLater + "search
   // finished(-1, aborted)" precisely for a task the pool never got to.
+  // "Never got to" = handed to the pool and still waiting in QThreadPool's
+  // queue: a single thread, held by a blocker. Until 2026-10-16 this case
+  // aborted a task handed to no pool at all; abort() now asks QThreadPool
+  // (tryTake) whether the task can still never run, and the application
+  // aborts no task it has not handed over (test_task_cleanup_order, queued).
   {
+    QThreadPool* qtp = QThreadPool::globalInstance();
+    const int threads = qtp->maxThreadCount();
+    qtp->setMaxThreadCount(1);
+    TTThreadTaskPool pool;
     QObject receiver;
+    QuickTask* blocker = new QuickTask("Blocker");
+    blocker->sleepMs.store(500);
+    pool.start(blocker);
+    for (int i = 0; i < 200 && !blocker->isRunning(); ++i) {
+      QCoreApplication::processEvents();
+      QThread::msleep(5);
+    }
     QuickTask* task = new QuickTask("BeforeStart");
     Counts c;
     wire(task, &receiver, &c);
+    pool.start(task);                       // queued behind the blocker
 
     task->onUserAbort();
+    qtp->waitForDone();
     drain(5);
+    qtp->setMaxThreadCount(threads);
 
-    printf("case 2 - never started : finished=%d aborted=%d cleanUp=%d\n",
-           c.finished, c.aborted, task->cleanUpCalls.load());
+    printf("case 2 - never started : finished=%d aborted=%d cleanUp=%d operation=%d\n",
+           c.finished, c.aborted, task->cleanUpCalls.load(), task->operationReturned.load());
 
-    const bool ok = (c.aborted == 1 && c.finished == 0);
+    const bool ok = (c.aborted == 1 && c.finished == 0 && task->cleanUpCalls == 1
+                     && !task->operationReturned);
     printf("case 2 - %s: a task cancelled before it ran must still report aborted\n",
            ok ? "PASS" : "FAIL");
     if (!ok) exitCode = 2;
 
     delete task;
+    delete blocker;
   }
 
   // ---- case 3: cancel during a re-run of the same task ---------------------

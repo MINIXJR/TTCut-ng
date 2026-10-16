@@ -1,6 +1,6 @@
 ---
-base_commit: 65e8c5eec4917440663915389594602e5fa6734a
-last_verified: 2026-10-14
+base_commit: 3b0e9bd5fb64e26c3aa32b6912846d5db07e30d4
+last_verified: 2026-10-16
 sources:
   - common/istatusreporter.h
   - common/istatusreporter.cpp
@@ -190,9 +190,17 @@ flowchart TD
 ## Assumptions, contracts & pitfalls
 
 - **`TTThreadTask::abort()` acts on three states, not two.** "Running" sets
-  the flag the operation polls; "never started" (still in the pool queue)
-  emits `aborted()` right away, and `TTCutMainWindow` depends on that (a
-  search task the pool never ran emits `aborted`, never `finished`). The third
+  the flag the operation polls; "never started" emits `aborted()` right away
+  (after `cleanUp()`), and `TTCutMainWindow` depends on that (a search task
+  the pool never ran emits `aborted`, never `finished`). "Never started" is
+  decided by `QThreadPool::tryTake()` alone (2026-10-16): only a task taken
+  back out of the queue can never run. The flags could not decide it —
+  `mIsRunning` is also false between QThreadPool starting `run()` and the
+  flag being set, and while `run()` is in `cleanUp()` before `mIsFinished`;
+  a cancel there ran `cleanUp()` twice or freed members under `operation()`,
+  and a queued task reported aborted and deleted was still run later
+  (gate `task_cleanup_order`, cases `end` and `queued`). Every task that
+  `tryTake()` does not return sees `mIsAborted` in `run()` and ends itself. The third
   is **already finished**, added 2026-08-15: `run()` sets
   `mIsFinished` immediately before `emit finished`, and `abort()` then returns
   without signalling, logging a warning instead. Before that, a cancel landing

@@ -44,6 +44,7 @@
 
 #include <math.h>
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QString>
 #include <qfileinfo.h>
 
@@ -213,6 +214,96 @@ TTAudioStream::~TTAudioStream()
     delete header_list;
     header_list = NULL;
   }
+}
+
+// create the audio header list
+// -----------------------------------------------------------------------------
+int TTAudioStream::createHeaderList()
+{
+  QElapsedTimer updateTime;
+  const int updateIntervalMs = 1000;
+  int skipped = 0;
+
+  header_list = new TTAudioHeaderList( 1000 );
+
+  // Where the next frame starts while the track is intact.
+  quint64 nextFrame = (quint64)start_pos;
+  stream_buffer->seekAbsolute( nextFrame );
+
+  try
+  {
+    updateTime.start();
+    emit statusReport(StatusReportArgs::Start, tr("Creating audio header list"), stream_buffer->size());
+
+    while ( !stream_buffer->atEnd() )
+    {
+      if (mAbort) {
+        mAbort = false;
+        log->infoMsg(__FILE__, __LINE__, "TTAudioStream::createHeaderList -> user abort");
+        throw TTAbortException(tr("Index list creation aborted!"));
+      }
+
+      searchNextSyncByte();
+      TTAudioHeader* audio_header = readHeader();
+
+      // The end of the file cut the header off.
+      if (audio_header == nullptr)
+        break;
+
+      // Behind junk or a skipped header the sync search also stops on byte
+      // pairs inside the frame data, and such a header is listed like a real
+      // one - deliberately: libav, which cuts the track, counts the same
+      // frames, and the cut finds a frame by its number (acmod, repairs).
+      // Only ending the list needs a header right behind the previous
+      // frame: a false E-AC3 sync after a signal loss ended a 61-minute AC3
+      // track at 10:53 (2026-10-16).
+      if (audio_header->headerOffset() == nextFrame && endsHeaderList(audio_header)) {
+        delete audio_header;
+        break;
+      }
+
+      // A header that yields no frame (reserved or corrupt fields) is skipped
+      // and the search goes on from behind it. It used to END the MPEG list:
+      // one broken header at 2:00 of a 10-minute file left 2:00 in the length
+      // column (audit run 11, H3).
+      if (audio_header->frame_length < headerBytes()) {
+        ++skipped;
+        delete audio_header;
+        continue;
+      }
+
+      // first audio header: abs_frame_time = 0.0 (msec)
+      if ( header_list->count() == 0 )
+        audio_header->abs_frame_time = 0.0;
+      else
+      {
+        const TTAudioHeader* prev_audio_header = header_list->audioHeaderAt(header_list->count()-1);
+        audio_header->abs_frame_time = prev_audio_header->abs_frame_time
+          + prev_audio_header->frame_time;
+      }
+
+      header_list->add( audio_header );
+      nextFrame = audio_header->headerOffset() + audio_header->frame_length;
+      stream_buffer->seekRelative( audio_header->frame_length - headerBytes() );
+
+      if (updateTime.elapsed() >= updateIntervalMs) {
+        emit statusReport(StatusReportArgs::Step, tr("Creating audio header list"), stream_buffer->position());
+        updateTime.restart();
+      }
+    }
+
+    emit statusReport(StatusReportArgs::Finished, tr("Audio header list created"), stream_buffer->position());
+  }
+  catch (TTFileBufferException)
+  {
+  }
+
+  if (skipped > 0)
+    log->warningMsg(__FILE__, __LINE__,
+        QString("Skipped %1 invalid audio header(s) in %2").arg(skipped).arg(filePath()));
+  logHeaderListCreated(header_list->count());
+
+  return header_list->count();
 }
 
 // return pointer to current header list

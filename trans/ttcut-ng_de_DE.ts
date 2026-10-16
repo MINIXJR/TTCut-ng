@@ -38,15 +38,12 @@
 <context>
     <name>TTAC3AudioStream</name>
     <message>
-        <location filename="../avstream/ttac3audiostream.cpp" line="149"/>
-        <location filename="../avstream/ttac3audiostream.cpp" line="193"/>
         <source>Creating audio header list</source>
-        <translation>Audio-Header-Liste erstellen</translation>
+        <translation type="vanished">Audio-Header-Liste erstellen</translation>
     </message>
     <message>
-        <location filename="../avstream/ttac3audiostream.cpp" line="197"/>
         <source>Audio header list created</source>
-        <translation>Audio-Header-Liste erstellt</translation>
+        <translation type="vanished">Audio-Header-Liste erstellt</translation>
     </message>
 </context>
 <context>
@@ -645,24 +642,24 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
 <context>
     <name>TTAVStream</name>
     <message>
-        <location filename="../avstream/ttavstream.cpp" line="68"/>
+        <location filename="../avstream/ttavstream.cpp" line="69"/>
         <source>Stream does not exists: %1</source>
         <translation>Stream existiert nicht: %1</translation>
     </message>
     <message>
-        <location filename="../avstream/ttavstream.cpp" line="73"/>
+        <location filename="../avstream/ttavstream.cpp" line="74"/>
         <source>Error allocating buffer for: %1</source>
         <translation>Fehler bei Pufferzuweisung für: %1</translation>
     </message>
     <message>
-        <location filename="../avstream/ttavstream.cpp" line="164"/>
-        <location filename="../avstream/ttavstream.cpp" line="179"/>
-        <location filename="../avstream/ttavstream.cpp" line="185"/>
+        <location filename="../avstream/ttavstream.cpp" line="165"/>
+        <location filename="../avstream/ttavstream.cpp" line="180"/>
+        <location filename="../avstream/ttavstream.cpp" line="186"/>
         <source>Cutting audio</source>
         <translation>Audio schneiden</translation>
     </message>
     <message>
-        <location filename="../avstream/ttavstream.cpp" line="186"/>
+        <location filename="../avstream/ttavstream.cpp" line="187"/>
         <source>Audio cut finished</source>
         <translation>Audio-Schnitt abgeschlossen</translation>
     </message>
@@ -1114,6 +1111,25 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <location filename="../gui/ttaudiorepairdialog.cpp" line="724"/>
         <source>End must not be before start.</source>
         <translation>Ende darf nicht vor dem Start liegen.</translation>
+    </message>
+</context>
+<context>
+    <name>TTAudioStream</name>
+    <message>
+        <location filename="../avstream/ttavstream.cpp" line="234"/>
+        <location filename="../avstream/ttavstream.cpp" line="276"/>
+        <source>Creating audio header list</source>
+        <translation>Audio-Header-Liste erstellen</translation>
+    </message>
+    <message>
+        <location filename="../avstream/ttavstream.cpp" line="241"/>
+        <source>Index list creation aborted!</source>
+        <translation>Indexerstellung abgebrochen!</translation>
+    </message>
+    <message>
+        <location filename="../avstream/ttavstream.cpp" line="281"/>
+        <source>Audio header list created</source>
+        <translation>Audio-Header-Liste erstellt</translation>
     </message>
 </context>
 <context>
@@ -2152,27 +2168,27 @@ Marker und Reparaturen löschen?</numerusform>
         <translation>Erstelle Logo-Profil (%1/%2 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2558"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2560"/>
         <source>Logo profile created (%1 frames)</source>
         <translation>Logo-Profil erstellt (%1 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2561"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2565"/>
         <source>Logo profile could not be created</source>
         <translation>Logo-Profil konnte nicht erstellt werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2585"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2589"/>
         <source>Searching logo change from frame %1...</source>
         <translation>Suche Logo-Wechsel ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2596"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2600"/>
         <source>Logo search aborted</source>
         <translation>Logo-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2596"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2600"/>
         <source>No logo state change found</source>
         <translation>Keine Logo-Statusänderung gefunden</translation>
     </message>
@@ -4135,20 +4151,16 @@ Ausgabedatei:
 <context>
     <name>TTMPEGAudioStream</name>
     <message>
-        <location filename="../avstream/ttmpegaudiostream.cpp" line="168"/>
-        <location filename="../avstream/ttmpegaudiostream.cpp" line="213"/>
         <source>Creating audio header list</source>
-        <translation>Audio-Header-Liste erstellen</translation>
+        <translation type="vanished">Audio-Header-Liste erstellen</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpegaudiostream.cpp" line="175"/>
         <source>Index list creation aborted!</source>
-        <translation>Indexerstellung abgebrochen!</translation>
+        <translation type="vanished">Indexerstellung abgebrochen!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpegaudiostream.cpp" line="218"/>
         <source>Audio header list created</source>
-        <translation>Audio-Header-Liste erstellt</translation>
+        <translation type="vanished">Audio-Header-Liste erstellt</translation>
     </message>
 </context>
 <context>
@@ -4308,12 +4320,12 @@ mplex fand hinter dem letzten erkennbaren Audio-Frame weitere Daten und hat den 
         <translation type="vanished">Datei %1 konnte nicht gefunden werden!</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="77"/>
+        <location filename="../data/ttopenvideotask.cpp" line="78"/>
         <source>file %1 does not exist</source>
         <translation>Datei %1 existiert nicht</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="91"/>
+        <location filename="../data/ttopenvideotask.cpp" line="92"/>
         <source>Container format detected: %1
 
 TTCut only works with elementary streams.
@@ -4334,22 +4346,22 @@ Unterstützte Formate:
   Untertitel: .srt</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="113"/>
+        <location filename="../data/ttopenvideotask.cpp" line="114"/>
         <source>unsupported video type %1</source>
         <translation>Nicht unterstütztes Videoformat %1</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="121"/>
+        <location filename="../data/ttopenvideotask.cpp" line="122"/>
         <source>failed to create video stream for %1</source>
         <translation>Videostream für %1 konnte nicht erstellt werden</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="132"/>
+        <location filename="../data/ttopenvideotask.cpp" line="133"/>
         <source>Failed to parse video stream headers: %1</source>
         <translation>Video-Stream-Header konnten nicht geparst werden: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="138"/>
+        <location filename="../data/ttopenvideotask.cpp" line="139"/>
         <source>Failed to create video index: %1</source>
         <translation>Video-Index konnte nicht erstellt werden: %1</translation>
     </message>
@@ -4598,12 +4610,12 @@ Unterstützte Formate:
     </message>
     <message>
         <location filename="../avstream/ttsrtsubtitlestream.cpp" line="179"/>
-        <location filename="../avstream/ttsrtsubtitlestream.cpp" line="236"/>
+        <location filename="../avstream/ttsrtsubtitlestream.cpp" line="242"/>
         <source>Creating subtitle header list</source>
         <translation>Untertitel-Header-Liste erstellen</translation>
     </message>
     <message>
-        <location filename="../avstream/ttsrtsubtitlestream.cpp" line="241"/>
+        <location filename="../avstream/ttsrtsubtitlestream.cpp" line="247"/>
         <source>Subtitle header list created</source>
         <translation>Untertitel-Header-Liste erstellt</translation>
     </message>

@@ -51,8 +51,9 @@ void TTOpenVideoTask::onUserAbort()
   if (mpVideoStream != 0)
     mpVideoStream->setAbort(true);
 
-  if (!mpAVItem->isInList())
-    delete mpAVItem;
+  // The item is not ours to delete: TTAVData owns it (mPendingVideoItems)
+  // until it joins the list, and this task's own finished() as well as the
+  // audio and subtitle tasks of the same item still carry the pointer.
 }
 
 /**

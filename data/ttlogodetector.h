@@ -31,6 +31,9 @@ public:
                       std::function<void(int current, int total)> progressFn = nullptr);
 
   // ROI management (manual fallback)
+  // Smallest side, in picture pixels, of an area the detector accepts - the
+  // selection in the picture, the area itself and its part inside the frame.
+  static constexpr int kMinRoiSide = 5;
   void setROI(const QRect& roiInImageCoords);
   QRect roi() const;
   bool hasROI() const;

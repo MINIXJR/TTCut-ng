@@ -44,17 +44,21 @@ class TTMPEGAudioStream : public TTAudioStream
 
   TTAVTypes::AVStreamType streamType() const override;
 
-  void searchNextSyncByte();
   //! Fills audio_header from the three header bytes after the sync byte at
   //! data[offset]; frame_length 0 when they describe no frame. Needs no
   //! stream: TTAudioType probes sync candidates with it.
   static void parseAudioHeader( const quint8* data, int offset, TTMpegAudioHeader* audio_header );
 
-  void    readAudioHeader( TTMpegAudioHeader* audio_header );
+  //! False when the end of the file cut the header off.
+  bool    readAudioHeader( TTMpegAudioHeader* audio_header );
 
-  int createHeaderList() override;
   int createIndexList() override {return 0;}
 
+ protected:
+  // createHeaderList() steps: sync 0xFFE (11 bits), 4 header bytes
+  void           searchNextSyncByte() override;
+  int            headerBytes() const override { return 4; }
+  TTAudioHeader* readHeader() override;
 };
 
 #endif //TTMPEGAUDIOSTREAM_H

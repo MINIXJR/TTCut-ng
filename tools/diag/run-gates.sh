@@ -123,6 +123,8 @@ log_app_file_off       tux   300  -
 log_qdebug_context     tux   300  -
 acm_cut_isolated       tux   300  -
 navigator_refresh      tux   300  test_navigator_refresh
+logo_roi               tux   300  test_logo_roi
+open_cancel            tux   840  test_open_cancel
 mpeg2_framerate_cut    tux   600  -
 diag_target_complete   unit  60   -
 cases_verdict          unit  60   -
@@ -617,6 +619,25 @@ gate_navigator_refresh() {
   ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/p.ttcut"
   LC_ALL=C.UTF-8 "$D/test_navigator_refresh" "$W/p.ttcut"
 }
+# A logo area is reported as a profile only when the detector built one.
+gate_logo_roi() {
+  need "$PRJ264"
+  LC_ALL=C.UTF-8 "$D/test_logo_roi" "$PRJ264"
+}
+# Cancelling a video open or a project load leaves the item to its owner.
+gate_open_cancel() {
+  cases 120 open_cancel_unit open_cancel_fresh_0 open_cancel_fresh_20 open_cancel_fresh_100 \
+            open_cancel_project_0 open_cancel_project_20 open_cancel_project_100
+}
+# 0 ms: the cancel lands while the tasks wait in or enter QThreadPool
+# (TTThreadTask::abort, see test_task_cleanup_order).
+case_open_cancel_fresh_0()     { need "$V264";   "$D/test_open_cancel" cancel "$V264" 0; }
+case_open_cancel_project_0()   { need "$PRJ264"; "$D/test_open_cancel" cancel "$PRJ264" 0; }
+case_open_cancel_unit()        { "$D/test_open_cancel" unit; }
+case_open_cancel_fresh_20()    { need "$V264";   "$D/test_open_cancel" cancel "$V264" 20; }
+case_open_cancel_fresh_100()   { need "$V264";   "$D/test_open_cancel" cancel "$V264" 100; }
+case_open_cancel_project_20()  { need "$PRJ264"; "$D/test_open_cancel" cancel "$PRJ264" 20; }
+case_open_cancel_project_100() { need "$PRJ264"; "$D/test_open_cancel" cancel "$PRJ264" 100; }
 # acm-cut.sh must not rotate the caller's log (XDG_CACHE_HOME stands for ~/.cache).
 gate_acm_cut_isolated() {
   need "$V264" "$A264"; mkdir -p "$W/out" "$XDG_CACHE_HOME/ttcut-ng"

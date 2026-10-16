@@ -27,12 +27,6 @@
 
 
 #include "ttac3audiostream.h"
-#include "ttaudioheaderlist.h"
-
-#include <QElapsedTimer>
-
-#include "../common/istatusreporter.h"
-#include "../common/ttexception.h"
 #include "ttcommon.h"
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -78,7 +72,7 @@ void TTAC3AudioStream::searchNextSyncByte()
 }
 
 //! Read audio header information from stream
-void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
+bool TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
 {
   // AC3 frame layout up to and including the bytes we just read:
   //   [2 bytes sync word][6 bytes header data]
@@ -88,18 +82,23 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
   static constexpr int kAC3SyncBytes   = 2;
   static constexpr int kAC3HeaderBytes = 6;
 
-  quint8* daten = new quint8[kAC3HeaderBytes];
+  quint8 daten[kAC3HeaderBytes];
   quint16 stuff;
 
-  stream_buffer->readByte(daten, kAC3HeaderBytes);
+  // readByte swallows the end of the file and returns how many it got - the
+  // rest of daten would be uninitialised
+  if (stream_buffer->readByte(daten, kAC3HeaderBytes) < kAC3HeaderBytes)
+    return false;
 
   audio_header->setHeaderOffset( stream_buffer->position() - (kAC3SyncBytes + kAC3HeaderBytes) );
 
   audio_header->fscod           = (quint8)((daten[2]&0xc0)>>6);
   audio_header->frmsizecod      = (quint8)(daten[2]&0x3f);
+  audio_header->bsid            = (quint8)(daten[3]>>3);
 
-  // Guard against OOB: AC3FrameLength is [4][38], fscod 3 is reserved, frmsizecod >= 38 is invalid
-  if (audio_header->fscod >= 3 || audio_header->frmsizecod >= 38) {
+  // Guard against OOB: AC3FrameLength is [4][38], fscod 3 is reserved, frmsizecod >= 38 is invalid.
+  // An E-AC3 frame (bsid > 10) has its size elsewhere: no frame this table can size.
+  if (audio_header->fscod >= 3 || audio_header->frmsizecod >= 38 || audio_header->bsid > 10) {
     audio_header->syncframe_words = 0;
   } else {
     audio_header->syncframe_words = AC3FrameLength[audio_header->fscod][audio_header->frmsizecod];
@@ -110,7 +109,6 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
   // frames) - see TTMPEGAudioStream::parseAudioHeader (audit run 11, H1).
   audio_header->frame_time      = (audio_header->sampleRate() > 0)
                                   ? 1536.0 * 1000.0 / audio_header->sampleRate() : 0.0;
-  audio_header->bsid            = (quint8)(daten[3]>>3);
   audio_header->bsmod           = (quint8)(daten[3] & 0x07);
   audio_header->acmod           = (quint8)(daten[4]>>5);
 
@@ -130,77 +128,29 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
 
   audio_header->lfeon=(stuff&0x8000)!=0;
 
-  delete [] daten;
+  return true;
 }
 
-//! Create the header list
-int TTAC3AudioStream::createHeaderList()
+//! Read the header behind the sync word for createHeaderList()
+TTAudioHeader* TTAC3AudioStream::readHeader()
 {
-  QElapsedTimer updateTime;
-  const int updateIntervalMs = 1000;
-
-  header_list = new TTAudioHeaderList( 1000 );
-
-  stream_buffer->seekRelative( start_pos );
-
-  try
-  {
-    updateTime.start();
-    emit statusReport(StatusReportArgs::Start, tr("Creating audio header list"), stream_buffer->size());
-
-    while (!stream_buffer->atEnd())
-    {
-      if (mAbort) {
-        mAbort = false;
-        throw TTAbortException("User abort in TTAC3AudioStream::createHeaderList!");
-      }
-
-      searchNextSyncByte();
-
-      TTAC3AudioHeader* audio_header = new TTAC3AudioHeader();
-
-      readAudioHeader( audio_header );
-
-      // E-AC3 (DD+) uses same 0x0B77 sync but different frame size encoding.
-      // bsid > 10 indicates E-AC3 which this parser cannot handle.
-      if (audio_header->bsid > 10) {
-        log->warningMsg(__FILE__, __LINE__,
-            QString("E-AC3 stream detected (bsid=%1) - not supported, skipping").arg(audio_header->bsid));
-        delete audio_header;
-        break;
-      }
-
-      // Guard against zero/invalid frame length (fscod=3 reserved, corrupt data)
-      if (audio_header->syncframe_words == 0) {
-        delete audio_header;
-        continue;
-      }
-
-      if ( header_list->count() == 0 )
-        audio_header->abs_frame_time = 0.0;
-      else
-      {
-        const TTAudioHeader* prev_audio_header = header_list->audioHeaderAt(header_list->count()-1);
-        audio_header->abs_frame_time = prev_audio_header->abs_frame_time
-          +prev_audio_header->frame_time;
-      }
-
-      header_list->add( audio_header );
-
-      stream_buffer->seekRelative(audio_header->syncframe_words*2-8);
-
-      if (updateTime.elapsed() >= updateIntervalMs) {
-        emit statusReport(StatusReportArgs::Step, tr("Creating audio header list"), stream_buffer->position());
-        updateTime.restart();
-      }
-    }
-    emit statusReport(StatusReportArgs::Finished, tr("Audio header list created"), stream_buffer->position());
+  TTAC3AudioHeader* audio_header = new TTAC3AudioHeader();
+  if (!readAudioHeader( audio_header )) {
+    delete audio_header;
+    return nullptr;
   }
-  catch (TTFileBufferException)
-  {
-  }
+  return audio_header;
+}
 
-  logHeaderListCreated(header_list->count());
+//! E-AC3 (DD+) uses the same 0x0B77 sync but a different frame size
+//! encoding: bsid > 10 is a stream this parser cannot handle.
+bool TTAC3AudioStream::endsHeaderList(const TTAudioHeader* header)
+{
+  const auto* ac3_header = static_cast<const TTAC3AudioHeader*>(header);
+  if (ac3_header->bsid <= 10)
+    return false;
 
-  return header_list->count();
+  log->warningMsg(__FILE__, __LINE__,
+      QString("E-AC3 stream detected (bsid=%1) - not supported, skipping").arg(ac3_header->bsid));
+  return true;
 }

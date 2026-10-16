@@ -221,6 +221,20 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     wie bei der geteilten Engine). Auch vermerkt in
     `docs/code-map/smart-cut.md`.
 
+- **Element eines abgebrochenen frischen Öffnens bleibt liegen**
+  (2026-10-16, Rest des Fixes „Abbruch beim Öffnen“, siehe
+  `docs/completed-work.md`). Bricht ein frisches Öffnen ab oder scheitert
+  es, bleibt sein `TTAVItem` in `mPendingVideoItems`; freigegeben wird es
+  erst beim nächsten abgebrochenen Projektladen (`endAbortedProjectLoad`),
+  sonst nie. Beim Scheitern war das schon vorher so, beim Abbruch wurde es
+  bis dahin (fehlerhaft) von der Aufgabe gelöscht. Nicht gemessen, wie viel
+  Speicher ein liegengebliebenes Element hält.
+  - **Falle für den Fix:** die naheliegende Stelle `onThreadPoolExit` läuft
+    auch *innerhalb* des modalen Fehlerbild-Dialogs, den `onOpenVideoFinished`
+    vor dem Anhängen an `mpAVList` zeigt (Kommentar dort), und würde das
+    gerade bearbeitete Element löschen. Freigeben erst, wenn kein
+    `onOpenVideoFinished` mehr aussteht.
+
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an zwei Stellen: `data/ttpreviewclip.cpp` und
     `data/ttcutpreviewtask.cpp` — beide schreiben `preview_audio_temp.<ext>`
@@ -541,10 +555,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
 - **Lesebefunde der vollen Kartenprüfung (2026-10-11)** — beim Lesen der
   Karten gegen den Code aufgefallen. **Alle nur gelesen, keiner gemessen**;
   vor einer Änderung zuerst nachstellen.
-  - **Fenster ohne Schutz im Lauf ohne Oberfläche.**
-    `TTAVData::showImportAsStreamPointsWarning` ruft `msgBox.exec()` ohne
-    Abfrage von `mNonInteractive`; aufgerufen aus
-    `showExtraFrameClusterDialog` und der Integritätswarnung beim Öffnen.
   - **Sequenzkopf hinter einem ganz neu kodierten MPEG-2-Abschnitt.** Liegt
     das nächste I-Bild hinter dem Schnittende, kodiert
     `TTMpeg2VideoStream::getCutStartObject` den ganzen Abschnitt neu und
@@ -565,21 +575,10 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
       der ganzen Schnittliste, gleich welche Zeilen der Auftrag umfasste.
   - **Aus der zweiten Stufe, nur von den Agenten gelesen (von mir nicht
     nachgelesen):**
-    - Abbruch während eines Projektladens: `TTOpenVideoTask::onUserAbort`
-      löscht `mpAVItem`, wenn es nicht in der Liste ist, während
-      `mPendingVideoItems` den Zeiger noch hält und
-      `endAbortedProjectLoad` `qDeleteAll(mPendingVideoItems)` ruft —
-      mögliches doppeltes Löschen.
     - Vorschau über zwei Videos: `TTCutPreviewTask::operation` richtet die
       gemeinsame Smart-Cut-Engine am Eintrag 0 der Auftragsliste ein; eine
       Liste, die zwei Videos umfasst, schnitte die Clips des zweiten aus
       der Engine des ersten.
-    - Logo-Auswahl 4×4: `TTMPEG2Window2` sendet `logoROISelected` ab 4×4
-      Pixeln, `TTLogoDetector::hasROI()` verlangt Breite > 4 — der Status
-      meldete dann „Logo profile created“ ohne brauchbares Profil.
-    - SRT mit UTF-8-BOM: die Karte `subtitle-core` nennt „reads fine“
-      (gemessen); nach dem Code würde die erste Indexzeile zu 0 und die
-      zweite eine Warnung „missing subtitle“ auslösen. Kein Gate-Fall.
     - Esc im Vorschau-Dialog beendet ihn womöglich über `reject()` ohne
       `closeEvent` → `cleanUp` (Vermutung, Qt-Verhalten).
     - `tools/burst-analysis/` (README und Kopf von `burst_analysis.py`):
@@ -701,16 +700,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
     `detectSilencePoints` (155 Zeilen) und `detectBurst` (246 Zeilen) aus.
     Ein gemeinsamer Öffner mit RAII-Freigabe, danach die Worker-Methode nach
     Phasen teilen.
-  - **P10 Ein Kopflisten-Lauf für MPEG-Audio und AC3** (Audit-Lauf 11,
-    `audio-es-input.md`) — `TTMPEGAudioStream::createHeaderList` und
-    `TTAC3AudioStream::createHeaderList` (mit `searchNextSyncByte`) sind
-    derselbe Lauf: Abbruch prüfen, Sync suchen, Kopf lesen, unbrauchbaren
-    Kopf überspringen, `abs_frame_time` verketten, Rahmen überspringen,
-    Fortschritt melden, Dateiende schlucken. Seit Lauf 11 überspringen beide
-    einen unbrauchbaren Kopf. Ziel: ein Lauf in `TTAudioStream`, je Codec nur
-    Sync-Muster, Kopfgröße und das Lesen des Kopfes; E-AC3 beendet die Liste
-    weiterhin. Gate: jede Kopfliste vorher/nachher gleich, wie in Lauf 11
-    (Ausgabe aller Kopfwerte auf neun Dateien, `docs/completed-work.md`).
 
 - **AAC-, E-AC3- und DTS-Tonspuren werden nicht gelesen** (Audit-Lauf 11,
   `audio-es-input.md` H2). `ttcut-demux` schreibt `.aac` und `.eac3`, aber

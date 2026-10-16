@@ -1728,6 +1728,124 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Abbruch beim Öffnen eines Videos oder Projekts stürzte ab** →
+  **ERLEDIGT (2026-10-16)**, Zweig `fix/logo-roi-profile` (Lesebefund der
+  vollen Kartenprüfung „Abbruch während eines Projektladens: mögliches
+  doppeltes Löschen“; die Messung fand zwei andere Fehler).
+  - Gemessen vor dem Fix (Wegwerf-Prüfprogramm, Hauptfenster offscreen,
+    Abbrechen-Knopf der Fortschrittsleiste `<ms>` nach dem Start): ohne
+    Sanitizer SIGSEGV beim Tux-H.264-Projekt nach 20 ms, beim HEVC-Tux
+    nach 20 und 100 ms, beim frischen Öffnen nach 20 und 100 ms (330-MB-ES
+    aus zehn Tux-Kopien); gdb jedes Mal in `onOpenVideoFinished` bzw. den
+    Baumansichten. Später (Laden schon fertig) sauber.
+  - **A**, AddressSanitizer: `TTOpenVideoTask::onUserAbort` gab das
+    `TTAVItem` frei (`if (!isInList()) delete`, aus dem ursprünglichen
+    TTCut), das seit `b56927cd` `TTAVData` über `mPendingVideoItems`
+    gehört; die eingereihten `finished` von Video-, Ton- und
+    Untertitelaufgabe benutzten es danach (`setVideoStream`,
+    `appendAudioEntry`). Das im TODO vermutete doppelte Löschen in
+    `endAbortedProjectLoad` kam in keinem Lauf dran — der Absturz kam
+    vorher. Fix: das `delete` fällt weg.
+  - **B**, AddressSanitizer bei 0 ms: `TTThreadTask::abort()` hielt „nicht
+    laufend, nicht abgebrochen, nicht fertig“ für „nie gestartet“, sendete
+    `aborted` und rief `cleanUp()`. So sieht es auch kurz nach dem Start
+    aus (`TTOpenVideoTask::cleanUp` gab `mpVideoType` unter `operation()`
+    frei) und während `run()` in `cleanUp()` steht (doppeltes Freigeben in
+    `TTOpenSubtitleTask::cleanUp`). Eine wirklich wartende Aufgabe wurde
+    gemeldet und vom Besitzer gelöscht, `QThreadPool` startete sie trotzdem
+    noch. Fix: „nie gestartet“ heißt `QThreadPool::tryTake()` gelingt; dann
+    `cleanUp()` vor `aborted` (wie in `run()`), sonst nur `mIsAborted`.
+  - Gates: `open_cancel` (Einheit: Element lebt nach `onUserAbort`; Ablauf
+    0/20/100 ms für frisches Öffnen und Projekt), vorher Einheit und beide
+    20-ms-Fälle rot (rc 139 und 134); `task_cleanup_order` mit den Fällen
+    `end` (vorher cleanUp 2, aborted 1) und `queued` (vorher cleanUp 2,
+    aborted 2). Unter ASAN nach beiden Fixes: 0 und 20 ms, Projekt und
+    frisches Öffnen, 40 von 40 Läufen ohne Befund. 22 weitere Abbruch- und
+    Aufgaben-Gates grün; `abort_after_finish` Fall 2 wurde rot und ist
+    umgestellt: er brach eine Aufgabe ab, die keinem Pool übergeben war —
+    das tut die Anwendung nirgends (Suche, Zeitsprung, Vorschau übergeben
+    vorher; die Vorschau reicht an eine `startNested`-Aufgabe weiter, die
+    jetzt beim Start über `mIsAborted` endet). Jetzt wartet die Aufgabe
+    hinter einer Sperre in der Warteschlange von `QThreadPool`: aborted 1,
+    cleanUp 1, keine `operation()`.
+  - User-Entscheid 2026-10-16: die frühere Gate-Zusage aus `0af72ab1` (auch
+    eine nie übergebene Aufgabe meldet `aborted`) entfällt, und Fix B bleibt
+    bei `tryTake()` statt des im Entwurf genannten Kennzeichens in `run()` —
+    das Kennzeichen hätte die Lücke zwischen Warteschlange und Start von
+    `run()` nicht geschlossen.
+  - Offen geblieben, im `TODO.md`: das Element eines abgebrochenen oder
+    gescheiterten frischen Öffnens bleibt in `mPendingVideoItems` liegen.
+
+- **Fenster ohne Schutz im Lauf ohne Oberfläche** → **ERLEDIGT ohne
+  Code-Änderung (2026-10-16): nicht erreichbar** (Lesebefund der vollen
+  Kartenprüfung: `TTAVData::showImportAsStreamPointsWarning` ruft
+  `msgBox.exec()` ohne Abfrage von `mNonInteractive`).
+  - Gemessen (Wegwerf-Prüfprogramm, Tux-H.264 mit `audio_gap_frames=1000`
+    in der `.info`, Projekt mit einem Schnitt, jedes modale Fenster gezählt
+    und geschlossen): frisches Öffnen (`onReadVideoStream`) zeigt „Defective
+    Frames Detected“; der Weg von `--auto-cut` (`runAutoCutMode`) zeigt
+    kein Fenster, Rückgabe 0, MKV geschrieben.
+  - Grund: beide Aufrufer hängen am frischen Öffnen — der Fehlerbild-Dialog
+    nur für Videos, die `openAVStreams` vorgemerkt hat, die
+    Integritätswarnung steht in `openAVStreams`. `--auto-cut` setzt als
+    einziger Lauf `mNonInteractive` und lädt nur Projekte; das Projektladen
+    geht an `openAVStreams` vorbei, Video-Argumente wertet `main()` in dem
+    Zweig nicht aus.
+  - Festgehalten in der Karte `ttcut-demux` (Abschnitt zum ungeschützten
+    Dialog): öffnet `--auto-cut` je frisch, braucht es die Abfrage.
+
+- **SRT mit UTF-8-BOM: falsche Warnung, vor einer Leerzeile fehlte der
+  erste Eintrag** → **ERLEDIGT (2026-10-16)**, Zweig `fix/logo-roi-profile`
+  (Lesebefund der vollen Kartenprüfung; die Karte `subtitle-core` nannte
+  den BOM nach Audit-Lauf 14 „not a problem“).
+  - Gemessen vor dem Fix (Gate `subtitle_core`, Fall H5, zwei Einträge,
+    der erste „Über“): BOM direkt vor „1“ ergab die richtigen Einträge und
+    die Warnung „Subtitles in bom.srt missing. Reading subtitle 0, last
+    was 2.“; BOM mit folgender Leerzeile verlor den ersten Eintrag
+    („subtitle 0 skipped, unreadable timing line "1"“).
+  - Ursache: `TTFileBuffer::readLine` liest Latin-1, der BOM kam als „ï»¿“
+    vor der ersten Zeile an und galt als Eintragsnummer (`toInt()` = 0)
+    bzw. allein als Nummer, und die echte Nummer wurde zur Zeitzeile.
+  - Fix: `createHeaderList` entfernt den BOM von der ersten Zeile.
+    Nebenbei: die Lücken-Warnung nannte die beiden Nummern vertauscht
+    (Lücke 1→3: „Reading subtitle 1, last was 3“); jetzt „Reading subtitle
+    3, last was 1“. Gate `subtitle_core` H5 (drei Prüfungen, vorher alle
+    rot); `subtitle_delay` danach unverändert grün.
+  - Nicht gemessen: echte Dateien mit BOM — die einzige SRT im Repo hat
+    keinen, die zehn Dateien aus Audit-Lauf 14 sind nicht wieder geprüft.
+
+- **Logo-Bereich: „Logo profile created“ ohne Profil** →
+  **ERLEDIGT (2026-10-16)**, Zweig `fix/logo-roi-profile` (Lesebefund der
+  vollen Kartenprüfung „Logo-Auswahl 4×4“; die Messung zeigte mehr).
+  - Gemessen vor dem Fix (`test_logo_roi`, Hauptfenster offscreen,
+    `tux_h264_1080p_progressive_test.ttcut`, Bereich direkt an
+    `onLogoROISelected`, danach `onSearchLogo`): 4×4 und ein 50×50-Bereich
+    ganz außerhalb des Bildes meldeten „Logo profile created (10 frames)“,
+    die Suchknöpfe gingen an, der Suchklick startete nichts und sagte
+    nichts. 200×120 und 5×5 arbeiteten richtig. Beim Aufziehen im Bild
+    sendete das Widget bei 8 von 17 Fensterbreiten (800–2400 px) als
+    ersten Bereich 4×4.
+  - Ursache: `onLogoROISelected` meldete Erfolg nach der Zahl dekodierter
+    Bilder; `addEdgeSample` verwirft still jedes Bild, solange `hasROI()`
+    (Seite > 4) oder der Teil im Bild (≥ 4) nicht reicht, und dann gibt es
+    kein Profil. Drei Grenzen nebeneinander: Widget ≥ 4, `hasROI` > 4,
+    Zuschnitt ≥ 4. Im Fehlerzweig blieben außerdem Rahmen und Suchknöpfe
+    eines früheren Bereichs stehen.
+  - Fix: Erfolg ist `hasProfile()` nach `finalizeProfile`; im Fehlerzweig
+    Rahmen weg und Suchknöpfe aus. Eine Grenze
+    `TTLogoDetector::kMinRoiSide` (5) für Widget, `hasROI` und Zuschnitt;
+    ein zu kleines Aufziehen lässt die Auswahl offen. Gate `logo_roi`
+    (vier Bereiche samt Suchklick, Aufziehen bei 17 Fensterbreiten),
+    vorher drei Prüfungen rot.
+  - Nebenbefund, nicht geändert: die Grenze gilt in Bildpunkten. Bei einem
+    310 px breiten Bild ergibt schon ein Klick ohne Bewegung 6×6 und
+    startet die Profilerstellung (`QRect(p, p)` ist 1 px breit, ein
+    Widget-Pixel sind dort gut 6 Bildpunkte).
+  - Nicht gemessen: der MPEG-2-Weg (Bilder über das Vorschaufenster statt
+    über den Analyse-Dekoder) und ein gespeichertes Projekt mit einem
+    Bereich aus anderer Auflösung — die Zeile „außerhalb des Bildes“ ruft
+    `onLogoROISelected` direkt, wie es `onLogoDataLoaded` tut.
+
 - **Duplizieren von Schnitten zweier Videos beendete das Programm** →
   **ERLEDIGT (2026-10-11)**, Zweig `fix/duplicate-cut-and-glyph-path`
   (Lesebefund der vollen Kartenprüfung; der Befund lautete „kein Fangnetz“,
@@ -2896,6 +3014,69 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     im "Aktueller Frame"-Widget läuft während der mpv-Wiedergabe live mit.
 
 ### Audio
+
+- **Kopfliste: Kopf aus nicht belegtem Speicher am Dateiende, falsches
+  E-AC3 nach einer Störung** → **DONE (2026-10-16, Zweig
+  `refactor/audio-headerlist`)**. Beim Umbau P10 gefunden.
+  - **Dateiende:** fand die Sync-Suche bis zum Ende nichts mehr, wurde der
+    Kopf trotzdem gelesen — `readByte(quint8*, int)` meldet das Ende nur
+    über die Rückgabe, die keiner prüfte. valgrind: „uninitialised value“
+    in beiden `readAudioHeader`. Folge: mit 300 Null-Bytes am Ende in 2 von
+    3 Läufen ein erfundener letzter Kopf (MP2 835 statt 834, einmal AC3 626
+    statt 625). Jetzt endet die Liste dort; valgrind 0 Fehler.
+  - **Falsches E-AC3:** hinter einem kaputten AC3-Kopf traf die Suche auf
+    ein `0B 77` in den Tondaten mit bsid > 10 und beendete die Liste. Auf
+    einer roh gezogenen DVB-Spur mit Signalverlust (The Rookie 07x12,
+    `ffmpeg -c:a copy` ohne `ttcut-audiofix`): 20 420 Köpfe, Länge 10:53
+    statt 61:22. Jetzt beendet E-AC3 die Liste nur an der Stelle, wo der
+    vorige Rahmen endete; anderswo bekommt ein solcher Kopf die Länge 0 und
+    wird übersprungen. Ergebnis 115 340 Köpfe.
+  - **Verworfen nach Messung:** zuerst sollte ein Kopf nach einer Störung
+    nur zählen, wenn genau eine Rahmenlänge dahinter der nächste beginnt
+    (gegen den Befund „ein kaputter MP2-Kopf kostet zwei Rahmen“, Lauf 11).
+    Der Vergleich mit libav zeigte: libav zählt genau dieselben Rahmen wie
+    der einfache Lauf — `mp2_badhdr` 832/832, H3-Material 2498/2498, rohe
+    Rookie-MP2 153 837/153 837, Remington Steele 206 815/206 815, Rookie-AC3
+    ohne den E-AC3-Abbruch 115 342 (Python-Nachbau, bildet die alten 20 420
+    genau nach) gegen 115 340. Der Tonschnitt nummeriert seine Rahmen nach
+    libav (`frameNo = pktTime / frameDur`, `TTAudioCutter`), acmod und
+    Reparatur nach dem Platz in der Kopfliste; mit der Prüfung lag die Liste
+    hinter jeder Störung daneben (Rookie-MP2 −116, Rookie-AC3 −179).
+    User-Entscheid: so zählen wie libav.
+  - Gate `audio_es_input`: H3 jetzt „Kopfzahl = Paketzahl bei libav“ (vorher
+    `>= 2498`); neu „false E-AC3“ (alter Code immer rot: 300 von 625) und
+    „tail“ (MP2/AC3 mit 300 Null-Bytes; alter Code nur manchmal rot).
+  - Vorher/nachher: 46 bereinigte DVB-Spuren Byte für Byte gleich — unter
+    ihren 2,5 Mio. Köpfen liegt keiner außerhalb der Reihe, der geänderte
+    Weg wird dort nie betreten. Der Arbeitsablauf mit `ttcut-demux` ist
+    also nicht betroffen, nur roh gezogene Spuren. Die zwölf Dateien von
+    P10 im Programmweg gleich.
+
+- **P10: ein Kopflisten-Lauf für MPEG-Audio und AC3** → **DONE (2026-10-16,
+  Zweig `refactor/audio-headerlist`)**. Umbau-Projekt aus Audit-Lauf 11.
+  - `TTAudioStream::createHeaderList` ist der eine Lauf: Abbruch, Sync,
+    Kopf, Ende der Liste, unbrauchbarer Kopf, `abs_frame_time`, Sprung,
+    Fortschritt. Je Codec bleiben `searchNextSyncByte`, `headerBytes` (4 / 8)
+    und `readHeader`; AC3 dazu `endsHeaderList` (E-AC3 beendet die Liste).
+    „Unbrauchbar“ heißt jetzt für beide `frame_length < headerBytes()` (bei
+    AC3 gleichwertig mit `syncframe_words == 0`, die Tabelle kennt nur
+    Längen ab 128 Byte).
+  - Gewollte Änderungen (User-Entscheid im Entwurf): AC3 schreibt beim
+    Abbruch die Logzeile und wirft den übersetzten Text „Index list creation
+    aborted!“ statt eines unübersetzten; übersprungene Köpfe werden für beide
+    gewarnt („Skipped N invalid audio header(s) in …“, vorher nur MPEG). Die
+    Fortschrittstexte haben den Kontext `TTAudioStream` (dafür `Q_OBJECT`);
+    zur Laufzeit deutsch geprüft.
+  - Gate (Wegwerf-Sonde mit CMake-Eintrag, neuer als die Quellen geprüft):
+    alle Kopfwerte und -texte, Anzahl und Länge auf zwölf Dateien — die neun
+    aus Lauf 11, dazu MP2 und AC3 mit Müll vor dem ersten Sync und mitten in
+    der Datei (`start_pos > 0`) und E-AC3 — jeweils über `TTAudioType`, direkt
+    als AC3, direkt als MPEG und mit Abbruch: 21 918 Zeilen, gleich bis auf
+    den gewollten Abbruchtext. Gates `audio_es_input`, `open_cancel`,
+    `audiorepair`, `audiocutter_paths`, `audio_order_reset`,
+    `audiocut_abort`, `audioonlycut_abort` grün.
+  - Dabei gefunden: Kopf aus nicht belegtem Speicher am Dateiende → eigener
+    Eintrag darüber.
 
 - **Reparatur folgt ihrer Spur beim Laden** → **DONE (2026-10-11, branch
   `fix/repair-track-after-missing-track`)**.

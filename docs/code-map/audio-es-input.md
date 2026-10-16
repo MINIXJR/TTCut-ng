@@ -1,6 +1,6 @@
 ---
-base_commit: b4e0150e545aa53e16ad6ca9dff5b9bfe8dbe50a
-last_verified: 2026-10-14
+base_commit: 3b0e9bd5fb64e26c3aa32b6912846d5db07e30d4
+last_verified: 2026-10-16
 sources:
   - avstream/ttavtypes.h
   - avstream/ttavtypes.cpp
@@ -63,8 +63,7 @@ flowchart TD
     FILE["audio ES file<br/>.mpa / .mp2 / .mp3 / .ac3"]
     OPEN["TTOpenAudioTask<br/>operation"]
     TYPE["TTAudioType<br/>getAudioStreamType"]
-    MPS["TTMPEGAudioStream<br/>createHeaderList"]
-    AC3S["TTAC3AudioStream<br/>createHeaderList"]
+    WALK["TTAudioStream::createHeaderList<br/>steps: TTMPEGAudioStream / TTAC3AudioStream"]
     HL["TTAudioHeaderList<br/>TTMpegAudioHeader / TTAC3AudioHeader"]
     FIN["TTAVData::onOpenAudioFinished"]
     ITEM["TTAudioItem<br/>audio list columns"]
@@ -78,12 +77,9 @@ flowchart TD
 
     OPEN -.->|file path| TYPE
     FILE -->|first 64 KiB| TYPE
-    TYPE -->|type, start_pos| MPS
-    TYPE -->|type, start_pos| AC3S
-    FILE -->|whole file, frame by frame| MPS
-    FILE -->|whole file, frame by frame| AC3S
-    MPS --> HL
-    AC3S --> HL
+    TYPE -->|type, start_pos| WALK
+    FILE -->|whole file, frame by frame| WALK
+    WALK --> HL
     OPEN -->|stream with list| FIN
     HL -->|header 0 strings, last abs_frame_time| ITEM
     ITEM -->|header 0 strings| COMPAT
@@ -101,10 +97,11 @@ flowchart TD
 |---|---|
 | `OPEN` -.-> `TYPE` | `TTOpenAudioTask::operation`: `new TTAudioType(path)`. A missing file throws in `TTAVTypes` (`TTIOException`), rethrown as “Unsupported audio type or file not found”; any type other than `mpeg_audio`/`ac3_audio` throws “Unsupported audio type”. The open dialog and the automatic search (`TTAVData::getAudioNames`) offer exactly `TTAVTypes::readableAudioSuffixes` (mpa, mp2, mp3, ac3); AAC, E-AC3 and DTS have no parser (TODO). |
 | `FILE` → `TYPE` | One read of 65 536 bytes; the first byte offset where either test passes wins (AC3 tested before MPEG at the same offset). **AC3:** `0x0B77`, `frame_len = 2 · AC3FrameLength[fscod][frmsizecod]` from byte 4, and a second `0x0B77` exactly `frame_len` later. **MPEG:** `(sync & 0xFFE0) == 0xFFE0`, the static `TTMPEGAudioStream::parseAudioHeader` on a stack header for the frame length, and another MPEG sync that far on. No bsid check: E-AC3 is judged by the AC3 frame-size table. No pass → `unknown`. |
-| `TYPE` → `MPS` / `AC3S` | `createAudioStream`: the stream class for the type, with `start_pos` = offset of the first confirmed sync. The video sibling `TTVideoType` decides via `ttProbeVideo` (libav); a file libav cannot open is assumed MPEG-2, a file libav opens but whose codec is none of MPEG-2/H.264/H.265 falls back to the file suffix, then to MPEG-2. `TTSubtitleType` decides by suffix only (`srt`). |
-| `FILE` → `MPS` | From `start_pos`: `searchNextSyncByte` (any `0xFFE0` sync), 3 header bytes, header offset = sync start, `seekRelative(frame_length − 4)`. Samples per frame: Layer I 384, Layer II 1152, Layer III 1152 (MPEG-1) or 576 (MPEG-2/2.5). `frame_length` = (samples / 8 / slot · bitrate / samplerate + padding) · slot, slot = 4 bytes for Layer I, else 1. `frame_time` = samples · 1000 / samplerate ms — the duration, independent of the padding bit. A header that yields no frame is skipped and the search resumes behind it (one summary warning); a read past the end ends the list silently (`TTFileBufferException` caught). |
-| `FILE` → `AC3S` | From `start_pos`: `searchNextSyncByte` (`0x0B77`), 6 header bytes, header offset = sync start, `seekRelative(2 · syncframe_words − 8)`. `frame_time` = 1536 · 1000 / samplerate ms (32 ms at 48 kHz, 34.830 ms at 44.1 kHz for both 69- and 70-word frames). bsid > 10 (E-AC3) **ends** the list with a warning; reserved `fscod`/`frmsizecod` skips the header and resyncs (`continue`). acmod = top three bits of header byte 4 (index into the 6 bytes read, frame byte 6), `lfeon` behind the acmod-dependent mix-level bits. |
-| `MPS`/`AC3S` → `HL` | One header per frame in file order: `headerOffset`, `frame_length`, `frame_time`, and `abs_frame_time` = previous `abs_frame_time` + previous `frame_time` (0 for the first) — the **start** time of the frame in ms, a running `double` sum. `TTAudioHeaderList` is never sorted (`sort()` exists but has no caller). Abort: `mAbort` → `TTAbortException`. |
+| `TYPE` → `WALK` | `createAudioStream`: the stream class for the type, with `start_pos` = offset of the first confirmed sync. The video sibling `TTVideoType` decides via `ttProbeVideo` (libav); a file libav cannot open is assumed MPEG-2, a file libav opens but whose codec is none of MPEG-2/H.264/H.265 falls back to the file suffix, then to MPEG-2. `TTSubtitleType` decides by suffix only (`srt`). |
+| `FILE` → `WALK` | One walk for both codecs (`TTAudioStream::createHeaderList`): from `start_pos` (`seekAbsolute`) the codec's `searchNextSyncByte`, then its `readHeader` — `nullptr` when the end of the file cuts the header off (`readByte(quint8*, int)` swallows the end and returns a short count), which ends the list. The walk keeps `nextFrame`, the end of the last listed frame (`start_pos` at first); `endsHeaderList` is asked only for a header exactly there. Then a `frame_length` below the codec's `headerBytes()` skips the header and the search resumes behind it (one summary warning per list), else the header is listed and the walk jumps `frame_length − headerBytes()`. A read past the end inside the sync search ends the list silently (`TTFileBufferException` caught). **Behind junk or a skipped header a sync-like byte pair inside the frame data is listed like a real header — on purpose: libav's parser counts the same frames, and the cut finds a frame by its libav number** (`TTAudioCutter`, `frameNo = pktTime / frameDur`; measured 2026-10-16: header count = libav packet count on three raw DVB tracks with signal loss and on the gate's broken-header file). |
+| `FILE` → `WALK` (MPEG steps) | `searchNextSyncByte`: any `0xFFE0` sync; 3 header bytes, `headerBytes()` 4, header offset = sync start. Samples per frame: Layer I 384, Layer II 1152, Layer III 1152 (MPEG-1) or 576 (MPEG-2/2.5). `frame_length` = (samples / 8 / slot · bitrate / samplerate + padding) · slot, slot = 4 bytes for Layer I, else 1. `frame_time` = samples · 1000 / samplerate ms — the duration, independent of the padding bit. |
+| `FILE` → `WALK` (AC3 steps) | `searchNextSyncByte`: `0x0B77`; 6 header bytes, `headerBytes()` 8, header offset = sync start, `frame_length` = 2 · `syncframe_words` (0 for a reserved code). `frame_time` = 1536 · 1000 / samplerate ms (32 ms at 48 kHz, 34.830 ms at 44.1 kHz for both 69- and 70-word frames). bsid > 10 (E-AC3): `frame_length` 0, since the table cannot size an E-AC3 frame; right behind the previous frame it **ends** the list with a warning (`endsHeaderList`, checked before the frame length), elsewhere it is skipped — a false E-AC3 sync after a signal loss ended a 61-minute track at 10:53. Reserved `fscod`/`frmsizecod` skips the header. acmod = top three bits of header byte 4 (index into the 6 bytes read, frame byte 6), `lfeon` behind the acmod-dependent mix-level bits. |
+| `WALK` → `HL` | One header per frame in file order: `headerOffset`, `frame_length`, `frame_time`, and `abs_frame_time` = previous `abs_frame_time` + previous `frame_time` (0 for the first) — the **start** time of the frame in ms, a running `double` sum. `TTAudioHeaderList` is never sorted (`sort()` exists but has no caller). Abort: `mAbort` → `TTAbortException` ("Index list creation aborted!", translated, for both codecs). |
 | `OPEN` → `FIN` | `finished(item, stream, order)` right after `createHeaderList`, whatever its count — also for an empty list. |
 | `HL` → `ITEM` | `TTAudioItem::setItemData`: length column = `streamLengthTime()` = `abs_frame_time` of the **last** header (its start, so one frame short of the file), plus the byte size. Version, mode, bit rate and sample rate columns (`TTAudioTreeView` reads `getVersion`/`getMode`/`getBitrate`/`getSamplerate`) = the strings of **header 0** (`audioStream->headerAt(0)`, which throws `TTIndexOutOfRangeException` on an empty list). |
 | `ITEM` → `COMPAT` | `canCutWith` → `checkAudioCompat`: per track pair, header 0's bit-rate, sample-rate and version strings must be equal; the mode is not compared (commented out). |
@@ -138,9 +135,11 @@ flowchart TD
 - **Skipped headers leave holes.** A skipped header is neither in the list
   nor in the `abs_frame_time` chain (the next header continues from the last
   listed one), so every later header's index and start time are smaller than
-  its position in the file by the skipped frames; a skipped MPEG header can
-  also cost the next frame when the resync hits a false sync inside it
-  (measured: 2498 of 2500 frames after one broken header). Index-based readers
+  its position in the file by the skipped frames. Behind one broken MPEG
+  header a false sync in the frame data can be listed and cost more real
+  frames (2498 of 2500, gate `audio_es_input` H3: there a 44.1 kHz header in
+  a 48 kHz track, jumping over two real frames) — libav counts exactly the
+  same (2498 packets), so the list stays in step with the cut. Index-based readers
   (`ttAnalyzeAcmodWindow`) and `abs_frame_time` readers (`detectAudioChanges`)
   are shifted alike: they get the header of the frame that many frames later
   in the file.
@@ -162,9 +161,9 @@ flowchart TD
   - shared purpose: `fscod`/`frmsizecod` of byte 4 → `2 · AC3FrameLength`, with the reserved-code guard
   - status: kept separate → three small lookups on the shared table; one helper when E-AC3 gets a parser (a bsid check belongs in all three)
 - **Sync search + header walk, MPEG vs AC3**
-  - sites: `avstream/ttmpegaudiostream.cpp:TTMPEGAudioStream::createHeaderList` + `:searchNextSyncByte`, `avstream/ttac3audiostream.cpp:TTAC3AudioStream::createHeaderList` + `:searchNextSyncByte`
+  - sites: `avstream/ttavstream.cpp:TTAudioStream::createHeaderList`; per codec `searchNextSyncByte`, `headerBytes`, `readHeader` (AC3 also `endsHeaderList`)
   - shared purpose: find sync, read header, chain `abs_frame_time`, skip the frame, report progress
-  - status: documented → TODO P10 (one walk in `TTAudioStream`, a virtual header read per codec; both now skip an unusable header)
+  - status: consolidated (P10, 2026-10-16) → one walk in `TTAudioStream`; every header value of twelve files equal before and after
 - **Audio time → display frame**
   - sites: `data/ttaudioanomalyscantask.cpp:TTAudioAnomalyScanTask::videoFrameForTime` (anomaly scan, `TTStreamPointAudioWorker` silence and audio change), `data/ttavdata.cpp:TTAVData::countExtraFramesBefore` (the inverse direction)
   - shared purpose: the extra-frame correction between audio time and display index
