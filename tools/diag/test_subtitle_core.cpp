@@ -6,7 +6,11 @@
 //       time are read (they became cues at 00:00:00);
 //   H4  a file mixing CRLF and LF keeps all cues (it kept the first);
 //   H6  cues out of time order are found by the overlay lookup;
-//   H3  overlapping cues are shown together by the overlay lookup.
+//   H3  overlapping cues are shown together by the overlay lookup;
+//   H5  a UTF-8 BOM, also followed by an empty line, reads like no BOM and
+//       logs no warning (it logged "missing" and, before an empty line,
+//       dropped the first cue); a real gap is logged as "Reading subtitle
+//       <new>, last was <old>" (the two numbers were swapped).
 //
 //   usage: test_subtitle_core <workdir>
 //
@@ -15,10 +19,12 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QTextStream>
 
 #include <cstdio>
 
 #include "avstream/ttcutparameter.h"
+#include "common/ttmessagelogger.h"
 #include "avstream/ttfilebuffer.h"
 #include "avstream/ttsrtsubtitlestream.h"
 #include "avstream/ttsubtitleheaderlist.h"
@@ -65,6 +71,8 @@ int main(int argc, char** argv)
   if (argc < 2) { fprintf(stderr, "usage: %s <workdir>\n", argv[0]); return 2; }
   const QString dir = QString::fromLocal8Bit(argv[1]);
   QDir().mkpath(dir);
+  const QString logPath = QDir(dir).absoluteFilePath("subtitle_core.log");
+  TTMessageLogger::getInstance()->setLogFilePath(logPath);
 
   // H1
   {
@@ -146,6 +154,51 @@ int main(int argc, char** argv)
     const QString at = overlayAt(hl, 2500);
     check(at == "Lang\r\nKurz" && overlayAt(hl, 4000) == "Lang" && overlayAt(hl, 6000).isEmpty(),
           "H3: overlapping cues are shown together - at 2500: " + QString(at).replace("\r\n", "|"));
+  }
+
+  // H5
+  {
+    // Log lines of this reader written while reading one file.
+    auto readerWarnings = [&logPath](const QString& file, auto read) {
+      QFile log(logPath);
+      const qint64 before = log.exists() ? log.size() : 0;
+      read();
+      QStringList out;
+      if (!log.open(QIODevice::ReadOnly)) return out;
+      log.seek(before);
+      for (const QString& l : QString::fromUtf8(log.readAll()).split('\n'))
+        if (l.contains("TTSrtSubtitleStream") && l.contains(file)) out << l.trimmed();
+      return out;
+    };
+    const QByteArray body =
+        "1\r\n00:00:01,000 --> 00:00:02,000\r\n\xC3\x9C" "ber\r\n\r\n"
+        "2\r\n00:00:03,000 --> 00:00:04,000\r\nZwei\r\n\r\n";
+    const QString want = QString::fromUtf8("1000..2000 \xC3\x9C" "ber | 3000..4000 Zwei");
+    const struct { const char* name; QByteArray head; } files[] = {
+      { "bom.srt",       "\xEF\xBB\xBF" },
+      { "bom_blank.srt", "\xEF\xBB\xBF\r\n" },
+    };
+    for (const auto& f : files) {
+      const QString src = writeSrt(dir, f.name, f.head + body);
+      QString got;
+      const QStringList warn = readerWarnings(f.name, [&] {
+        TTSrtSubtitleStream s{QFileInfo(src)};
+        s.createHeaderList();
+        got = cues(static_cast<TTSubtitleHeaderList*>(s.headerList()));
+      });
+      check(got == want && warn.isEmpty(),
+            QString("H5: %1 reads like no BOM, no warning - got: %2; log: %3")
+                .arg(f.name, got, warn.isEmpty() ? "-" : warn.join(" / ")));
+    }
+    const QString gap = writeSrt(dir, "gap.srt",
+        "1\n00:00:01,000 --> 00:00:02,000\nEins\n\n"
+        "3\n00:00:05,000 --> 00:00:06,000\nDrei\n\n");
+    const QStringList warn = readerWarnings("gap.srt", [&] {
+      TTSrtSubtitleStream s{QFileInfo(gap)};
+      s.createHeaderList();
+    });
+    check(warn.size() == 1 && warn.first().contains("Reading subtitle 3, last was 1"),
+          "H5: a real gap names the new and the last number - log: " + warn.join(" / "));
   }
 
   printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);

@@ -18,6 +18,7 @@
 
 #include <QCoreApplication>
 #include <QThread>
+#include <QThreadPool>
 #include <QDebug>
 
 /**
@@ -134,13 +135,23 @@ void TTThreadTask::abort()
     return;
   }
 
-  if (!mIsRunning && !mIsAborted) {
+  // "Never started" is decided by QThreadPool alone: tryTake() removes the
+  // task only while it still waits in the queue, and then run() can never
+  // follow. The flags cannot decide it - mIsRunning is false both before run()
+  // sets it and after operation() returned, while run() is in cleanUp(): a
+  // cancel there ran cleanUp() a second time (double free, and on the way in
+  // TTOpenVideoTask::cleanUp freed mpVideoType under operation()), and a
+  // queued task that was reported aborted and deleted by its owner was still
+  // run by QThreadPool later. tools/diag/test_task_cleanup_order, cases end
+  // and queued. In every other case run() is under way or about to be: it
+  // sees mIsAborted and ends itself.
+  // cleanUp() before the signal, as in run(): owners delete on aborted().
+  const bool wasAborted = mIsAborted.exchange(true);
+  if (!wasAborted && !mIsSynchron && QThreadPool::globalInstance()->tryTake(this)) {
+    cleanUp();
     emit aborted(this);
     qApp->processEvents();
-    cleanUp();
   }
-
-  mIsAborted = true;  
 }
 
 /** 

@@ -1,6 +1,6 @@
 ---
 base_commit: 4fa1aba8d44cf9ff01c9743653a786b01a4ff13d
-last_verified: 2026-10-11
+last_verified: 2026-10-16
 sources:
   - avstream/ttsrtsubtitlestream.h
   - avstream/ttsrtsubtitlestream.cpp
@@ -72,8 +72,8 @@ flowchart TD
 | From → To | What crosses (data / order / invariant) |
 |---|---|
 | `TASK` -.-> `TYPE` / `PARSE` | `TTOpenSubtitleTask::operation`: `TTSubtitleType` by suffix only (`srt`); anything else throws “Unsupported subtitle type”. Then `createHeaderList()`; `finished` follows whatever the count. |
-| `FILE` → `FB` → `PARSE` | Lines are split on LF and a CR before it is dropped, so CRLF, LF and files mixing both read the same. `TTFileBuffer::readLine` maps each byte 1:1 onto a `QChar` (Latin-1), caps a line at 1 MiB. |
-| `PARSE` → `HL` | Per cue: index line (`simplified().toInt()`; a gap in the numbering is only a log warning), timing line matched by `srtTimingLine()` — `h:mm:ss,zzz --> h:mm:ss,zzz` with a comma or a dot, one- or two-digit hours, 1–3 fraction digits, anything after the end time ignored; an unreadable line skips its cue with a warning — then text lines up to an empty line (64 KiB cap), trailing CRLF stripped, text decoded as UTF-8 with Latin-1 fallback (`decodeSrtLine`). Times stored as ms since 00:00. After reading, `sort()` orders the list by start time (stable). |
+| `FILE` → `FB` → `PARSE` | Lines are split on LF and a CR before it is dropped, so CRLF, LF and files mixing both read the same. `TTFileBuffer::readLine` maps each byte 1:1 onto a `QChar` (Latin-1), caps a line at 1 MiB. A UTF-8 BOM (three Latin-1 characters) is dropped from the first line only. |
+| `PARSE` → `HL` | Per cue: index line (`simplified().toInt()`; a gap in the numbering is only a log warning, "Reading subtitle <new>, last was <old>"), timing line matched by `srtTimingLine()` — `h:mm:ss,zzz --> h:mm:ss,zzz` with a comma or a dot, one- or two-digit hours, 1–3 fraction digits, anything after the end time ignored; an unreadable line skips its cue with a warning — then text lines up to an empty line (64 KiB cap), trailing CRLF stripped, text decoded as UTF-8 with Latin-1 fallback (`decodeSrtLine`). Times stored as ms since 00:00. After reading, `sort()` orders the list by start time (stable). |
 | `HL` → `LEN` | `streamLengthTime()` = end time of the cue that **starts** last; the subtitle list shows it. |
 | `HL` → `SEARCH` | `searchTimeIndex(t)`: linear scan from index 0 for the first cue whose **end** ≥ t; when none, the **last** index; −1 for an empty list. `textAt(t)` starts there and collects every cue with start ≤ t ≤ end, joined by CRLF. |
 | `SEARCH` → `OVL` | `getSubtitleTextAtCurrentFrame`: t = `currentIndex / frameRate` in ms **minus the track delay**; `textAt(t)` — overlapping cues show together, one per line. |
@@ -104,7 +104,8 @@ Throwaway probe on small crafted `.srt` files; gate `subtitle_core`.
 - **H3 confirmed and fixed.** Overlapping cues: the overlay showed one;
   `textAt` shows all.
 - **H4 confirmed and fixed.** CRLF then LF: only the first cue survived.
-- **H5 not a problem.** A UTF-8 BOM reads fine.
+- **H5 confirmed and fixed (2026-10-16).** A UTF-8 BOM gave the right cues but a
+  false "missing" warning; BOM plus an empty line dropped the first cue.
 - **H6 confirmed and fixed.** Out-of-order cues were missed by the
   overlay; the list is sorted after reading.
 

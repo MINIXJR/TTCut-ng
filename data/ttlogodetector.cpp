@@ -127,7 +127,7 @@ QRect TTLogoDetector::roi() const
 
 bool TTLogoDetector::hasROI() const
 {
-  return mROI.isValid() && mROI.width() > 4 && mROI.height() > 4;
+  return mROI.isValid() && mROI.width() >= kMinRoiSide && mROI.height() >= kMinRoiSide;
 }
 
 void TTLogoDetector::addEdgeSample(const QImage& fullFrame)
@@ -227,7 +227,7 @@ QImage TTLogoDetector::extractGrayscaleROI(const QImage& fullFrame) const
   if (fullFrame.isNull()) return QImage();
 
   QRect clipped = mROI.intersected(fullFrame.rect());
-  if (clipped.width() < 4 || clipped.height() < 4) return QImage();
+  if (clipped.width() < kMinRoiSide || clipped.height() < kMinRoiSide) return QImage();
 
   QImage roiImage = fullFrame.copy(clipped);
   return roiImage.convertToFormat(QImage::Format_Grayscale8);

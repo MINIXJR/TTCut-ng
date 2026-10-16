@@ -1,6 +1,6 @@
 ---
 base_commit: b4e0150e545aa53e16ad6ca9dff5b9bfe8dbe50a
-last_verified: 2026-10-14
+last_verified: 2026-10-16
 sources:
   - tools/ttcut-demux/ttcut-demux
   - tools/ttcut-pts-analyze/ttcut-pts-analyze.c
@@ -351,8 +351,15 @@ history and the measurements that led to it are in `docs/completed-work.md`
   no decoding) and `tools/diag/av_chain_check.py` (original TS + cut MKV →
   offset per track, picture MD5 / packet MD5, with the plain-remux control).
   `measure_es_offset.py` (byte-pattern search of one audio ES in another, CBR frame size converts offset to time) predates both.
-- **Known gap** (pre-existing): the fresh-open extra-frame cluster dialog
-  (`showExtraFrameClusterDialog` → `showImportAsStreamPointsWarning`) calls
-  `msgBox.exec()` without an `mNonInteractive` guard — does not affect
-  `--auto-cut` (project load bypasses `openAVStreams`, the only place that
-  sets `mpPendingExtraFrameDialog`), but blocks a headless fresh-open.
+- **Unguarded dialog, unreachable headless** (pre-existing):
+  `showImportAsStreamPointsWarning` calls `msgBox.exec()` without an
+  `mNonInteractive` guard. Both callers hang on a fresh open: the cluster
+  dialog (`showExtraFrameClusterDialog`, only for items `openAVStreams`
+  marked in `mpPendingExtraFrameDialog`) and the legacy decode-error
+  "Stream Integrity Warning" inside `openAVStreams` itself. `--auto-cut`,
+  the only run that sets `mNonInteractive`, loads a project, which bypasses
+  `openAVStreams`, and `main()` ignores video arguments in that branch.
+  Measured 2026-10-16 (Tux H.264 with `audio_gap_frames=1000` in its
+  `.info`): a fresh open shows "Defective Frames Detected", the
+  `runAutoCutMode` path shows no box and cuts (exit 0). Should `--auto-cut`
+  ever open a video fresh, the guard is needed there.

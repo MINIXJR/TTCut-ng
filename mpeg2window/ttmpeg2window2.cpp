@@ -15,6 +15,7 @@
 #include "ttmpeg2window2.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/tth26xvideostream.h"  // frameIndexBundle (index sharing)
+#include "../data/ttlogodetector.h"           // kMinRoiSide
 
 #include <QDebug>
 #include <QMouseEvent>
@@ -597,7 +598,9 @@ void TTMPEG2Window2::mouseReleaseEvent(QMouseEvent* event)
     QRect widgetRect = QRect(mRubberBandOrigin, event->position().toPoint()).normalized();
     QRect imageRect = widgetToImageRect(widgetRect);
 
-    if (imageRect.width() >= 4 && imageRect.height() >= 4) {
+    // Smaller than the detector accepts: keep selecting instead of handing
+    // over an area that cannot become a profile.
+    if (imageRect.width() >= TTLogoDetector::kMinRoiSide && imageRect.height() >= TTLogoDetector::kMinRoiSide) {
       mLogoSelectionMode = false;
       setCursor(Qt::ArrowCursor);
       emit logoROISelected(imageRect);

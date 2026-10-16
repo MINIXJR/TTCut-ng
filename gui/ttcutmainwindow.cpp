@@ -2551,13 +2551,17 @@ void TTCutMainWindow::onLogoROISelected(QRect imageCoords)
     delete analysisWrapper;
   }
 
-  if (collected > 0) {
-    mLogoDetector->finalizeProfile();
+  // Decoded frames are not accepted samples: the detector silently rejects
+  // an area too small or outside the picture, and then has no profile.
+  if (collected > 0) mLogoDetector->finalizeProfile();
+  if (mLogoDetector->hasProfile()) {
     currentFrame->videoWindow()->setLogoROIOverlay(imageCoords);
     navigation->setLogoSearchEnabled(true);
     statusBar()->showMessage(tr("Logo profile created (%1 frames)").arg(collected), 3000);
   } else {
     mLogoDetector->clearProfile();
+    currentFrame->videoWindow()->clearLogoROIOverlay();
+    navigation->setLogoSearchEnabled(false);
     statusBar()->showMessage(tr("Logo profile could not be created"), 3000);
   }
 

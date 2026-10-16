@@ -179,9 +179,15 @@ int TTSrtSubtitleStream::createHeaderList()
     emit statusReport(StatusReportArgs::Start, tr("Creating subtitle header list"), stream_buffer->size());
 
     // Lines split on LF and a CR before it is dropped: CRLF, LF and files
-    // mixing both read the same.
-    auto nextLine = [this]() {
+    // mixing both read the same. A UTF-8 byte order mark arrives as three
+    // Latin-1 characters (see decodeSrtLine) in front of the first line and
+    // is dropped there - otherwise it is read as the first cue number, or,
+    // before an empty line, the real number is taken for the timing line.
+    bool firstLine = true;
+    auto nextLine = [this, &firstLine]() {
       QString line = stream_buffer->readLine("\n");
+      if (firstLine && line.startsWith(QLatin1String("\xEF\xBB\xBF"))) line.remove(0, 3);
+      firstLine = false;
       if (line.endsWith('\r')) line.chop(1);
       return line;
     };
@@ -196,7 +202,7 @@ int TTSrtSubtitleStream::createHeaderList()
         break;
       if (line.toInt() != counter + 1 && counter != -1)
         log->warningMsg("TTSrtSubtitleStream", __LINE__,
-                        QString("Subtitles in %1 missing. Reading subtitle %2, last was %3.").arg(fileName()).arg(counter).arg(line));
+                        QString("Subtitles in %1 missing. Reading subtitle %2, last was %3.").arg(fileName()).arg(line.toInt()).arg(counter));
       counter = line.toInt();
 
       const QString timing = nextLine().simplified();

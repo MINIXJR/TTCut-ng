@@ -1,6 +1,6 @@
 ---
 base_commit: b4e0150e545aa53e16ad6ca9dff5b9bfe8dbe50a
-last_verified: 2026-10-14
+last_verified: 2026-10-16
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
@@ -387,7 +387,10 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   einzige `TTCutTask`-Instanz durch jeden Schnittlisteneintrag), ein
   stehengebliebenes Flag hätte jeden Eintrag nach dem ersten unabbrechbar
   gemacht — derselbe Defekt wie `1f372cca`, diesmal am Abschluss- statt am
-  Abbruchpfad. Harness `tools/diag/test_abort_after_finish`, drei Fälle
+  Abbruchpfad. Seit 2026-10-16 entscheidet „noch nicht gestartet“ allein
+  `QThreadPool::tryTake()` (siehe `progress-reporting.md`): die beiden Flags
+  sehen auch kurz nach dem Start und während `cleanUp()` so aus. Harness
+  `tools/diag/test_abort_after_finish`, drei Fälle
   (Abbruch nach Ende, Abbruch vor Start, Abbruch während eines
   Wiederholungslaufs).
 - **`cleanUp()` ist absichtlich leer.** Der Dekoder wird nur im Destruktor
