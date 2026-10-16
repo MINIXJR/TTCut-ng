@@ -432,8 +432,9 @@ TTAVItem* TTAVData::doOpenVideoStream(const QString& filePath, int order)
 {
   TTAVItem*        avItem        = createAVItem();
   TTOpenVideoTask* openVideoTask = new TTOpenVideoTask(avItem, filePath, order);
-  // Owned by nobody until onOpenVideoFinished() appends it to mpAVList; a
-  // project load whose video never opens frees it in endAbortedProjectLoad().
+  // Owned by nobody until onOpenVideoFinished() takes it; an item whose
+  // video never opens is freed when the pool run ends (onThreadPoolExit, or
+  // endAbortedProjectLoad for a project load).
   mPendingVideoItems.append(avItem);
 
   connect(openVideoTask, qOverload<TTAVItem*, TTVideoStream*, int, const QString&>(&TTOpenVideoTask::finished),
@@ -708,6 +709,12 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 {
   if (avItem == nullptr) return;
 
+  // The item is this handler's from here on, before the extra-frame dialog
+  // below: the pool run can end INSIDE that modal dialog (see the comment
+  // at setInitialAudioLoadDone), and onThreadPoolExit frees what is still
+  // pending then.
+  mPendingVideoItems.removeAll(avItem);
+
   avItem->setVideoStream(vStream);
 
   // No .info and no SPS timing: the frame rate is a guess - reported with
@@ -734,7 +741,6 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 
   if (mpAVList == nullptr) return;
 
-  mPendingVideoItems.removeAll(avItem);
   mpAVList->append(avItem);
 
   // The pool-exit initial-load-done loop (onThreadPoolExit(), below) can
@@ -1118,6 +1124,13 @@ void TTAVData::onThreadPoolExit()
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
              this,             &TTAVData::onOpenAVStreamsAborted);
 
+  // Every video open of this run has ended, and its onOpenVideoFinished has
+  // been delivered: the task posts it from operation(), before its own
+  // finished() that ends the run. What is still pending is the item of a
+  // failed or cancelled open, and no task refers to it any more - it was
+  // never freed (gate open_cancel, cases pending_*).
+  dropPendingVideoItems();
+
   // End of the initial load window: audio auto-sorting (see
   // onOpenAudioFinished) stops here for every item that finished loading.
   // The former unconditional re-sort at this point reset a user's manual
@@ -1397,9 +1410,7 @@ void TTAVData::endAbortedProjectLoad()
   // reach them: until 2026-09-24 they stayed, their cuts mirrored in the
   // global cut list, and were never freed. The project load is over; any
   // item still pending belongs to it.
-  for (const TTAVItem* item : mPendingVideoItems) dropPendingTrackValues(item);
-  qDeleteAll(mPendingVideoItems);
-  mPendingVideoItems.clear();
+  dropPendingVideoItems();
 
   emit readProjectFileAborted();
 
@@ -1471,6 +1482,16 @@ static void dropPendingOf(M& pending, const TTAVItem* item)
   if (item == nullptr) { pending.clear(); return; }
   for (auto it = pending.begin(); it != pending.end(); )
     it = (it.key().first == item) ? pending.erase(it) : std::next(it);
+}
+
+void TTAVData::dropPendingVideoItems()
+{
+  for (TTAVItem* item : mPendingVideoItems) {
+    dropPendingTrackValues(item);
+    mpPendingExtraFrameDialog.remove(item);
+  }
+  qDeleteAll(mPendingVideoItems);
+  mPendingVideoItems.clear();
 }
 
 void TTAVData::dropPendingTrackValues(const TTAVItem* item)

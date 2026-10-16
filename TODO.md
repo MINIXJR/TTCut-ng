@@ -221,19 +221,16 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     wie bei der geteilten Engine). Auch vermerkt in
     `docs/code-map/smart-cut.md`.
 
-- **Element eines abgebrochenen frischen Öffnens bleibt liegen**
-  (2026-10-16, Rest des Fixes „Abbruch beim Öffnen“, siehe
-  `docs/completed-work.md`). Bricht ein frisches Öffnen ab oder scheitert
-  es, bleibt sein `TTAVItem` in `mPendingVideoItems`; freigegeben wird es
-  erst beim nächsten abgebrochenen Projektladen (`endAbortedProjectLoad`),
-  sonst nie. Beim Scheitern war das schon vorher so, beim Abbruch wurde es
-  bis dahin (fehlerhaft) von der Aufgabe gelöscht. Nicht gemessen, wie viel
-  Speicher ein liegengebliebenes Element hält.
-  - **Falle für den Fix:** die naheliegende Stelle `onThreadPoolExit` läuft
-    auch *innerhalb* des modalen Fehlerbild-Dialogs, den `onOpenVideoFinished`
-    vor dem Anhängen an `mpAVList` zeigt (Kommentar dort), und würde das
-    gerade bearbeitete Element löschen. Freigeben erst, wenn kein
-    `onOpenVideoFinished` mehr aussteht.
+- **Abbruch beim Öffnen eines H.264/H.265-Videos wirkt nicht** (2026-10-16,
+  gemessen beim Fix „Element eines abgebrochenen Öffnens“). `TTOpenVideoTask::
+  onUserAbort` setzt nur die Abbruch-Kennzeichen; der MPEG-2-Leser fragt das
+  des Streams ab und endet, `TTH26xVideoStream::createHeaderList` und
+  `TTFrameIndexer::build` fragen keines ab. Tux-H.264, frisches Öffnen,
+  Abbruch nach 1, 20 und 100 ms: jedes Mal `finished`, das Video wird ganz
+  geöffnet und erscheint. Bei einer großen Aufnahme heißt das: der Knopf
+  „Abbrechen“ wartet bis zum Ende des Indexaufbaus. Karte
+  `stream-open-project-load.md`, `h26x-stream.md`. Nicht gemessen, wie lange
+  der Indexaufbau einer abendfüllenden Aufnahme dauert.
 
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an zwei Stellen: `data/ttpreviewclip.cpp` und

@@ -627,8 +627,27 @@ gate_logo_roi() {
 # Cancelling a video open or a project load leaves the item to its owner.
 gate_open_cancel() {
   cases 120 open_cancel_unit open_cancel_fresh_0 open_cancel_fresh_20 open_cancel_fresh_100 \
-            open_cancel_project_0 open_cancel_project_20 open_cancel_project_100
+            open_cancel_project_0 open_cancel_project_20 open_cancel_project_100 \
+            open_cancel_pending_fail open_cancel_pending_cancel open_cancel_pending_ok \
+            open_cancel_pending_dialog
 }
+# The item of a failed or cancelled fresh open is freed when the pool run
+# ends; a listed item survives, also when the run ends inside the
+# extra-frame dialog (.info with an audio gap). MPEG-2 for the cancel: the
+# H.26x open does not poll the abort flag (TODO.md).
+case_open_cancel_pending_fail() {
+  need "$A264"; head -c 2000000 /dev/zero | tr '\0' 'U' > "$W/fail.264"; cp "$A264" "$W/fail.ac3"
+  "$D/test_open_cancel" pending "$W/fail.264" -1 0; }
+case_open_cancel_pending_cancel() {
+  need "$M2V" "$MP2"; cp "$M2V" "$W/c.m2v"; cp "$MP2" "$W/c.mp2"
+  "$D/test_open_cancel" pending "$W/c.m2v" 20 0; }
+case_open_cancel_pending_ok() {
+  need "$M2V" "$MP2"; cp "$M2V" "$W/ok.m2v"; cp "$MP2" "$W/ok.mp2"
+  "$D/test_open_cancel" pending "$W/ok.m2v" -1 1; }
+case_open_cancel_pending_dialog() {
+  need "$V264"; cp "$V264" "$W/gap.264"
+  printf '[video]\nfile=gap.264\ncodec=h264\nframe_rate=50/1\n\n[warnings]\naudio_gap_frames=1000\n' > "$W/gap.info"
+  "$D/test_open_cancel" pending "$W/gap.264" -1 1; }
 # 0 ms: the cancel lands while the tasks wait in or enter QThreadPool
 # (TTThreadTask::abort, see test_task_cleanup_order).
 case_open_cancel_fresh_0()     { need "$V264";   "$D/test_open_cancel" cancel "$V264" 0; }

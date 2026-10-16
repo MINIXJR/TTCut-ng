@@ -1,6 +1,6 @@
 ---
 base_commit: 3b0e9bd5fb64e26c3aa32b6912846d5db07e30d4
-last_verified: 2026-10-14
+last_verified: 2026-10-16
 sources:
   - avstream/tth26xvideostream.h
   - avstream/tth26xvideostream.cpp
@@ -123,6 +123,12 @@ flowchart LR
 
 ## Assumptions, contracts & pitfalls
 
+- **An open cannot be cancelled.** `createHeaderList` and
+  `TTFrameIndexer::build` poll no abort flag (`TTAVStream::mAbort`, which
+  `TTOpenVideoTask::onUserAbort` sets): a cancel while an H.264/H.265 video
+  opens lets the open run to its end (measured 2026-10-16 on the Tux H.264
+  recording, cancels at 1, 20 and 100 ms all ended in `finished`). Open in
+  `TODO.md`.
 - **Two index spaces, one conversion.** The bundle is in decode order;
   everything a caller passes (`isCutInPoint`, `isCutOutPoint`,
   `findIDRBefore`, the index list after the sort) is in display order.

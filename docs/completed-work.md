@@ -1728,6 +1728,32 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Element eines gescheiterten oder abgebrochenen Öffnens wurde nie
+  freigegeben** → **DONE (2026-10-16, Zweig `fix/pending-video-items`)**
+  (Rest des Abbruch-Fixes darunter).
+  - Gemessen mit gdb (Haltepunkte auf Konstruktor und Destruktor von
+    `TTAVItem`, bis zum Prozessende): gelungenes Öffnen 1/1 (Kontrolle),
+    Video scheitert (Füllbytes als `.264`, Tonspur lädt) 1/0, MPEG-2 nach 20
+    und 100 ms abgebrochen 1/0 — im 100-ms-Fall hing die fertig geladene
+    Tonspur mit dran. LeakSanitizer meldete es nicht. Speicherbedarf nicht
+    gemessen.
+  - Fix: `onThreadPoolExit` gibt frei, was am Ende eines Pool-Laufs noch in
+    `mPendingVideoItems` steht (`dropPendingVideoItems`, auch von
+    `endAbortedProjectLoad` benutzt; nimmt das Element auch aus der
+    Vormerkung für den Fehlerbild-Dialog). Die Falle aus dem TODO —
+    `onThreadPoolExit` läuft innerhalb des modalen Fehlerbild-Dialogs von
+    `onOpenVideoFinished` — ist entschärft: das Element verlässt
+    `mPendingVideoItems` jetzt am Anfang des Handlers statt vor dem
+    Anhängen. Gegenprobe ohne diesen Teil: Element im Dialog freigegeben,
+    Liste zeigt ins Leere, Absturz (rc 139).
+  - Gate `open_cancel`, neue Fälle `pending_fail`, `pending_cancel` (beide
+    vorher rot: 1 lebendes Element, 0 in der Liste), `pending_ok` und
+    `pending_dialog` (Kontrollen). Gezählt werden die lebenden `TTAVItem`
+    über die Objekt-Hooks von Qt (`qtHookData`), ohne neue Schnittstelle im
+    Programm.
+  - Dabei gefunden: der Abbruch beim Öffnen eines H.264/H.265-Videos wirkt
+    nicht (kein Abbruch-Abfrage im Indexaufbau) → `TODO.md`.
+
 - **Abbruch beim Öffnen eines Videos oder Projekts stürzte ab** →
   **ERLEDIGT (2026-10-16)**, Zweig `fix/logo-roi-profile` (Lesebefund der
   vollen Kartenprüfung „Abbruch während eines Projektladens: mögliches
@@ -1773,8 +1799,10 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     bei `tryTake()` statt des im Entwurf genannten Kennzeichens in `run()` —
     das Kennzeichen hätte die Lücke zwischen Warteschlange und Start von
     `run()` nicht geschlossen.
-  - Offen geblieben, im `TODO.md`: das Element eines abgebrochenen oder
-    gescheiterten frischen Öffnens bleibt in `mPendingVideoItems` liegen.
+  - Offen geblieben: das Element eines abgebrochenen oder gescheiterten
+    frischen Öffnens blieb in `mPendingVideoItems` liegen → erledigt am
+    selben Tag, Eintrag „Element eines gescheiterten oder abgebrochenen
+    Öffnens“ darüber.
 
 - **Fenster ohne Schutz im Lauf ohne Oberfläche** → **ERLEDIGT ohne
   Code-Änderung (2026-10-16): nicht erreichbar** (Lesebefund der vollen
