@@ -3015,6 +3015,37 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **P10: ein Kopflisten-Lauf für MPEG-Audio und AC3** → **DONE (2026-10-16,
+  Zweig `refactor/audio-headerlist`)**. Umbau-Projekt aus Audit-Lauf 11.
+  - `TTAudioStream::createHeaderList` ist der eine Lauf: Abbruch, Sync,
+    Kopf, Ende der Liste, unbrauchbarer Kopf, `abs_frame_time`, Sprung,
+    Fortschritt. Je Codec bleiben `searchNextSyncByte`, `headerBytes` (4 / 8)
+    und `readHeader`; AC3 dazu `endsHeaderList` (E-AC3 beendet die Liste).
+    „Unbrauchbar“ heißt jetzt für beide `frame_length < headerBytes()` (bei
+    AC3 gleichwertig mit `syncframe_words == 0`, die Tabelle kennt nur
+    Längen ab 128 Byte).
+  - Gewollte Änderungen (User-Entscheid im Entwurf): AC3 schreibt beim
+    Abbruch die Logzeile und wirft den übersetzten Text „Index list creation
+    aborted!“ statt eines unübersetzten; übersprungene Köpfe werden für beide
+    gewarnt („Skipped N invalid audio header(s) in …“, vorher nur MPEG). Die
+    Fortschrittstexte haben den Kontext `TTAudioStream` (dafür `Q_OBJECT`);
+    zur Laufzeit deutsch geprüft.
+  - Gate (Wegwerf-Sonde mit CMake-Eintrag, neuer als die Quellen geprüft):
+    alle Kopfwerte und -texte, Anzahl und Länge auf zwölf Dateien — die neun
+    aus Lauf 11, dazu MP2 und AC3 mit Müll vor dem ersten Sync und mitten in
+    der Datei (`start_pos > 0`) und E-AC3 — jeweils über `TTAudioType`, direkt
+    als AC3, direkt als MPEG und mit Abbruch: 21 918 Zeilen, gleich bis auf
+    den gewollten Abbruchtext. Gates `audio_es_input`, `open_cancel`,
+    `audiorepair`, `audiocutter_paths`, `audio_order_reset`,
+    `audiocut_abort`, `audioonlycut_abort` grün.
+  - Dabei gefunden, nicht Teil des Umbaus: läuft die Sync-Suche ohne Fund ans
+    Dateiende, wird trotzdem ein Kopf gelesen, aus nicht belegtem Speicher
+    (`readByte(quint8*, int)` meldet das Ende nur über die Rückgabe, die
+    keiner prüft). Belegt schon auf dem alten Code: E-AC3-Warnung mit
+    wechselndem bsid auf einer MP2-Datei ohne `0B 77`; auf dem neuen Code
+    ab und zu ein erfundener letzter Kopf bei MP2 mit 300 Null-Bytes am
+    Ende. Karte `audio-es-input.md`.
+
 - **Reparatur folgt ihrer Spur beim Laden** → **DONE (2026-10-11, branch
   `fix/repair-track-after-missing-track`)**.
   - **Defect:** a repair is saved under its track's `<Order>` and was taken

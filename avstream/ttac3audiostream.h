@@ -45,11 +45,16 @@ class TTAC3AudioStream : public TTAudioStream
 
   TTAVTypes::AVStreamType streamType() const override;
 
-  void searchNextSyncByte();
   void readAudioHeader(TTAC3AudioHeader* audio_header);
 
-  int  createHeaderList() override;
   int  createIndexList() override {return 0;}
+
+ protected:
+  // createHeaderList() steps: sync 0x0B77, 8 header bytes, E-AC3 ends the list
+  void           searchNextSyncByte() override;
+  int            headerBytes() const override { return 8; }
+  TTAudioHeader* readHeader() override;
+  bool           endsHeaderList(const TTAudioHeader* header) override;
 };
 
 #endif //TTAC3AUDIOSTREAM_H

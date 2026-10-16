@@ -27,12 +27,8 @@
 
 
 #include "ttmpegaudiostream.h"
-#include "ttaudioheaderlist.h"
-#include "../common/ttexception.h"
-#include "../common/istatusreporter.h"
 #include "ttcommon.h"
 
-#include <QElapsedTimer>
 #include <math.h>
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -150,81 +146,11 @@ void TTMPEGAudioStream::readAudioHeader( TTMpegAudioHeader* audio_header )
   delete []data;
 }
 
-// create the audio header list
+// read the header behind the sync word for createHeaderList()
 // -----------------------------------------------------------------------------
-int TTMPEGAudioStream::createHeaderList( )
+TTAudioHeader* TTMPEGAudioStream::readHeader()
 {
-  QElapsedTimer updateTime;
-  const int updateIntervalMs = 1000;
-  int skipped = 0;
-
-  header_list = new TTAudioHeaderList( 1000 );
-
-  stream_buffer->seekAbsolute( (quint64)start_pos );
-
-  try
-  {
-    updateTime.start();
-    emit statusReport(StatusReportArgs::Start, tr("Creating audio header list"), stream_buffer->size());
-
-    while ( !stream_buffer->atEnd() )
-    {
-    	if (mAbort) {
-    		mAbort = false;
-        log->infoMsg(__FILE__, __LINE__, "TTMpegAudioStream::createHeaderList -> user abort");
-    		throw TTAbortException(tr("Index list creation aborted!"));
-    	}
-
-      searchNextSyncByte();
-      TTMpegAudioHeader* audio_header = new TTMpegAudioHeader();
-
-      // read and parse current audio header
-      readAudioHeader( audio_header );
-
-      // claculate the absolute frame time
-      // -----------------------------------------------------------------------
-      // first audio header: abs_frame_time = 0.0 (msec)
-      if ( header_list->count() == 0 )
-        audio_header->abs_frame_time = (double)0.0;
-      else
-      {
-        // previous frame header
-        const TTAudioHeader* prev_audio_header = header_list->audioHeaderAt(header_list->count()-1);
-
-        // absolute frame time for current frame in msec
-        audio_header->abs_frame_time = prev_audio_header->abs_frame_time+
-          prev_audio_header->frame_time;
-      }
-
-      // A header that yields no frame (reserved or corrupt fields) is skipped
-      // and the search goes on from behind it, like TTAC3AudioStream does.
-      // It used to END the list: one broken header at 2:00 of a 10-minute
-      // file left 2:00 in the length column (audit run 11, H3).
-      if (audio_header->frame_length < 4) {
-        ++skipped;
-        delete audio_header;
-        continue;
-      }
-      // add audio header to header list
-      header_list->add( audio_header );
-      stream_buffer->seekRelative( audio_header->frame_length-4 );
-
-      if (updateTime.elapsed() >= updateIntervalMs) {
-        emit statusReport(StatusReportArgs::Step, tr("Creating audio header list"), stream_buffer->position());
-        updateTime.restart();
-      }
-    }
-
-    emit statusReport(StatusReportArgs::Finished, tr("Audio header list created"), stream_buffer->position());
-  }
-  catch (TTFileBufferException)
-  {
-  }
-
-  if (skipped > 0)
-    log->warningMsg(__FILE__, __LINE__,
-        QString("Skipped %1 invalid MPEG audio header(s) in %2").arg(skipped).arg(filePath()));
-  logHeaderListCreated(header_list->count());
-
-  return header_list->count();
+  TTMpegAudioHeader* audio_header = new TTMpegAudioHeader();
+  readAudioHeader( audio_header );
+  return audio_header;
 }

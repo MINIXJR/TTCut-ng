@@ -27,12 +27,6 @@
 
 
 #include "ttac3audiostream.h"
-#include "ttaudioheaderlist.h"
-
-#include <QElapsedTimer>
-
-#include "../common/istatusreporter.h"
-#include "../common/ttexception.h"
 #include "ttcommon.h"
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -133,74 +127,23 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
   delete [] daten;
 }
 
-//! Create the header list
-int TTAC3AudioStream::createHeaderList()
+//! Read the header behind the sync word for createHeaderList()
+TTAudioHeader* TTAC3AudioStream::readHeader()
 {
-  QElapsedTimer updateTime;
-  const int updateIntervalMs = 1000;
+  TTAC3AudioHeader* audio_header = new TTAC3AudioHeader();
+  readAudioHeader( audio_header );
+  return audio_header;
+}
 
-  header_list = new TTAudioHeaderList( 1000 );
+//! E-AC3 (DD+) uses the same 0x0B77 sync but a different frame size
+//! encoding: bsid > 10 is a stream this parser cannot handle.
+bool TTAC3AudioStream::endsHeaderList(const TTAudioHeader* header)
+{
+  const auto* ac3_header = static_cast<const TTAC3AudioHeader*>(header);
+  if (ac3_header->bsid <= 10)
+    return false;
 
-  stream_buffer->seekRelative( start_pos );
-
-  try
-  {
-    updateTime.start();
-    emit statusReport(StatusReportArgs::Start, tr("Creating audio header list"), stream_buffer->size());
-
-    while (!stream_buffer->atEnd())
-    {
-      if (mAbort) {
-        mAbort = false;
-        throw TTAbortException("User abort in TTAC3AudioStream::createHeaderList!");
-      }
-
-      searchNextSyncByte();
-
-      TTAC3AudioHeader* audio_header = new TTAC3AudioHeader();
-
-      readAudioHeader( audio_header );
-
-      // E-AC3 (DD+) uses same 0x0B77 sync but different frame size encoding.
-      // bsid > 10 indicates E-AC3 which this parser cannot handle.
-      if (audio_header->bsid > 10) {
-        log->warningMsg(__FILE__, __LINE__,
-            QString("E-AC3 stream detected (bsid=%1) - not supported, skipping").arg(audio_header->bsid));
-        delete audio_header;
-        break;
-      }
-
-      // Guard against zero/invalid frame length (fscod=3 reserved, corrupt data)
-      if (audio_header->syncframe_words == 0) {
-        delete audio_header;
-        continue;
-      }
-
-      if ( header_list->count() == 0 )
-        audio_header->abs_frame_time = 0.0;
-      else
-      {
-        const TTAudioHeader* prev_audio_header = header_list->audioHeaderAt(header_list->count()-1);
-        audio_header->abs_frame_time = prev_audio_header->abs_frame_time
-          +prev_audio_header->frame_time;
-      }
-
-      header_list->add( audio_header );
-
-      stream_buffer->seekRelative(audio_header->syncframe_words*2-8);
-
-      if (updateTime.elapsed() >= updateIntervalMs) {
-        emit statusReport(StatusReportArgs::Step, tr("Creating audio header list"), stream_buffer->position());
-        updateTime.restart();
-      }
-    }
-    emit statusReport(StatusReportArgs::Finished, tr("Audio header list created"), stream_buffer->position());
-  }
-  catch (TTFileBufferException)
-  {
-  }
-
-  logHeaderListCreated(header_list->count());
-
-  return header_list->count();
+  log->warningMsg(__FILE__, __LINE__,
+      QString("E-AC3 stream detected (bsid=%1) - not supported, skipping").arg(ac3_header->bsid));
+  return true;
 }
