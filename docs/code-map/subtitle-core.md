@@ -1,5 +1,5 @@
 ---
-base_commit: 4fa1aba8d44cf9ff01c9743653a786b01a4ff13d
+base_commit: 3b0e9bd5fb64e26c3aa32b6912846d5db07e30d4
 last_verified: 2026-10-16
 sources:
   - avstream/ttsrtsubtitlestream.h
