@@ -333,7 +333,8 @@ class TTAVData : public QObject
     QStringList mFrameRateAssumed;   // videos opened at kTTAssumedFrameRate
     bool        mVideoOpenFailed = false;
     QString mVideoOpenFailure;   //!< its reason, for the "Project Not Loaded" dialog
-    //! AV items created by doOpenVideoStream() whose open task has not finished.
+    //! AV items created by doOpenVideoStream() whose onOpenVideoFinished()
+    //! has not run; at the end of a pool run only failed or cancelled opens.
     QList<TTAVItem*> mPendingVideoItems;
     bool        mOpenCancelled   = false;   // an aborted() without a failure reason = user cancel
 
@@ -359,6 +360,9 @@ class TTAVData : public QObject
     //! open) would otherwise outlive the item and could match a later item
     //! allocated at the same address.
     void dropPendingTrackValues(const TTAVItem* item);
+    //! Free the items of mPendingVideoItems - their video open failed or was
+    //! cancelled - with everything parked for them.
+    void dropPendingVideoItems();
 
     // Last-cut metadata (set by the cut path, read by the completion dialog)
     bool    mLastCutWasAudioOnly = false;
