@@ -1,5 +1,5 @@
 ---
-base_commit: 3b0e9bd5fb64e26c3aa32b6912846d5db07e30d4
+base_commit: 38b90b52ccae4606c0be7494328aec41ba32f3f6
 last_verified: 2026-10-16
 sources:
   - avstream/tth26xvideostream.h
