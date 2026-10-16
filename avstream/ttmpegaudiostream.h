@@ -49,7 +49,8 @@ class TTMPEGAudioStream : public TTAudioStream
   //! stream: TTAudioType probes sync candidates with it.
   static void parseAudioHeader( const quint8* data, int offset, TTMpegAudioHeader* audio_header );
 
-  void    readAudioHeader( TTMpegAudioHeader* audio_header );
+  //! False when the end of the file cut the header off.
+  bool    readAudioHeader( TTMpegAudioHeader* audio_header );
 
   int createIndexList() override {return 0;}
 

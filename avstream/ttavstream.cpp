@@ -226,7 +226,9 @@ int TTAudioStream::createHeaderList()
 
   header_list = new TTAudioHeaderList( 1000 );
 
-  stream_buffer->seekAbsolute( (quint64)start_pos );
+  // Where the next frame starts while the track is intact.
+  quint64 nextFrame = (quint64)start_pos;
+  stream_buffer->seekAbsolute( nextFrame );
 
   try
   {
@@ -244,7 +246,18 @@ int TTAudioStream::createHeaderList()
       searchNextSyncByte();
       TTAudioHeader* audio_header = readHeader();
 
-      if (endsHeaderList(audio_header)) {
+      // The end of the file cut the header off.
+      if (audio_header == nullptr)
+        break;
+
+      // Behind junk or a skipped header the sync search also stops on byte
+      // pairs inside the frame data, and such a header is listed like a real
+      // one - deliberately: libav, which cuts the track, counts the same
+      // frames, and the cut finds a frame by its number (acmod, repairs).
+      // Only ending the list needs a header right behind the previous
+      // frame: a false E-AC3 sync after a signal loss ended a 61-minute AC3
+      // track at 10:53 (2026-10-16).
+      if (audio_header->headerOffset() == nextFrame && endsHeaderList(audio_header)) {
         delete audio_header;
         break;
       }
@@ -270,6 +283,7 @@ int TTAudioStream::createHeaderList()
       }
 
       header_list->add( audio_header );
+      nextFrame = audio_header->headerOffset() + audio_header->frame_length;
       stream_buffer->seekRelative( audio_header->frame_length - headerBytes() );
 
       if (updateTime.elapsed() >= updateIntervalMs) {

@@ -72,7 +72,7 @@ void TTAC3AudioStream::searchNextSyncByte()
 }
 
 //! Read audio header information from stream
-void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
+bool TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
 {
   // AC3 frame layout up to and including the bytes we just read:
   //   [2 bytes sync word][6 bytes header data]
@@ -82,18 +82,23 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
   static constexpr int kAC3SyncBytes   = 2;
   static constexpr int kAC3HeaderBytes = 6;
 
-  quint8* daten = new quint8[kAC3HeaderBytes];
+  quint8 daten[kAC3HeaderBytes];
   quint16 stuff;
 
-  stream_buffer->readByte(daten, kAC3HeaderBytes);
+  // readByte swallows the end of the file and returns how many it got - the
+  // rest of daten would be uninitialised
+  if (stream_buffer->readByte(daten, kAC3HeaderBytes) < kAC3HeaderBytes)
+    return false;
 
   audio_header->setHeaderOffset( stream_buffer->position() - (kAC3SyncBytes + kAC3HeaderBytes) );
 
   audio_header->fscod           = (quint8)((daten[2]&0xc0)>>6);
   audio_header->frmsizecod      = (quint8)(daten[2]&0x3f);
+  audio_header->bsid            = (quint8)(daten[3]>>3);
 
-  // Guard against OOB: AC3FrameLength is [4][38], fscod 3 is reserved, frmsizecod >= 38 is invalid
-  if (audio_header->fscod >= 3 || audio_header->frmsizecod >= 38) {
+  // Guard against OOB: AC3FrameLength is [4][38], fscod 3 is reserved, frmsizecod >= 38 is invalid.
+  // An E-AC3 frame (bsid > 10) has its size elsewhere: no frame this table can size.
+  if (audio_header->fscod >= 3 || audio_header->frmsizecod >= 38 || audio_header->bsid > 10) {
     audio_header->syncframe_words = 0;
   } else {
     audio_header->syncframe_words = AC3FrameLength[audio_header->fscod][audio_header->frmsizecod];
@@ -104,7 +109,6 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
   // frames) - see TTMPEGAudioStream::parseAudioHeader (audit run 11, H1).
   audio_header->frame_time      = (audio_header->sampleRate() > 0)
                                   ? 1536.0 * 1000.0 / audio_header->sampleRate() : 0.0;
-  audio_header->bsid            = (quint8)(daten[3]>>3);
   audio_header->bsmod           = (quint8)(daten[3] & 0x07);
   audio_header->acmod           = (quint8)(daten[4]>>5);
 
@@ -124,14 +128,17 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
 
   audio_header->lfeon=(stuff&0x8000)!=0;
 
-  delete [] daten;
+  return true;
 }
 
 //! Read the header behind the sync word for createHeaderList()
 TTAudioHeader* TTAC3AudioStream::readHeader()
 {
   TTAC3AudioHeader* audio_header = new TTAC3AudioHeader();
-  readAudioHeader( audio_header );
+  if (!readAudioHeader( audio_header )) {
+    delete audio_header;
+    return nullptr;
+  }
   return audio_header;
 }
 

@@ -5,7 +5,14 @@
 //       within one audio frame (it lost ~20 ms per segment before);
 //   H5  MPEG-2 (low sampling rate) Layer II opens and parses at its real
 //       frame length;
-//   H3  one broken MPEG header does not end the header list;
+//   H3  one broken MPEG header does not end the header list, and the list
+//       counts the frames libav counts (the cut numbers its frames by
+//       libav's packets; behind the broken header both take a false sync
+//       in the frame data);
+//   a false E-AC3 sync behind a broken AC3 header does not end the list
+//       (it ended a 61-minute track at 10:53, 2026-10-16);
+//   tail bytes without a sync at the end of an MP2 or AC3 file add no
+//       header (the walk read one from uninitialised memory, 2026-10-16);
 //   H2  the automatic audio search offers only what the parser can read;
 //   H4  audio-change markers land on the display frame of the change,
 //       extra frames and a 44.1 kHz AC3 track included;
@@ -68,6 +75,19 @@ static TTAudioStream* openAudio(const QString& path)
   } catch (const TTException&) {
     return nullptr;
   }
+}
+
+// Number of packets libav reads from an audio ES, -1 when it cannot open it.
+static long long libavPackets(const QString& path)
+{
+  AVFormatContext* ctx = nullptr;
+  if (avformat_open_input(&ctx, path.toUtf8().constData(), nullptr, nullptr) < 0) return -1;
+  AVPacket* pkt = av_packet_alloc();
+  long long packets = 0;
+  while (av_read_frame(ctx, pkt) >= 0) { ++packets; av_packet_unref(pkt); }
+  av_packet_free(&pkt);
+  avformat_close_input(&ctx);
+  return packets;
 }
 
 // Duration of an audio ES by libav: packets x frame size / sample rate.
@@ -189,8 +209,78 @@ static void checkBrokenHeader(const QString& dir)
   TTAudioStream* s = openAudio(in);
   if (!s) { check(false, "H3: stream does not open"); return; }
   const int n = s->headerList()->count();
-  check(n >= 2498, QString("H3: header list has %1 of 2500 frames after a broken header at frame 1000").arg(n));
+  const long long libav = libavPackets(in);
+  check(n >= 2490 && n == libav,
+        QString("H3: header list has %1 of 2500 frames after a broken header at frame 1000, libav %2").arg(n).arg(libav));
   delete s;
+}
+
+// A broken AC3 header, and 100 bytes into that frame a sync word whose bsid
+// says E-AC3: the walk reaches the false sync while resyncing. It used to end
+// the list there.
+static void checkFalseEac3Sync(const QString& dir)
+{
+  const QString in = dir + "/false_eac3.ac3";
+  if (!makeSine(in, 20, {"-ar", "48000", "-ac", "6", "-c:a", "ac3", "-b:a", "448k", "-f", "ac3"})) {
+    check(false, "false E-AC3: ffmpeg could not build the material");
+    return;
+  }
+  QFile f(in);
+  if (!f.open(QIODevice::ReadWrite)) { check(false, "false E-AC3: cannot open " + in); return; }
+  QByteArray d = f.readAll();
+  const int frameBytes = 1792, total = d.size() / frameBytes;   // 448 kbit/s at 48 kHz
+  const int off = 300 * frameBytes;
+  if (uchar(d[off]) != 0x0B || uchar(d[off + 1]) != 0x77) { check(false, "false E-AC3: no frame at 300"); return; }
+  d[off + 4] = char(uchar(d[off + 4]) | 0xC0);                  // fscod 3 (reserved): no frame
+  const char fake[] = {0x0B, 0x77, 0x00, 0x00, 0x0E, char(16 << 3)}; // valid frmsizecod, bsid 16
+  for (int i = 0; i < 6; ++i) d[off + 100 + i] = fake[i];
+  f.seek(0); f.write(d); f.close();
+
+  TTAudioStream* s = openAudio(in);
+  if (!s) { check(false, "false E-AC3: stream does not open"); return; }
+  const int n = s->headerList()->count();
+  const quint64 last = n > 0 ? s->headerAt(n - 1)->headerOffset() : 0;
+  check(n == total - 1 && last == quint64(total - 1) * frameBytes,
+        QString("false E-AC3: header list has %1 of %2 frames, last at %3 (expected %4 frames up to the last at %5)")
+            .arg(n).arg(total).arg(last).arg(total - 1).arg(quint64(total - 1) * frameBytes));
+  delete s;
+}
+
+// Bytes without a sync word behind the last frame: the sync search runs to
+// the end of the file, and the header read there must not list a frame.
+static void checkTailWithoutSync(const QString& dir)
+{
+  struct Case { QString name; QStringList codec; };
+  const QList<Case> cases = {
+    { "tail.mp2", {"-ar", "48000", "-c:a", "mp2", "-b:a", "192k", "-f", "mp2"} },
+    { "tail.ac3", {"-ar", "48000", "-ac", "6", "-c:a", "ac3", "-b:a", "448k", "-f", "ac3"} },
+  };
+  for (const Case& c : cases) {
+    const QString clean = dir + "/clean_" + c.name, in = dir + "/" + c.name;
+    if (!makeSine(clean, 20, c.codec)) { check(false, "tail: ffmpeg could not build " + c.name); continue; }
+    TTAudioStream* ref = openAudio(clean);
+    if (!ref) { check(false, "tail: " + clean + " does not open"); continue; }
+    const int expected = ref->headerList()->count();
+    delete ref;
+
+    QFile src(clean), dst(in);
+    if (!src.open(QIODevice::ReadOnly) || !dst.open(QIODevice::WriteOnly)) {
+      check(false, "tail: cannot write " + in); continue;
+    }
+    const qint64 size = src.size();
+    dst.write(src.readAll() + QByteArray(300, '\0'));
+    dst.close();
+
+    TTAudioStream* s = openAudio(in);
+    if (!s) { check(false, "tail: " + in + " does not open"); continue; }
+    const int n = s->headerList()->count();
+    const TTAudioHeader* last = n > 0 ? s->headerAt(n - 1) : nullptr;
+    const qint64 end = last ? qint64(last->headerOffset()) + last->frame_length : -1;
+    check(n == expected && end == size,
+          QString("tail %1: %2 headers, last frame ends at %3 (expected %4 headers ending at %5, "
+                  "300 zero bytes behind it)").arg(c.name).arg(n).arg(end).arg(expected).arg(size));
+    delete s;
+  }
 }
 
 // H2: the automatic search next to a video.
@@ -348,6 +438,8 @@ int main(int argc, char** argv)
   checkAc3FrameTime(dir);
   checkLowRateMpeg(dir);
   checkBrokenHeader(dir);
+  checkFalseEac3Sync(dir);
+  checkTailWithoutSync(dir);
   checkAudioSearch(dir);
   checkAudioChangeMarker(dir, 48000);
   checkAudioChangeMarker(dir, 44100);

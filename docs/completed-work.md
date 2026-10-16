@@ -3015,6 +3015,43 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Kopfliste: Kopf aus nicht belegtem Speicher am Dateiende, falsches
+  E-AC3 nach einer Störung** → **DONE (2026-10-16, Zweig
+  `refactor/audio-headerlist`)**. Beim Umbau P10 gefunden.
+  - **Dateiende:** fand die Sync-Suche bis zum Ende nichts mehr, wurde der
+    Kopf trotzdem gelesen — `readByte(quint8*, int)` meldet das Ende nur
+    über die Rückgabe, die keiner prüfte. valgrind: „uninitialised value“
+    in beiden `readAudioHeader`. Folge: mit 300 Null-Bytes am Ende in 2 von
+    3 Läufen ein erfundener letzter Kopf (MP2 835 statt 834, einmal AC3 626
+    statt 625). Jetzt endet die Liste dort; valgrind 0 Fehler.
+  - **Falsches E-AC3:** hinter einem kaputten AC3-Kopf traf die Suche auf
+    ein `0B 77` in den Tondaten mit bsid > 10 und beendete die Liste. Auf
+    einer roh gezogenen DVB-Spur mit Signalverlust (The Rookie 07x12,
+    `ffmpeg -c:a copy` ohne `ttcut-audiofix`): 20 420 Köpfe, Länge 10:53
+    statt 61:22. Jetzt beendet E-AC3 die Liste nur an der Stelle, wo der
+    vorige Rahmen endete; anderswo bekommt ein solcher Kopf die Länge 0 und
+    wird übersprungen. Ergebnis 115 340 Köpfe.
+  - **Verworfen nach Messung:** zuerst sollte ein Kopf nach einer Störung
+    nur zählen, wenn genau eine Rahmenlänge dahinter der nächste beginnt
+    (gegen den Befund „ein kaputter MP2-Kopf kostet zwei Rahmen“, Lauf 11).
+    Der Vergleich mit libav zeigte: libav zählt genau dieselben Rahmen wie
+    der einfache Lauf — `mp2_badhdr` 832/832, H3-Material 2498/2498, rohe
+    Rookie-MP2 153 837/153 837, Remington Steele 206 815/206 815, Rookie-AC3
+    ohne den E-AC3-Abbruch 115 342 (Python-Nachbau, bildet die alten 20 420
+    genau nach) gegen 115 340. Der Tonschnitt nummeriert seine Rahmen nach
+    libav (`frameNo = pktTime / frameDur`, `TTAudioCutter`), acmod und
+    Reparatur nach dem Platz in der Kopfliste; mit der Prüfung lag die Liste
+    hinter jeder Störung daneben (Rookie-MP2 −116, Rookie-AC3 −179).
+    User-Entscheid: so zählen wie libav.
+  - Gate `audio_es_input`: H3 jetzt „Kopfzahl = Paketzahl bei libav“ (vorher
+    `>= 2498`); neu „false E-AC3“ (alter Code immer rot: 300 von 625) und
+    „tail“ (MP2/AC3 mit 300 Null-Bytes; alter Code nur manchmal rot).
+  - Vorher/nachher: 46 bereinigte DVB-Spuren Byte für Byte gleich — unter
+    ihren 2,5 Mio. Köpfen liegt keiner außerhalb der Reihe, der geänderte
+    Weg wird dort nie betreten. Der Arbeitsablauf mit `ttcut-demux` ist
+    also nicht betroffen, nur roh gezogene Spuren. Die zwölf Dateien von
+    P10 im Programmweg gleich.
+
 - **P10: ein Kopflisten-Lauf für MPEG-Audio und AC3** → **DONE (2026-10-16,
   Zweig `refactor/audio-headerlist`)**. Umbau-Projekt aus Audit-Lauf 11.
   - `TTAudioStream::createHeaderList` ist der eine Lauf: Abbruch, Sync,
@@ -3038,13 +3075,8 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     den gewollten Abbruchtext. Gates `audio_es_input`, `open_cancel`,
     `audiorepair`, `audiocutter_paths`, `audio_order_reset`,
     `audiocut_abort`, `audioonlycut_abort` grün.
-  - Dabei gefunden, nicht Teil des Umbaus: läuft die Sync-Suche ohne Fund ans
-    Dateiende, wird trotzdem ein Kopf gelesen, aus nicht belegtem Speicher
-    (`readByte(quint8*, int)` meldet das Ende nur über die Rückgabe, die
-    keiner prüft). Belegt schon auf dem alten Code: E-AC3-Warnung mit
-    wechselndem bsid auf einer MP2-Datei ohne `0B 77`; auf dem neuen Code
-    ab und zu ein erfundener letzter Kopf bei MP2 mit 300 Null-Bytes am
-    Ende. Karte `audio-es-input.md`.
+  - Dabei gefunden: Kopf aus nicht belegtem Speicher am Dateiende → eigener
+    Eintrag darüber.
 
 - **Reparatur folgt ihrer Spur beim Laden** → **DONE (2026-10-11, branch
   `fix/repair-track-after-missing-track`)**.

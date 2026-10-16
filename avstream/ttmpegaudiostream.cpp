@@ -130,20 +130,21 @@ void TTMPEGAudioStream::parseAudioHeader( const quint8* data, int offset, TTMpeg
 
 // read one audio header from stream
 // -----------------------------------------------------------------------------
-void TTMPEGAudioStream::readAudioHeader( TTMpegAudioHeader* audio_header )
+bool TTMPEGAudioStream::readAudioHeader( TTMpegAudioHeader* audio_header )
 {
-  quint8* data = new quint8[3];
+  quint8 data[3];
 
-  // read 3 byte from stream
-  stream_buffer->readByte( data, 3 );
+  // read 3 byte from stream; readByte swallows the end of the file and
+  // returns how many it got - the rest of data would be uninitialised
+  if (stream_buffer->readByte( data, 3 ) < 3)
+    return false;
 
   // audio header offset
   audio_header->setHeaderOffset( stream_buffer->position() - 4 );
 
   // parse current audio header and fill header struct
   parseAudioHeader( data, 0, audio_header );
-
-  delete []data;
+  return true;
 }
 
 // read the header behind the sync word for createHeaderList()
@@ -151,6 +152,9 @@ void TTMPEGAudioStream::readAudioHeader( TTMpegAudioHeader* audio_header )
 TTAudioHeader* TTMPEGAudioStream::readHeader()
 {
   TTMpegAudioHeader* audio_header = new TTMpegAudioHeader();
-  readAudioHeader( audio_header );
+  if (!readAudioHeader( audio_header )) {
+    delete audio_header;
+    return nullptr;
+  }
   return audio_header;
 }

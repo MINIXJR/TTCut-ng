@@ -45,7 +45,8 @@ class TTAC3AudioStream : public TTAudioStream
 
   TTAVTypes::AVStreamType streamType() const override;
 
-  void readAudioHeader(TTAC3AudioHeader* audio_header);
+  //! False when the end of the file cut the header off.
+  bool readAudioHeader(TTAC3AudioHeader* audio_header);
 
   int  createIndexList() override {return 0;}
 

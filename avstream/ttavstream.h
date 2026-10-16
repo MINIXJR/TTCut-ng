@@ -129,11 +129,13 @@ protected:
   //! Bytes from the start of the frame up to where readHeader() leaves the
   //! buffer, sync word included.
   virtual int headerBytes() const = 0;
-  //! A new header read behind the sync word just found; a frame_length
-  //! below headerBytes() means the header yields no frame.
+  //! A new header read behind the sync word just found, nullptr when the
+  //! end of the file cut it off; a frame_length below headerBytes() means
+  //! the header yields no frame.
   virtual TTAudioHeader* readHeader() = 0;
   //! True for a header the list must end at, checked before the frame
-  //! length. None by default.
+  //! length and only for a header right behind the previous frame. None by
+  //! default.
   virtual bool endsHeaderList(const TTAudioHeader*) { return false; }
 
   // header list
