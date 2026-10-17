@@ -178,6 +178,7 @@ void clearDir(const QString& dir)
 // around it (the TTSettings::logSmartCut lines are on for this case).
 QtMessageHandler  gPrevHandler = nullptr;
 TTAVData*         gInitCancelTarget = nullptr;
+std::atomic<int>  gInitCancelHolds { 0 };
 
 void initCancelHandler(QtMsgType type, const QMessageLogContext& ctx, const QString& msg)
 {
@@ -188,8 +189,10 @@ void initCancelHandler(QtMsgType type, const QMessageLogContext& ctx, const QStr
     // GUI thread, inside TTCutPreviewTask::onUserAbort(): the engine already
     // has its cancel, the task's own flag is not set yet. Hold that window
     // open so the worker gets through it.
-    if (msg.contains("\"CutVideoTask\"") && msg.contains("abort request"))
+    if (msg.contains("\"CutVideoTask\"") && msg.contains("abort request")) {
+      ++gInitCancelHolds;
       QThread::msleep(200);
+    }
   }
   if (gPrevHandler) gPrevHandler(type, ctx, msg);
 }
@@ -486,6 +489,11 @@ int main(int argc, char** argv)
     // case proves nothing about it.
     if (!log.contains("Shared Smart Cut init aborted by user"))
       return fail("initcancel: the cancel did not land inside the shared engine's init");
+    // The hold is matched by a log text; if that line changes, the window is
+    // no longer held open and the case would pass without testing it.
+    if (gInitCancelHolds.load() != 1)
+      return fail(QString("initcancel: the abort window was held %1 times, expected 1 "
+                          "(log line of TTThreadTask::abort changed?)").arg(gInitCancelHolds.load()));
     if (finishedFired.load())     return fail("initcancel: cutPreviewFinished fired despite the cancel");
     if (dialogSeen.load())        return fail("initcancel: a dialog on a plain cancel: " + dialogText);
     if (cancelCount != 1)         return fail(QString("initcancel: expected one Canceled, got %1").arg(cancelCount));
