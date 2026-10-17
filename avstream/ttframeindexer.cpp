@@ -49,9 +49,10 @@ TTFrameIndexer::~TTFrameIndexer()
 // buildFrameIndex() did; callers check frameCount().
 // ----------------------------------------------------------------------------
 bool TTFrameIndexer::build(const QString& filePath, int videoStreamIndex,
-                           const ProgressFn& progress)
+                           const ProgressFn& progress, const std::atomic<bool>* cancel)
 {
     mBundle = TTFrameIndexBundle();
+    mCancelled = false;
 
     QString err;
     if (!ttOpenInput(&mFormatCtx, filePath, &err)) {
@@ -69,7 +70,11 @@ bool TTFrameIndexer::build(const QString& filePath, int videoStreamIndex,
         return false;
     }
 
-    scanPacketsIntoRawIndex(videoStreamIndex, progress);
+    scanPacketsIntoRawIndex(videoStreamIndex, progress, cancel);
+    if (mCancelled) {
+        avformat_close_input(&mFormatCtx);
+        return false;
+    }
     mergePAFFFieldsInIndex();
     finalizeFrameIndex();
 
@@ -195,7 +200,8 @@ TTFieldInfo TTFrameIndexer::parseH264FieldInfo(const uint8_t* data, int size,
 // Scan: append one TTFrameInfo per video packet (raw — no field merging here)
 // ----------------------------------------------------------------------------
 void TTFrameIndexer::scanPacketsIntoRawIndex(int videoStreamIndex,
-                                            const ProgressFn& progressFn)
+                                            const ProgressFn& progressFn,
+                                            const std::atomic<bool>* cancel)
 {
     AVPacket* packet = av_packet_alloc();
     if (!packet) {
@@ -233,6 +239,13 @@ void TTFrameIndexer::scanPacketsIntoRawIndex(int videoStreamIndex,
     TTLeadingPicClassifier leadingClassifier(collectPoc ? codecId : AV_CODEC_ID_NONE);
 
     while (av_read_frame(mFormatCtx, packet) >= 0) {
+        if (cancel && cancel->load()) {
+            av_packet_unref(packet);
+            mCancelled = true;
+            TTMessageLogger::getInstance()->infoMsg(__FILE__, __LINE__,
+                QString("Frame index build cancelled after %1 packets").arg(rawCount));
+            break;
+        }
         if (packet->stream_index == videoStreamIndex) {
             TTFrameInfo info;
             info.pts        = packet->pts;
@@ -308,7 +321,7 @@ void TTFrameIndexer::scanPacketsIntoRawIndex(int videoStreamIndex,
         av_packet_unref(packet);
     }
 
-    if (collectPoc) {
+    if (collectPoc && !mCancelled) {
         pocCollector.finish();
         const QVector<int>& pocs = pocCollector.pocs();
         if (pocs.size() == mBundle.index.size()) {

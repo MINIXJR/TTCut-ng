@@ -40,6 +40,8 @@
 #include <QString>
 #include <QFileInfo>
 
+#include <atomic>
+
 class TTMessageLogger;
 class TTSequenceHeader;
 class TTVideoHeaderList;
@@ -84,7 +86,11 @@ protected:
 	TTAVTypes::AVStreamType stream_type;
   QFileInfo*              stream_info;
   TTFileBuffer*           stream_buffer;
-  bool                    mAbort;
+  // Set by the GUI thread (setAbort from a task's onUserAbort), read by the
+  // worker inside its read loops - atomic, or the load may be hoisted out of
+  // the loop (see TTThreadTask::mIsAborted). Every reader clears it as it
+  // throws TTAbortException.
+  std::atomic<bool>       mAbort;
   TTMessageLogger*        log;
 
 signals:

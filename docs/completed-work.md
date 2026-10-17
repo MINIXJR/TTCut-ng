@@ -1728,6 +1728,45 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Abbruch beim Öffnen eines H.264/H.265-Videos wirkte nicht** →
+  **ERLEDIGT (2026-10-17)**, Zweig `fix/h26x-open-cancel`, Commit
+  `6a910649` (gefunden beim Fix des Elements eines abgebrochenen Öffnens).
+  - Gemessen vor dem Fix: `TTOpenVideoTask::onUserAbort` setzte
+    `TTAVStream::mAbort`, aber weder `TTH26xVideoStream::createHeaderList`
+    noch die Paketschleife von `TTFrameIndexer` fragten es ab. Abbruch beim
+    ersten Fortschrittsbericht über 10 % (Tux H.264 bei 3654628 von
+    33223896 Bytes, Tux HEVC bei 8249904 von 74999133): beide Male lief der
+    Indexaufbau bis zum Ende, das Video stand in der Liste.
+  - Fix: `TTFrameIndexer::build` bekommt das Kennzeichen als
+    `const std::atomic<bool>*` und liest es vor jedem Paket; ein
+    abgebrochener Aufbau gibt `false` mit `wasCancelled()` zurück,
+    `createHeaderList` wirft `TTAbortException` (Abbruch, kein Fehler).
+    `mAbort` ist jetzt `std::atomic<bool>` (auch MPEG-2-, Ton- und
+    SRT-Leser).
+  - Beim Umsetzen gemessen und mit behoben: ein Abbruch nach 0–3 ms traf
+    den Task, bevor er einen Stream hatte — `onUserAbort` konnte kein
+    Kennzeichen setzen, der Index wurde ganz gebaut (3 von 3 Läufen).
+    `TTOpenVideoTask::operation` prüft `isAborted()` jetzt vor und nach
+    `createHeaderList`.
+  - Gate `open_cancel`, neuer Modus `test_open_cancel index`, Fälle
+    `open_cancel_index_264`, `_265` (Abbruch nach Fortschritt) und
+    `_264_0ms`; alle drei vorher rot, danach 14 von 14 grün in drei Läufen
+    (erster Stand des Fixes).
+  - Nicht gemessen: wie lange der Indexaufbau einer abendfüllenden
+    Aufnahme dauert.
+  - Befunde des Abschluss-Reviews, gemessen und behoben:
+    der Stream eines abgebrochenen oder gescheiterten Öffnens wurde nie
+    freigegeben (nach jedem Abbruch 1 lebender `TTVideoStream` samt offener
+    Datei, auch MPEG-2; bestand schon vorher) — `cleanUp` gibt ihn jetzt
+    frei, solange `finished()` ihn nicht übergeben hat, ein Mutex schützt
+    den Zeiger gegen `onUserAbort`. Und ein Abbruch während
+    `createIndexList`/Sortierung ließ das Video erscheinen (Abbruch beim
+    Bericht „header list created“: 25 von 25 Läufen) — die zweite
+    Abfrage steht jetzt direkt vor `finished()`. Gate-Fall
+    `open_cancel_index_264_late`; alle Index-Fälle zählen die lebenden
+    `TTVideoStream` mit. Danach 15 von 15 grün in drei Läufen, der späte
+    Fall 10 von 10 je Codec.
+
 - **Element eines gescheiterten oder abgebrochenen Öffnens wurde nie
   freigegeben** → **DONE (2026-10-16, Zweig `fix/pending-video-items`)**
   (Rest des Abbruch-Fixes darunter).

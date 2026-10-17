@@ -17,6 +17,7 @@
 
 #include <QString>
 #include <QFileInfo>
+#include <QMutex>
 
 #include "../common/ttthreadtask.h"
 
@@ -52,6 +53,12 @@ class TTOpenVideoTask : public TTThreadTask
     QString        mDemuxedAudio;     /**<Demuxed audio file path   */
     TTVideoType*   mpVideoType;       /**<Stream video type         */
     TTVideoStream* mpVideoStream;     /**<Stream object reference   */
+    //! The task owns mpVideoStream until finished() hands it over; cleanUp()
+    //! frees it on every other exit. Written and read by the worker only.
+    bool           mStreamHandedOver = false;
+    //! Guards mpVideoStream between onUserAbort (GUI thread, setAbort) and
+    //! its creation and deletion on the worker.
+    QMutex         mStreamMutex;
 };
 
 #endif

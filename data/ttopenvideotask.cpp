@@ -48,6 +48,7 @@ void TTOpenVideoTask::onUserAbort()
 {
   abort();
 
+  QMutexLocker lock(&mStreamMutex);
   if (mpVideoStream != 0)
     mpVideoStream->setAbort(true);
 
@@ -65,6 +66,13 @@ void TTOpenVideoTask::cleanUp()
   if (mpVideoStream == 0) return;
 
   unlinkStatusSource(mpVideoStream);
+
+  // Cancelled or failed: nobody else ever saw the stream (and its open file).
+  if (!mStreamHandedOver) {
+    QMutexLocker lock(&mStreamMutex);
+    delete mpVideoStream;
+    mpVideoStream = nullptr;
+  }
 }
 
 /**
@@ -115,7 +123,10 @@ void TTOpenVideoTask::operation()
   }
 
   // Use factory method to create the appropriate video stream
-  mpVideoStream = mpVideoType->createVideoStream();
+  {
+    QMutexLocker lock(&mStreamMutex);
+    mpVideoStream = mpVideoType->createVideoStream();
+  }
 
   if (mpVideoStream == nullptr) {
     throw TTDataFormatException(__FILE__, __LINE__,
@@ -126,6 +137,11 @@ void TTOpenVideoTask::operation()
       qDebug() << "TTOpenVideoTask: Created video stream, type =" << mpVideoStream->streamType();
 
   linkStatusSource(mpVideoStream);
+
+  // A cancel before this point found no stream to flag (onUserAbort): end
+  // here, not after a full index build.
+  if (isAborted())
+    throw TTAbortException("Video open aborted!");
 
   int headerCount = mpVideoStream->createHeaderList();
   if (headerCount <= 0) {
@@ -146,5 +162,12 @@ void TTOpenVideoTask::operation()
   if (mpVideoType != 0) delete mpVideoType;
   mpVideoType = 0;
 
+  // A cancel that came after the stream's own last abort check must not let
+  // the video appear anyway (all codecs; the H.26x index build checks per
+  // packet, the index list and its sort check nothing).
+  if (isAborted())
+    throw TTAbortException("Video open aborted!");
+
+  mStreamHandedOver = true;
   emit finished(mpAVItem, mpVideoStream, mOrder, mDemuxedAudio);
 }

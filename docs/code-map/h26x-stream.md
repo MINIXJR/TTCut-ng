@@ -1,6 +1,6 @@
 ---
-base_commit: 38b90b52ccae4606c0be7494328aec41ba32f3f6
-last_verified: 2026-10-16
+base_commit: 6a9106495faccf030cc764fcf80213423cca6165
+last_verified: 2026-10-17
 sources:
   - avstream/tth26xvideostream.h
   - avstream/tth26xvideostream.cpp
@@ -108,7 +108,7 @@ flowchart LR
 |---|---|
 | `OPEN` -.-> `HL` | `TTOpenVideoTask::operation`: `TTVideoType::createVideoStream` builds the subclass from the libav probe (`h264_video` / `h265_video`), then `createHeaderList()`. A return `<= 0` throws `TTDataFormatException` — for H.26x that is `-1` (probe, codec or index failure) or an index without frames. |
 | `FILE` → `PROBE` | `openStream`: `ttProbeVideo` once per stream (`mProbed`); the detected codec must equal `expectedCodec()` or the open fails with “File is not H.264/H.265”. The result stays in `mProbe`; `streamInfo()` exposes its `TTStreamInfo` (width, height, profile, level, bit rate, and `frameRate` = `codecpar->framerate`, the SPS/VPS timing libav's parser read — H.264 `time_scale / (2·num_units_in_tick)`, HEVC VPS or VUI timing — 0 when the stream has none). `r_frame_rate`/`avg_frame_rate` are not used: for a raw ES they are 2× (H.264 progressive/MBAFF), the field rate (PAFF), 1200000/1 without timing, and the raw demuxer's default 25 respectively (measured, libav 9.0.2). |
-| `FILE` → `IDXR` → `BUN` | `TTFrameIndexer::build` (progress mapped onto 10–80 % of the byte total), copied into `mFrameIndexBundle`: one `TTFrameInfo` per (merged) access unit in **decode order**, GOP table, raw→merged map, PAFF flags, display-order map. Failure → `-1`. `createHeaderList` returns the AU count (dropped RASL included). |
+| `FILE` → `IDXR` → `BUN` | `TTFrameIndexer::build` (progress mapped onto 10–80 % of the byte total; the cancel flag `&mAbort` read per packet, see pitfalls), copied into `mFrameIndexBundle`: one `TTFrameInfo` per (merged) access unit in **decode order**, GOP table, raw→merged map, PAFF flags, display-order map. Failure → `-1`. `createHeaderList` returns the AU count (dropped RASL included). |
 | `PROBE` / `INFO` / `BUN` → `RATE` (trigger `HL` -.-> `RATE`) | `TTFrameIndexer::effectiveFrameRate(streamTiming, path, isPAFF, &origin)`, called after the index is built — **one rule**: the `.info` `frame_rate` when the file carries a usable one (`TTESInfo::hasFrameRate` — a `.info` without it no longer passes TTESInfo's 25/1 default on as its rate), halved when `isPAFF` and `> 30` (origin `Info`); else the SPS timing, never halved — it already is the frame rate, PAFF included (`StreamTiming`); else `kTTAssumedFrameRate` = 25 (`Assumed`). The indexer's PTS synthesis (`assignPtsFromFrameRate`, ES without timestamps) uses the same rule and then clamps to 25 fps outside 0–120. |
 | `RATE` → `FR` | `frame_rate` (float), returned by `TTH26xVideoStream::frameRate()`: the rate of every time column and time↔index conversion of the video; `frameRateOrigin()` says where it came from. The open log line shows it next to the SPS timing, PAFF, profile and level; `StreamTiming` logs “no .info” (or “.info without frame_rate”) “, frame rate from the SPS timing”, `Assumed` a warning, and a `.info` that differs from the SPS timing by more than 0.1 % a warning naming both (`.info` wins). |
 | `RATE` → `HINT` | `TTAVData::onOpenVideoFinished` collects videos with origin `Assumed`; `onThreadPoolExit` emits `frameRateAssumed(files)` and, interactive only, a `QMessageBox::warning` (file list, assumed 25 fps, “demux with ttcut-demux”); headless only the log. Cleared with the other open outcomes (`clearOpenOutcome`). |
@@ -123,12 +123,18 @@ flowchart LR
 
 ## Assumptions, contracts & pitfalls
 
-- **An open cannot be cancelled.** `createHeaderList` and
-  `TTFrameIndexer::build` poll no abort flag (`TTAVStream::mAbort`, which
-  `TTOpenVideoTask::onUserAbort` sets): a cancel while an H.264/H.265 video
-  opens lets the open run to its end (measured 2026-10-16 on the Tux H.264
-  recording, cancels at 1, 20 and 100 ms all ended in `finished`). Open in
-  `TODO.md`.
+- **A cancel ends the open in the index build.** `createHeaderList` hands
+  `&mAbort` (`TTAVStream::mAbort`, `std::atomic<bool>`, set by
+  `TTOpenVideoTask::onUserAbort`) to `TTFrameIndexer::build`, whose packet
+  loop reads it before every packet. A set flag ends the scan without the
+  post-processing (PAFF merge, GOP table, display map); `build` returns
+  `false` with `wasCancelled()`, and `createHeaderList` clears the flag and
+  throws `TTAbortException` — no `Error` report, the task ends as cancelled.
+  A cancel before the stream exists has no flag to set, and the index list
+  and its sort poll nothing: `TTOpenVideoTask` checks `isAborted()` before
+  `createHeaderList` and right before `finished()`; on every exit but
+  `finished()` its `cleanUp` deletes the stream (gate `open_cancel`, cases
+  `open_cancel_index_*`, which also count the live `TTVideoStream`).
 - **Two index spaces, one conversion.** The bundle is in decode order;
   everything a caller passes (`isCutInPoint`, `isCutOutPoint`,
   `findIDRBefore`, the index list after the sort) is in display order.

@@ -629,18 +629,33 @@ gate_open_cancel() {
   cases 120 open_cancel_unit open_cancel_fresh_0 open_cancel_fresh_20 open_cancel_fresh_100 \
             open_cancel_project_0 open_cancel_project_20 open_cancel_project_100 \
             open_cancel_pending_fail open_cancel_pending_cancel open_cancel_pending_ok \
-            open_cancel_pending_dialog
+            open_cancel_pending_dialog open_cancel_index_264 open_cancel_index_265 \
+            open_cancel_index_264_0ms open_cancel_index_264_late
 }
 # The item of a failed or cancelled fresh open is freed when the pool run
 # ends; a listed item survives, also when the run ends inside the
-# extra-frame dialog (.info with an audio gap). MPEG-2 for the cancel: the
-# H.26x open does not poll the abort flag (TODO.md).
+# extra-frame dialog (.info with an audio gap). The H.26x cancel lands inside
+# the frame index build: open_cancel_index_264/_265; at 0 ms it lands before
+# the task has a stream: open_cancel_index_264_0ms; after the scan:
+# open_cancel_index_264_late. No video stream may outlive a cancel.
 case_open_cancel_pending_fail() {
   need "$A264"; head -c 2000000 /dev/zero | tr '\0' 'U' > "$W/fail.264"; cp "$A264" "$W/fail.ac3"
   "$D/test_open_cancel" pending "$W/fail.264" -1 0; }
 case_open_cancel_pending_cancel() {
   need "$M2V" "$MP2"; cp "$M2V" "$W/c.m2v"; cp "$MP2" "$W/c.mp2"
   "$D/test_open_cancel" pending "$W/c.m2v" 20 0; }
+case_open_cancel_index_264() {
+  need "$V264"; cp "$V264" "$W/i.264"
+  "$D/test_open_cancel" index "$W/i.264"; }
+case_open_cancel_index_264_0ms() {
+  need "$V264"; cp "$V264" "$W/i0.264"
+  "$D/test_open_cancel" index "$W/i0.264" 0; }
+case_open_cancel_index_264_late() {
+  need "$V264"; cp "$V264" "$W/il.264"
+  "$D/test_open_cancel" index "$W/il.264" late; }
+case_open_cancel_index_265() {
+  need "$H265"; cp "$H265" "$W/i.265"
+  "$D/test_open_cancel" index "$W/i.265"; }
 case_open_cancel_pending_ok() {
   need "$M2V" "$MP2"; cp "$M2V" "$W/ok.m2v"; cp "$MP2" "$W/ok.mp2"
   "$D/test_open_cancel" pending "$W/ok.m2v" -1 1; }
