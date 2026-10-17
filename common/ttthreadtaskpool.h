@@ -18,6 +18,7 @@
 
 #include <QObject>
 #include <QQueue>
+#include <QSet>
 #include <QMap>
 #include <QUuid>
 
@@ -37,6 +38,13 @@ class TTThreadTaskPool : public QObject
     void  init(int estimateTaskCount);
         void  start(TTThreadTask* task, bool runSyncron=false, int priority=0);
     void  startNested(TTThreadTask* task);
+    //! start() for a task nobody else deletes: the pool deletes it (deleteLater)
+    //! once its own finished/aborted handler is done with it. An owner that
+    //! connects finished/aborted to deleteLater itself races that handler -
+    //! the task emits from the worker, and the GUI thread can run the owner's
+    //! deleteLater before the pool's queued call is even posted (SIGSEGV in
+    //! onThreadTaskAborted, 5 of 30 runs, test_open_cancel index, 2026-10-17).
+    void  startOwned(TTThreadTask* task);
     int   overallPercentage();
 
     //! Reason the last task in this run failed, or empty if none did (clean
@@ -81,9 +89,11 @@ class TTThreadTaskPool : public QObject
         // progress maps, every time the queue drains or is cleared.
         void resetCounters();
     int  runningTaskCount();
+    void releaseOwned(TTThreadTask* task);
 
     private:
     QQueue<TTThreadTask*> mTaskQueue;
+    QSet<TTThreadTask*>   mOwnedTasks;   //!< started by startOwned(), not yet released
     QString               mLastFailureMessage;
     QMap<QUuid, quint64>  mTotalMap;
     QMap<QUuid, quint64>  mProgressMap;

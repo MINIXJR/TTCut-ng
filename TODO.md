@@ -221,6 +221,33 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     wie bei der geteilten Engine). Auch vermerkt in
     `docs/code-map/smart-cut.md`.
 
+- **Besitzer löscht seinen Task selbst: Wettrennen mit dem Pool** (2026-10-17,
+  offen; gemessen nur bei den Öffnen-Tasks). Wer `finished`/`aborted` eines
+  Tasks mit dessen `deleteLater` verbindet, kann ihn löschen, bevor der Pool
+  sein eigenes `onThreadTaskAborted`/`onThreadTaskFinished` bearbeitet hat:
+  der Task sendet aus dem Arbeits-Thread, der GUI-Thread führt das
+  `deleteLater` aus, bevor das Pool-Ereignis eingereiht ist. Bei den
+  Öffnen-Tasks gemessen (SIGSEGV in `disconnectTaskSignals`, 5 von 30
+  Läufen) und mit `TTThreadTaskPool::startOwned` behoben. Dasselbe Muster
+  steht noch in `TTCutMainWindow::startAnalysisTask` und beim Start der Suche
+  (`TTCutMainWindow`, `mpRunningSearch`) — dort nicht gemessen. Lösungsform:
+  `startOwned`. Gate-Vorbild: `open_cancel_index_264_repeat`.
+- **Ton- und Untertitel-Öffnen: Abbruch vor dem Stream wirkt nicht**
+  (2026-10-17, nur aus dem Code gelesen, nicht gemessen). `TTOpenAudioTask`
+  und `TTOpenSubtitleTask` prüfen `isAborted()` nirgends; kommt der Abbruch,
+  bevor der Stream angelegt ist, setzt `onUserAbort` kein Kennzeichen, die
+  Spur wird ganz gelesen und mit `finished` übergeben. Der Video-Task prüft
+  seit `6a910649` vor `createHeaderList` und vor `finished`.
+
+- **Abbruch kurz nach dem Öffnen setzt `mAbort` am übergebenen Stream**
+  (2026-10-17, Review-Befund, nur gelesen, nicht gemessen). Kommt ein
+  Abbruch an, nachdem ein Öffnen-Task `finished` gesendet hat, kehrt
+  `abort()` früh zurück (`mIsFinished`), `onUserAbort` ruft aber trotzdem
+  `setAbort(true)` am Stream, der jetzt dem Element gehört. Das Kennzeichen
+  bleibt stehen, bis es ein Leser verbraucht — etwa `copySegment` beim
+  nächsten Schnitt, der dann grundlos abbräche. Alle drei Öffnen-Tasks,
+  bestand schon vorher.
+
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an zwei Stellen: `data/ttpreviewclip.cpp` und
     `data/ttcutpreviewtask.cpp` — beide schreiben `preview_audio_temp.<ext>`

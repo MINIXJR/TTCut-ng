@@ -16,6 +16,7 @@
 
 #include <QString>
 #include <QFileInfo>
+#include <QMutex>
 
 class TTAudioType;
 class TTAudioStream;
@@ -47,4 +48,10 @@ class TTOpenAudioTask : public TTThreadTask
     QString        mFilePath;
     TTAudioStream* mpAudioStream;
     TTAudioType*   mpAudioType;
+    //! The task owns mpAudioStream until finished() hands it over; cleanUp()
+    //! frees it on every other exit. Written and read by the worker only.
+    bool           mStreamHandedOver = false;
+    //! Guards mpAudioStream between onUserAbort (GUI thread, setAbort) and
+    //! its creation and deletion on the worker.
+    QMutex         mStreamMutex;
 };

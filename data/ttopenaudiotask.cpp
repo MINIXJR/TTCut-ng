@@ -20,6 +20,7 @@
 #include "../avstream/ttavstream.h"
 #include "../data/ttavlist.h"
 
+#include <QPointer>
 #include <QDebug>
 
 /**
@@ -40,8 +41,13 @@ TTOpenAudioTask::TTOpenAudioTask(TTAVItem* avItem, const QString& filePath, int 
  */
 void TTOpenAudioTask::onUserAbort()
 {
+  // Defensive, as in TTOpenVideoTask::onUserAbort: abort() of a queued task
+  // lets the pool release it and runs processEvents() (not measured to delete).
+  QPointer<TTOpenAudioTask> self(this);
   abort();
+  if (!self) return;
 
+  QMutexLocker lock(&mStreamMutex);
 	if (mpAudioStream != 0) {
     if (TTSettings::instance()->logCutPipeline())
         qDebug() << "open audio stream abort; audioStream is not null";
@@ -58,6 +64,13 @@ void TTOpenAudioTask::cleanUp()
   if (mpAudioStream == 0) return;
 
   unlinkStatusSource(mpAudioStream);
+
+  // Cancelled or failed: nobody else ever saw the stream (and its open file).
+  if (!mStreamHandedOver) {
+    QMutexLocker lock(&mStreamMutex);
+    delete mpAudioStream;
+    mpAudioStream = nullptr;
+  }
 }
 
 /**
@@ -78,12 +91,16 @@ void TTOpenAudioTask::operation()
 			mpAudioType->avStreamType() != TTAVTypes::ac3_audio) 
     throw TTException(__FILE__, __LINE__, tr("Unsupported audio type %1!").arg(mFilePath));
 
-	mpAudioStream = static_cast<TTAudioStream*>(mpAudioType->createAudioStream());
+  {
+    QMutexLocker lock(&mStreamMutex);
+    mpAudioStream = static_cast<TTAudioStream*>(mpAudioType->createAudioStream());
+  }
 
   linkStatusSource(mpAudioStream);
 
 	mpAudioStream->createHeaderList();
 
+  mStreamHandedOver = true;
 	emit finished(mpAVItem, mpAudioStream, mOrder);
 }
 

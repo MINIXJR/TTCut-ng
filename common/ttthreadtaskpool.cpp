@@ -18,6 +18,7 @@
 
 #include "../common/ttmessagelogger.h"
 
+#include <utility>
 #include <QThreadPool>
 #include <QPointer>
 #include <QThread>
@@ -109,7 +110,30 @@ void TTThreadTaskPool::cleanUpQueue()
     t.remove();
   }
 
+  // Owned tasks still listed have ended (waitForDone above) without their end
+  // reaching the pool; nobody else deletes them.
+  for (TTThreadTask* task : std::as_const(mOwnedTasks))
+    task->deleteLater();
+  mOwnedTasks.clear();
+
   resetCounters();
+}
+
+/**
+ * Start a task the pool deletes once it has handled its end (see the header)
+ */
+void TTThreadTaskPool::startOwned(TTThreadTask* task)
+{
+  mOwnedTasks.insert(task);
+  start(task);
+}
+
+// Last use of the task in a finished/aborted handler: from here on the pool
+// holds no pointer to it, so the deferred delete cannot meet one.
+void TTThreadTaskPool::releaseOwned(TTThreadTask* task)
+{
+  if (mOwnedTasks.remove(task))
+    task->deleteLater();
 }
 
 void TTThreadTaskPool::resetCounters()
@@ -247,6 +271,7 @@ void TTThreadTaskPool::onThreadTaskFinished(TTThreadTask* task)
   unwireTask(task);
 
   qDebug() << "finished " << task->taskName() << " with UUID " << task->taskID() << " remaining tasks " << mTaskQueue.count();
+  releaseOwned(task);
 
   if (mTaskQueue.isEmpty())
   {
@@ -277,6 +302,7 @@ void TTThreadTaskPool::onThreadTaskAborted(TTThreadTask* task)
     mLastFailureMessage = task->failureMessage();
 
   qDebug() << "aborted " << task->taskName() << " with UUID " << task->taskID() << " remaining tasks " << mTaskQueue.count();
+  releaseOwned(task);
 
   if (mTaskQueue.isEmpty())
   {
@@ -298,6 +324,7 @@ void TTThreadTaskPool::onThreadTaskAborted(TTThreadTask* task)
 void TTThreadTaskPool::onThreadTaskDestroyed(QObject* task)
 {
   int removed = mTaskQueue.removeAll(static_cast<TTThreadTask*>(task));
+  mOwnedTasks.remove(static_cast<TTThreadTask*>(task));
 
   if (removed > 0)
     qDebug() << "task destroyed while still enqueued, removed from queue; remaining tasks " << mTaskQueue.count();

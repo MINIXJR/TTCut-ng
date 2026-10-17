@@ -1,6 +1,6 @@
 ---
-base_commit: 6a9106495faccf030cc764fcf80213423cca6165
-last_verified: 2026-10-16
+base_commit: 7d38cc6524b96780321851b669b361eba1129f9a
+last_verified: 2026-10-17
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
@@ -397,6 +397,13 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   freigegeben (GUI-Thread über `deleteLater`). Ein Aufräumen im Arbeitsthread
   läuft ohne Happens-before-Kante gegen den Destruktor und kann doppelt
   freigeben.
+- **Besitzer-`deleteLater` gegen den Pool-Handler.** Hängt der Besitzer
+  `finished`/`aborted` an `deleteLater`, kann der GUI-Thread die Aufgabe
+  löschen, bevor das Ereignis für `onThreadTaskAborted`/`onThreadTaskFinished`
+  des Pools eingereiht ist (die Aufgabe sendet aus dem Arbeitsthread). Bei den
+  Öffnen-Aufgaben gemessen (SIGSEGV, 5 von 30 Läufen, 2026-10-17) und mit
+  `TTThreadTaskPool::startOwned` behoben; für die Suche nicht gemessen
+  (`TODO.md`).
 - **`run()` räumt vor dem Endsignal auf.**
   Wer `finished`/`aborted` an `deleteLater` hängt (jeder Nutzer dieser Familie),
   gab dem GUI-Thread damit die Erlaubnis, die Aufgabe zu zerstören, während der

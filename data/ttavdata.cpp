@@ -445,7 +445,8 @@ TTAVItem* TTAVData::doOpenVideoStream(const QString& filePath, int order)
   int audioCount = getAudioNames(QFileInfo(filePath)).count();
 
   mpThreadTaskPool->init(audioCount+1);
-  mpThreadTaskPool->start(openVideoTask);
+  // Owned by nobody else: the pool deletes the open tasks once they end.
+  mpThreadTaskPool->startOwned(openVideoTask);
 
   return avItem;
 }
@@ -463,7 +464,7 @@ void TTAVData::doOpenAudioStream(TTAVItem* avItem, const QString& filePath, int 
   watchOpenAbort(openAudioTask, [this, avItem, filePath](const QString& reason) {
     onOpenAudioAborted(avItem, filePath, reason); });
 
-  mpThreadTaskPool->start(openAudioTask);
+  mpThreadTaskPool->startOwned(openAudioTask);
 }
 
 /*!
@@ -479,7 +480,7 @@ void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, i
   watchOpenAbort(openSubtitleTask, [this, avItem, filePath](const QString& reason) {
     onOpenSubtitleAborted(avItem, filePath, reason); });
 
-  mpThreadTaskPool->start(openSubtitleTask);
+  mpThreadTaskPool->startOwned(openSubtitleTask);
 }
 
 /*!
