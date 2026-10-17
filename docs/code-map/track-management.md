@@ -1,5 +1,5 @@
 ---
-base_commit: 38b90b52ccae4606c0be7494328aec41ba32f3f6
+base_commit: 7d38cc6524b96780321851b669b361eba1129f9a
 last_verified: 2026-10-14
 sources:
   - data/ttaudiolist.h

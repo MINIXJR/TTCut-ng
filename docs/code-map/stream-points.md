@@ -1,6 +1,6 @@
 ---
-base_commit: 38b90b52ccae4606c0be7494328aec41ba32f3f6
-last_verified: 2026-10-16
+base_commit: 7d38cc6524b96780321851b669b361eba1129f9a
+last_verified: 2026-10-17
 sources:
   - gui/ttcutmainwindow.h
   - gui/ttcutmainwindow.cpp
@@ -142,7 +142,7 @@ flowchart TD
 
 - **Frame domain** — a marker's `frameIndex` is a navigation/display index for every codec; the time column subtracts the extra frames before it (MPEG-2 field-picture positions; for H.26x the classified doubled-PTS defects) like the playback does (`playback.md`), so model and navigation display agree.
 - **`TTStreamPointModel`** — assumes callers pass display indices; guarantees sorted rows; pitfall: no deduplication, so a second "Start analysis" that finds the same points doubles them only if the first set survived — it does not, because `clearAutoDetected` runs first; imported (`Error`, `VDRImportMarker`) and manual rows are the ones that can accumulate.
-- **`onAnalyzeStreamPoints`** — assumes the preview wrapper holds the frame index for H.26x (the pillarbox scan adopts it). Task lifetime is `startAnalysisTask`'s job: `TTThreadTask` has `setAutoDelete(false)` and the pool does not delete, so without its `deleteLater` wiring a task lives on. LeakSanitizer does not see such a leak (the signal connections keep the object reachable); the gate is `test_analysis_task_lifetime`, which drives `startAnalysisTask` with a finishing and an aborting dummy task.
+- **`onAnalyzeStreamPoints`** — assumes the preview wrapper holds the frame index for H.26x (the pillarbox scan adopts it). Task lifetime is `startAnalysisTask`'s job: `TTThreadTask` has `setAutoDelete(false)` and the pool deletes only tasks started with `startOwned`, so without its `deleteLater` wiring a task lives on. That owner-side `deleteLater` can run before the pool's own queued `onThreadTaskAborted`/`onThreadTaskFinished` — measured for the open tasks (SIGSEGV, fixed there with `startOwned`), not here (`TODO.md`). LeakSanitizer does not see such a leak (the signal connections keep the object reachable); the gate is `test_analysis_task_lifetime`, which drives `startAnalysisTask` with a finishing and an aborting dummy task.
 - **`startAudioAnomalyScan`** — shared by the explicit analysis and the auto start; the explicit run scans again on purpose after `clearAutoDetected` dropped the earlier findings.
 - **`onStreamPointsLoaded`** — the DISABLED annotation depends on `mpCurrentAVDataItem` being set (guaranteed by the project-finished order); the approximate range check is ±1 AC3 frame, fine for overlap, not for what a repair writes (the exact range travels in `AudioFrameFrom/To`).
 - **Logo profile lifetime** — cleared in `onAVItemChanged` (every item switch), by "cancel ROI", and on a failed manual build; `closeProject` clears the marker model but not the profile or its overlay — they go with the next item switch. The logo search buttons are disabled by `navigationEnabled(false)` meanwhile.

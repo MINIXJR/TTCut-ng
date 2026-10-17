@@ -1,5 +1,5 @@
 ---
-base_commit: 6a9106495faccf030cc764fcf80213423cca6165
+base_commit: 7d38cc6524b96780321851b669b361eba1129f9a
 last_verified: 2026-10-14
 sources:
   - tools/ttcut-ac3fix/ttcut-ac3fix.c

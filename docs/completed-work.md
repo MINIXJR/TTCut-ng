@@ -1728,6 +1728,35 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Öffnen-Tasks und Ton-/Untertitelstreams wurden nie freigegeben** →
+  **ERLEDIGT (2026-10-17)**, Zweig `fix/open-task-lifetime`, Commit
+  `7d38cc65` (gefunden beim Fix des H.26x-Öffnen-Abbruchs).
+  - Gemessen vor dem Fix (`test_open_cancel pending`, lebende Objekte über
+    die Objekt-Hooks von Qt): nach jedem Lauf, fertig oder abgebrochen,
+    lebten alle Öffnen-Tasks weiter — niemand löschte sie. Und ein Abbruch
+    in der Kopfliste einer langen MP2-Spur (30 × Tux-MP2, 86 MB) ließ
+    1 `TTAudioStream` ohne Besitzer zurück (bei 30, 60 und 100 ms).
+  - Erster Fix-Versuch verworfen: `finished`/`aborted` → `deleteLater` beim
+    Besitzer (wie `TTCutMainWindow::startAnalysisTask`) stürzte in 5 von 30
+    Läufen ab (SIGSEGV in `TTThreadTaskPool::disconnectTaskSignals`; vor
+    jedem Absturz „task destroyed while still enqueued“) — das
+    `deleteLater` lief vor dem Pool-Handler. Erklärung abgeleitet: die
+    Aufgabe sendet aus dem Arbeitsthread, der GUI-Thread führt das erste
+    Ereignis aus, bevor das zweite eingereiht ist.
+  - Fix: `TTThreadTaskPool::startOwned` — der Pool löscht die Aufgabe am
+    Ende seines eigenen Handlers. `onUserAbort` der Öffnen-Tasks sichert
+    sich mit `QPointer` (`abort()` einer wartenden Aufgabe lässt die
+    Ereignisschleife laufen). Ton- und Untertitel-Task geben ihren Stream
+    in `cleanUp` frei wie der Video-Task (Untertitel nur gelesen, nicht
+    ausgelöst).
+  - Gate `open_cancel`: `pending`-Fälle verlangen 0 lebende Tasks (alle
+    vier vorher rot; Positivkontrolle: beim Ende des Pool-Laufs sieht die
+    Zählung die Tasks noch); `open_cancel_index_264_repeat` (20 Läufe, gegen die
+    verworfene Variante Absturz im 2. Lauf); `open_cancel_audio_mp2`
+    (vorher rot). 120 Wiederholungsläufe der Absturzfälle ohne Fehler.
+  - Offen → `TODO.md`: dasselbe Wettrennen bei Hauptfenster und Suche (nicht
+    gemessen); Ton-/Untertitel-Öffnen prüft `isAborted()` nirgends (gelesen).
+
 - **Abbruch beim Öffnen eines H.264/H.265-Videos wirkte nicht** →
   **ERLEDIGT (2026-10-17)**, Zweig `fix/h26x-open-cancel`, Commit
   `6a910649` (gefunden beim Fix des Elements eines abgebrochenen Öffnens).
