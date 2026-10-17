@@ -22,6 +22,7 @@
 #include "../avstream/ttavstream.h"       // complete TTVideoStream
 #include "../avstream/ttvideoindexlist.h"  // indexList()->sortDisplayOrder()
 
+#include <QPointer>
 #include <QDir>
 #include <QDebug>
 #include <QStringList>
@@ -46,7 +47,13 @@ TTOpenVideoTask::TTOpenVideoTask(TTAVItem* avItem, const QString& fileName, int 
  */
 void TTOpenVideoTask::onUserAbort()
 {
+  // abort() of a task still waiting in the queue reports it aborted, the pool
+  // releases it (startOwned, deleteLater), and abort() runs processEvents().
+  // Whether the deferred delete can run inside that call is not measured -
+  // the guard is defensive.
+  QPointer<TTOpenVideoTask> self(this);
   abort();
+  if (!self) return;
 
   QMutexLocker lock(&mStreamMutex);
   if (mpVideoStream != 0)

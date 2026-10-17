@@ -20,6 +20,7 @@
 #include "../avstream/ttavstream.h"
 #include "ttavlist.h"
 
+#include <QPointer>
 #include <QDebug>
 
 /**
@@ -40,8 +41,13 @@ TTOpenSubtitleTask::TTOpenSubtitleTask(TTAVItem* avItem, const QString& filePath
  */
 void TTOpenSubtitleTask::onUserAbort()
 {
+  // Defensive, as in TTOpenVideoTask::onUserAbort: abort() of a queued task
+  // lets the pool release it and runs processEvents() (not measured to delete).
+  QPointer<TTOpenSubtitleTask> self(this);
   abort();
+  if (!self) return;
 
+  QMutexLocker lock(&mStreamMutex);
   if (mpSubtitleStream != 0)
   {
     if (TTSettings::instance()->logCutPipeline())
@@ -59,6 +65,13 @@ void TTOpenSubtitleTask::cleanUp()
   if (mpSubtitleStream == 0) return;
 
   unlinkStatusSource(mpSubtitleStream);
+
+  // Cancelled or failed: nobody else ever saw the stream (and its file).
+  if (!mStreamHandedOver) {
+    QMutexLocker lock(&mStreamMutex);
+    delete mpSubtitleStream;
+    mpSubtitleStream = nullptr;
+  }
 }
 
 /**
@@ -78,13 +91,17 @@ void TTOpenSubtitleTask::operation()
   if (mpSubtitleType->avStreamType() != TTAVTypes::srt_subtitle)
     throw TTException(__FILE__, __LINE__, tr("Unsupported subtitle type %1!").arg(mFilePath));
 
-  mpSubtitleStream = static_cast<TTSubtitleStream*>(mpSubtitleType->createSubtitleStream());
+  {
+    QMutexLocker lock(&mStreamMutex);
+    mpSubtitleStream = static_cast<TTSubtitleStream*>(mpSubtitleType->createSubtitleStream());
+  }
 
   qDebug("connect subtitle stream step signal");
   linkStatusSource(mpSubtitleStream);
   qDebug("create subtitle stream header list");
   mpSubtitleStream->createHeaderList();
 
+  mStreamHandedOver = true;
   emit finished(mpAVItem, mpSubtitleStream, mOrder);
 }
 

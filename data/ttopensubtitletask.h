@@ -16,6 +16,7 @@
 
 #include <QString>
 #include <QFileInfo>
+#include <QMutex>
 
 class TTSubtitleType;
 class TTSubtitleStream;
@@ -47,4 +48,11 @@ class TTOpenSubtitleTask : public TTThreadTask
     QString           mFilePath;
     TTSubtitleStream* mpSubtitleStream;
     TTSubtitleType*   mpSubtitleType;
+    //! The task owns mpSubtitleStream until finished() hands it over;
+    //! cleanUp() frees it on every other exit. Written and read by the
+    //! worker only.
+    bool              mStreamHandedOver = false;
+    //! Guards mpSubtitleStream between onUserAbort (GUI thread, setAbort)
+    //! and its creation and deletion on the worker.
+    QMutex            mStreamMutex;
 };

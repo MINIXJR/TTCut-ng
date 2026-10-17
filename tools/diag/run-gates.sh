@@ -630,7 +630,8 @@ gate_open_cancel() {
             open_cancel_project_0 open_cancel_project_20 open_cancel_project_100 \
             open_cancel_pending_fail open_cancel_pending_cancel open_cancel_pending_ok \
             open_cancel_pending_dialog open_cancel_index_264 open_cancel_index_265 \
-            open_cancel_index_264_0ms open_cancel_index_264_late
+            open_cancel_index_264_0ms open_cancel_index_264_late open_cancel_index_264_repeat \
+            open_cancel_audio_mp2
 }
 # The item of a failed or cancelled fresh open is freed when the pool run
 # ends; a listed item survives, also when the run ends inside the
@@ -653,6 +654,22 @@ case_open_cancel_index_264_0ms() {
 case_open_cancel_index_264_late() {
   need "$V264"; cp "$V264" "$W/il.264"
   "$D/test_open_cancel" index "$W/il.264" late; }
+# The owner deleting a task raced the pool's own aborted handler: SIGSEGV in
+# 5 of 30 runs of the index case (2026-10-17, before startOwned). 20 runs
+# catch a rate like that with about 97 %.
+case_open_cancel_index_264_repeat() {
+  need "$V264"; cp "$V264" "$W/ir.264"
+  local i
+  for i in $(seq 1 20); do
+    "$D/test_open_cancel" index "$W/ir.264" > "$W/ir.out" 2>&1 || { echo "run $i: rc=$?"; tail -3 "$W/ir.out"; return 1; }
+  done
+  echo "PASS: 20 of 20 runs"; }
+# A long audio track (30 x the Tux MP2, 86 MB), so the cancel lands inside
+# its header list; the task must not leave its stream behind.
+case_open_cancel_audio_mp2() {
+  need "$M2V" "$MP2"; cp "$M2V" "$W/a.m2v"
+  local i; for i in $(seq 1 30); do cat "$MP2"; done > "$W/a.mp2"
+  "$D/test_open_cancel" audio "$W/a.m2v"; }
 case_open_cancel_index_265() {
   need "$H265"; cp "$H265" "$W/i.265"
   "$D/test_open_cancel" index "$W/i.265"; }
