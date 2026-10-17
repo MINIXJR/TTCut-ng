@@ -1019,7 +1019,7 @@ case_mpeg2cut_audio() { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP
 case_mpeg2cut_video() { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" video; }
 case_mpeg2cut_mux()   { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" mux; }
 gate_cutsequence_abort() { need "$V264" "$A264" "$M2V" "$MP2"; "$D/test_cutsequence_abort" "$V264" "$A264" "$M2V" "$MP2" "$W"; }
-gate_previewcut_abort() { cases 600 previewcut_none previewcut_video previewcut_audio previewcut_fail previewcut_muxfail previewcut_muxfail_mpeg2; }
+gate_previewcut_abort() { cases 600 previewcut_none previewcut_video previewcut_audio previewcut_fail previewcut_muxfail previewcut_muxfail_mpeg2 previewcut_noread previewcut_initcancel; }
 case_previewcut_none()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" none; }
 case_previewcut_video() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" video; }
 # Holds the preview dialog's single-clip rebuild against the clip the preview
@@ -1033,6 +1033,8 @@ case_previewcut_audio() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V26
 case_previewcut_fail()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" fail; }
 case_previewcut_muxfail() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" muxfail; }
 case_previewcut_muxfail_mpeg2() { need "$M2V" "$MP2"; "$D/test_previewcut_abort" "$M2V" "$MP2" "$W" muxfail; }
+case_previewcut_noread() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" noread; }
+case_previewcut_initcancel() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" initcancel; }
 gate_smartcut_abort() { cases 600 smartcut_abort_h264 smartcut_abort_hevc; }
 case_smartcut_abort_h264() { need "$V264"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_smartcut_abort" "$V264" 50; }
 case_smartcut_abort_hevc() { need "$H265"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_smartcut_abort" "$H265" 50; }
