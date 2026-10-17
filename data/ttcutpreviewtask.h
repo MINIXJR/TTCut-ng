@@ -53,7 +53,7 @@ class TTCutPreviewTask : public TTThreadTask
   private:
     static TTCutList* createPreviewCutList(TTCutList* cutList);
     void createH264PreviewClip(TTCutList* cutList, const QString& outputFile,
-                               TTESSmartCut* sharedSmartCut = nullptr);
+                               TTESSmartCut* sharedSmartCut);
     static void removePreviewClipFiles(int clipIndex, const QString& videoExt,
                                 TTCutList* clipCutList, const QString& outputFile);
 
@@ -67,8 +67,8 @@ class TTCutPreviewTask : public TTThreadTask
     //! Guards mpActiveSmartCut against the worker thread creating,
     //! reassigning or destroying its Smart Cut engine while onUserAbort()
     //! (GUI thread) reaches for it. mpActiveSmartCut is the engine currently
-    //! doing work (shared instance across clips, or a clip-local one), or
-    //! nullptr between clips / for non-H.26x previews. Set/cleared by the
+    //! doing work (the shared instance across clips), or nullptr between
+    //! clips / for non-H.26x previews. Set/cleared by the
     //! worker under mSmartCutMutex, always BEFORE any delete of the pointee -
     //! never after - so onUserAbort() can never see a dangling pointer.
     QMutex             mSmartCutMutex;

@@ -70,8 +70,8 @@ TTCutPreviewTask::~TTCutPreviewTask()
  * Operation abort requested
  *
  * Runs on the GUI thread while operation() runs on the pool. mpActiveSmartCut
- * is worker-owned (the shared Smart Cut instance for H.264/H.265, or a
- * clip-local one); mSmartCutMutex is what makes reading it here safe against
+ * is worker-owned (the shared Smart Cut instance for H.264/H.265);
+ * mSmartCutMutex is what makes reading it here safe against
  * the worker creating, reassigning or destroying it concurrently. The
  * invariant that makes this race-free: the worker always clears the pointer
  * under the mutex BEFORE deleting the pointee, never after (see the header).
@@ -191,13 +191,32 @@ void TTCutPreviewTask::operation()
 			// (logging a plain user cancel at warning level would put a
 			// failure-looking line in the persistent log for something the
 			// user asked for).
-			if (sharedSmartCut->wasAborted())
+			if (sharedSmartCut->wasAborted()) {
 				TTMessageLogger::getInstance()->infoMsg(__FILE__, __LINE__,
 					"Preview: Shared Smart Cut init aborted by user");
-			else
+				// End the preview here, not at the clip loop's isAborted():
+				// onUserAbort() reaches the engine before it sets the task's
+				// own flag, so the loop could still read false and run a clip
+				// without an engine (null dereference, test_previewcut_abort
+				// initcancel). Message-only constructor: a cancel is not logged
+				// as an error. engineGuard releases the engine.
+				throw TTAbortException("user abort");
+			} else {
+				// A real failure ends the preview here. It used to fall back to a
+				// clip-local engine per clip, which opened the same file and failed
+				// the same way: the preview ended as finished, without a clip and
+				// without a message (measured 2026-10-17, test_previewcut_abort
+				// noread). initialize() fails only on an unopenable file or an
+				// unknown codec, so the fallback only helped when the file became
+				// readable in between - and then a cancel could not reach it.
+				const QString err = sharedSmartCut->lastError();
 				TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-					QString("Preview: Shared Smart Cut init failed: %1").arg(sharedSmartCut->lastError()));
-			releaseEngine(sharedSmartCut);
+					QString("Preview: Shared Smart Cut init failed: %1").arg(err));
+				mErrorMessage = tr("The preview could not be created:\n\n%1").arg(err);
+				// engineGuard releases the engine as the throw leaves operation().
+				throw TTIOException(__FILE__, __LINE__,
+					QString("Preview Smart Cut init failed: %1").arg(err));
+			}
 		} else {
 			const int mapEntries = ttApplyPreviewEncoderSettings(*sharedSmartCut, src);
 			if (TTSettings::instance()->logCutPipeline()) {
@@ -447,36 +466,16 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     for (int i = 0; i < cutFrames.count(); i++)
       qDebug() << "  Preview segment" << i+1 << ": frames" << cutFrames[i].first << "->" << cutFrames[i].second;
 
-  // --- Video Smart Cut (use shared instance or create local) ---
+  // --- Video Smart Cut (shared instance) ---
   QElapsedTimer clipTimer;
   clipTimer.start();
 
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "Preview: Using Smart Cut (frame-accurate)";
 
-  // Local fallback engine, used only when the shared one failed to initialise
-  // (operation() then leaves sharedSmartCut null). KNOWN GAP, pre-existing:
-  // this engine is published to mpActiveSmartCut only around the
-  // smartCutFrames() call below, so onUserAbort() cannot reach its
-  // initialize() — a full ES parse, not cancellable. It is reached for EVERY
-  // clip, so a recording damaged enough to fail the shared init produces N
-  // uncancellable full-ES parses in a row, with a cancel only landing at the
-  // clip-loop top in operation(). Closing the gap would mean publishing it
-  // under mSmartCutMutex around the initialize() as well, the same shape the
-  // shared engine uses.
-  TTESSmartCut localSmartCut;
+  // operation() fails the preview when the shared engine cannot be built, so
+  // it is always there.
   TTESSmartCut* smartCut = sharedSmartCut;
-  if (!smartCut) {
-    if (!localSmartCut.initialize(sourceFile, frameRate)) {
-      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-          QString("Preview Smart Cut init failed: %1").arg(localSmartCut.lastError()));
-      return;
-    }
-    const int mapEntries = ttApplyPreviewEncoderSettings(localSmartCut, src);
-    if (mapEntries >= 0 && TTSettings::instance()->logCutPipeline())
-        qDebug() << "Preview local: Injected display-order map (" << mapEntries << "entries)";
-    smartCut = &localSmartCut;
-  }
 
   // Create temporary video output
   QString tempVideoFile = QString("%1/preview_video_temp.%2")
@@ -496,8 +495,8 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     // makes a cancel take effect INSIDE a clip instead of only being noticed
     // between clips. qScopeGuard covers both the normal return and the throw
     // below: the guard only clears the tracking pointer, it never deletes the
-    // engine (that stays owned by the caller — sharedSmartCut in operation(),
-    // or the local stack instance above), so there is no ordering hazard here
+    // engine (that stays owned by the caller — sharedSmartCut in operation()),
+    // so there is no ordering hazard here
     // like the ones in operation() (which DOES delete its engine and has to
     // clear the pointer strictly before that).
     {

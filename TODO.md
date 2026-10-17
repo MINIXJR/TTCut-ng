@@ -209,17 +209,24 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `Q_ASSERT`-Meldung geht ins Logfile, das beim Absturz nicht geschrieben
     und beim Neustart überschrieben wird.
 
-- **Vorschau-Rückfall-Engine ist nicht abbrechbar** (Kartenbefund 2026-08-15,
-  niedrige Priorität — nur erreichbar, wenn die geteilte Smart-Cut-Engine der
-  Vorschau nicht initialisiert werden konnte, also auf stark beschädigten
-  Aufnahmen)
-  - `TTCutPreviewTask` legt dann je Clip eine lokale `TTESSmartCut` an, die
-    nie bei `mpActiveSmartCut` registriert wird; ihr `initialize()` (voller
-    ES-Parse) ist nicht abbrechbar, und das wiederholt sich für jeden Clip.
-    Der Code-Kommentar an `localSmartCut` (`data/ttcutpreviewtask.cpp`)
-    beschreibt Lücke und Lösungsform (Publish/Clear unter `mSmartCutMutex`
-    wie bei der geteilten Engine). Auch vermerkt in
-    `docs/code-map/smart-cut.md`.
+- **Vorschau: Abbruch beim Aufbau der geteilten Engine kann als Fehlschlag
+  gelten oder verloren gehen** (Review-Befund 2026-10-17, nur gelesen).
+  `TTCutPreviewTask::operation` unterscheidet Abbruch und Fehlschlag allein
+  an `TTESSmartCut::wasAborted()`. Zwei kleine Fenster: ein Abbruch nach dem
+  Eintragen in `mpActiveSmartCut`, aber bevor `initialize()` sein
+  `mAbortRequested` zurücksetzt, geht der Engine verloren (die Durchsicht
+  läuft ganz, die Clip-Schleife fängt ihn; bestand schon vorher). Ein
+  Abbruch kurz bevor das Öffnen einer unlesbaren Datei scheitert, bringt den
+  Fehler-Dialog statt „abgebrochen“. Lösungsform aus dem Review:
+  `wasAborted() || isAborted()`.
+- **Vorschau-Fehlschlag: Hauptfenster meldet vermutlich „Finished after …“**
+  (Review-Befund 2026-10-17, nur gelesen, bestand schon vorher). Ein
+  fehlgeschlagener Vorschau-Lauf (Mux, „too damaged“, Engine-Init) endet mit
+  dem `Exit` des Pools; `TTProgressBar` setzt 100 %, `TTCutMainWindow` wertet
+  ihn als regulär, weil `lastCutError()` für die Vorschau leer ist — neben
+  dem Dialog „Preview not possible“. Sichtbar nur in der Detailansicht
+  (`enterFinishedState` blendet die Leiste sonst aus). Erst am laufenden
+  Programm prüfen.
 
 - **Besitzer löscht seinen Task selbst: Wettrennen mit dem Pool** (2026-10-17,
   offen; gemessen nur bei den Öffnen-Tasks). Wer `finished`/`aborted` eines

@@ -16,7 +16,7 @@
 // pool's Exit.
 //
 // Usage: test_previewcut_abort <video-es> <audio-es> <workdir> <case> [cutIn cutOut]
-//   case = none | video | audio | fail | muxfail
+//   case = none | video | audio | fail | muxfail | noread | initcancel
 //
 // Setup: ONE cut item with cutPreviewSeconds() raised to 40s, so BOTH derived
 // preview clips (the cut-in window and the cut-out window) get their full
@@ -68,6 +68,19 @@
 //          avio_open fails. Until code-audit run 7 that failure was only
 //          logged (H.264/H.265) or ignored (MPEG-2) and the clip was
 //          announced; now it must end like "fail": dialog, one Exit.
+//   noread: the shared Smart Cut engine cannot open the source (a copy of
+//          the video without read permission). The preview used to fall back
+//          to a clip-local engine per clip, which failed the same way and
+//          ended as "finished" with no clip and no message; a clip-local
+//          engine that did get going could not be cancelled. Now the preview
+//          fails with the cause in the dialog, like "muxfail".
+//   initcancel: a cancel inside the shared engine's ES parse, sent when the
+//          engine logs "Parsing ES file". onUserAbort() reaches the engine
+//          before it sets the task's own flag; the harness holds that window
+//          open for 200 ms (at the nested CutVideoTask's abort line), so the
+//          worker leaves the cancelled init while isAborted() is still false.
+//          A clip loop relying on isAborted() then went on without an engine
+//          (null dereference, found in review). Must end as a plain cancel.
 //   fail:  genuine failure, not a cancel. tempDirPath is pointed at a
 //          directory that is never created, so
 //          TTFFmpegWrapper/TTESSmartCut's QFile::open(WriteOnly) call fails
@@ -99,6 +112,7 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QRegularExpression>
+#include <QThread>
 #include <QThreadPool>
 #include <QTimer>
 #include <QWidget>
@@ -160,6 +174,26 @@ void clearDir(const QString& dir)
   for (const QString& f : dirEntries(dir)) d.remove(f);
 }
 
+// "initcancel": a message handler that steers the cancel by the log lines
+// around it (the TTSettings::logSmartCut lines are on for this case).
+QtMessageHandler  gPrevHandler = nullptr;
+TTAVData*         gInitCancelTarget = nullptr;
+
+void initCancelHandler(QtMsgType type, const QMessageLogContext& ctx, const QString& msg)
+{
+  if (gInitCancelTarget) {
+    // Worker: the shared engine has opened the file and starts its ES parse.
+    if (msg.contains("TTESSmartCut: Parsing ES file"))
+      QMetaObject::invokeMethod(gInitCancelTarget, "onUserAbortRequest", Qt::QueuedConnection);
+    // GUI thread, inside TTCutPreviewTask::onUserAbort(): the engine already
+    // has its cancel, the task's own flag is not set yet. Hold that window
+    // open so the worker gets through it.
+    if (msg.contains("\"CutVideoTask\"") && msg.contains("abort request"))
+      QThread::msleep(200);
+  }
+  if (gPrevHandler) gPrevHandler(type, ctx, msg);
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -172,10 +206,10 @@ int main(int argc, char** argv)
   app.setQuitOnLastWindowClosed(false);
 
   if (argc < 5) {
-    fprintf(stderr, "usage: %s <video-es> <audio-es> <workdir> <none|video|audio|fail|muxfail> [cutIn cutOut]\n", argv[0]);
+    fprintf(stderr, "usage: %s <video-es> <audio-es> <workdir> <none|video|audio|fail|muxfail|noread|initcancel> [cutIn cutOut]\n", argv[0]);
     return 2;
   }
-  const QString videoFile = argv[1];
+  const QString videoFileArg = argv[1];
   const QString audioFile = argv[2];
   const QString workDir   = argv[3];
   const QString testCase  = argv[4];
@@ -183,9 +217,10 @@ int main(int argc, char** argv)
   const int argCutIn  = (argc > 5) ? QString(argv[5]).toInt() : -1;
   const int argCutOut = (argc > 6) ? QString(argv[6]).toInt() : -1;
 
+  const bool noRead = (testCase == "noread");
   if (testCase != "none" && testCase != "video" && testCase != "audio" && testCase != "fail"
-      && testCase != "muxfail")
-    return fail("unknown case (use none|video|audio|fail|muxfail)");
+      && testCase != "muxfail" && testCase != "initcancel" && !noRead)
+    return fail("unknown case (use none|video|audio|fail|muxfail|noread|initcancel)");
 
   const QString tempDir = QDir(workDir).absoluteFilePath("temp");
   const QString cutDir  = QDir(workDir).absoluteFilePath("cut");
@@ -209,6 +244,19 @@ int main(int argc, char** argv)
     const QString blocked = TTCutPreviewTask::createPreviewFileName(1, "mkv");
     QDir(blocked).removeRecursively();
     if (!QDir().mkpath(blocked)) return fail("muxfail: could not block " + blocked);
+  }
+
+  QString videoFile = videoFileArg;
+  if (noRead) {
+    const QString srcDir = QDir(workDir).absoluteFilePath("src");
+    QDir(srcDir).removeRecursively();
+    QDir().mkpath(srcDir);
+    const QFileInfo vi(videoFileArg);
+    videoFile = QDir(srcDir).absoluteFilePath(vi.fileName());
+    if (!QFile::copy(videoFileArg, videoFile)) return fail("could not copy the video");
+    const QString info = vi.absolutePath() + "/" + vi.completeBaseName() + ".info";
+    if (QFile::exists(info))
+      QFile::copy(info, QDir(srcDir).absoluteFilePath(vi.completeBaseName() + ".info"));
   }
 
   // Open the streams exactly like TTOpenVideoTask / TTOpenAudioTask do (same
@@ -322,6 +370,8 @@ int main(int argc, char** argv)
   watchdog.start(300000);
 
   QElapsedTimer clock;
+  if (noRead && !QFile::setPermissions(videoFile, QFileDevice::WriteOwner))
+    return fail("noread: could not take the read permission off the copy");
   clock.start();
 
   // Poll-based arming for "video"/"audio": read watchFile's size from the
@@ -376,8 +426,18 @@ int main(int argc, char** argv)
     armTimer.start();
   }
 
+  if (testCase == "initcancel") {
+    TTSettings::instance()->setLogSmartCut(true);
+    gInitCancelTarget = &avData;
+    gPrevHandler = qInstallMessageHandler(initCancelHandler);
+  }
+
   avData.doCutPreview(&cutList);
   qApp->exec();
+  if (gInitCancelTarget) {
+    qInstallMessageHandler(gPrevHandler);
+    gInitCancelTarget = nullptr;
+  }
 
   const qint64 elapsedMs = clock.elapsed();
   const QStringList left = dirEntries(tempDir).filter(QRegularExpression("^preview"));
@@ -399,8 +459,41 @@ int main(int argc, char** argv)
   printf("  temp dir preview* entries: %s\n",
          left.isEmpty() ? "(empty)" : qPrintable(left.join(", ")));
   printf("  QThreadPool::globalInstance()->activeThreadCount() at exit: %d\n", activeThreadsAtExit);
+
+  if (noRead)
+    QFile::setPermissions(videoFile, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
   if (activeThreadsAtExit != 0)
     return fail(QString("a pool thread was still active after threadPoolExit() (%1)").arg(activeThreadsAtExit));
+
+  if (noRead) {
+    if (finishedFired.load())     return fail("noread: cutPreviewFinished fired although no clip could be made");
+    if (cancelCount != 0)         return fail("noread: an unreadable source was reported as Canceled");
+    if (exitCount != 1)           return fail(QString("noread: expected one Exit, got %1").arg(exitCount));
+    if (!dialogSeen.load())       return fail("noread: no dialog for the unreadable source");
+    if (!dialogText.contains("could not be created") || !dialogText.contains("Cannot open ES file"))
+      return fail(QString("noread: dialog text does not carry the cause: \"%1\"").arg(dialogText));
+    if (!left.isEmpty())          return fail("noread: files left behind: " + left.join(", "));
+    printf("  dialog text: %s\n", qPrintable(dialogText));
+    printf("PASS\n");
+    return 0;
+  }
+
+  if (testCase == "initcancel") {
+    QFile logFile(logPath);
+    const QString log = logFile.open(QIODevice::ReadOnly | QIODevice::Text)
+        ? QString::fromUtf8(logFile.readAll()) : QString();
+    // Without this line the cancel landed outside the shared init and the
+    // case proves nothing about it.
+    if (!log.contains("Shared Smart Cut init aborted by user"))
+      return fail("initcancel: the cancel did not land inside the shared engine's init");
+    if (finishedFired.load())     return fail("initcancel: cutPreviewFinished fired despite the cancel");
+    if (dialogSeen.load())        return fail("initcancel: a dialog on a plain cancel: " + dialogText);
+    if (cancelCount != 1)         return fail(QString("initcancel: expected one Canceled, got %1").arg(cancelCount));
+    if (exitCount != 0)           return fail("initcancel: an Exit closed the cancelled preview");
+    if (!left.isEmpty())          return fail("initcancel: files left behind: " + left.join(", "));
+    printf("PASS\n");
+    return 0;
+  }
 
   if (testCase == "none") {
     if (!finishedFired.load())    return fail("none: cutPreviewFinished never fired");

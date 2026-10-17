@@ -1728,6 +1728,43 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Vorschau ohne geteilte Smart-Cut-Engine: stilles Ende, Abbruch
+  verloren** (TODO „Vorschau-Rückfall-Engine ist nicht abbrechbar“,
+  Kartenbefund 2026-08-15) → **ERLEDIGT (2026-10-17)**, Zweig
+  `fix/preview-fallback-cancel`, Commit `5df23670`.
+  - Gemessen vor dem Fix (`test_previewcut_abort`, Tux H.264 + AC3, Kopie
+    des Videos ohne Leserecht): die geteilte Engine und je Clip eine lokale
+    scheiterten sofort an „Cannot open ES file“; die Vorschau endete als
+    fertig — `cutPreviewFinished`, 0 Clips, kein Dialog. Leserecht zurück
+    vor der lokalen Engine von Clip 1 und Abbruch im selben Moment: Ende
+    nach 332 ms als Abbruch, aber der Encoder hatte Clip 1 ganz gerechnet
+    (I:1, P:47, gleiche Größen wie ohne Abbruch; Clip 1 dauert 347 ms).
+    Der Abbruch erreichte weder `initialize` noch `smartCutFrames` der
+    lokalen Engine, erst die Abfrage im Tonschnitt.
+  - Gelesen: `TTESSmartCut::initialize` scheitert nur an einer nicht
+    lesbaren Datei, einem unbekannten Codec oder einem Abbruch; die lokale
+    Engine half also nur, wenn die Datei zwischendurch wieder lesbar
+    wurde. Sie war der ursprüngliche Weg je Clip (`1cf22691`), beim
+    Einführen der geteilten Engine als Rückfall stehen geblieben.
+  - Fix (vom User gewählt: Rückfall entfernen statt abbrechbar machen):
+    scheitert die geteilte Engine ohne Abbruch, endet die Vorschau als
+    Fehlschlag mit `lastError()` im Dialog; die lokale Engine ist weg.
+  - Gate `previewcut_abort`, neuer Fall `previewcut_noread` (vorher rot:
+    „cutPreviewFinished fired“).
+  - Befund des Abschluss-Reviews, gemessen und behoben: ein Abbruch in der
+    Durchsicht der geteilten Engine ließ die Clip-Schleife ohne Engine
+    weiterlaufen — `onUserAbort` erreicht die Engine, bevor es das
+    Task-Kennzeichen setzt, und die Schleife verließ sich auf
+    `isAborted()`. Bis zu diesem Zweig fing das die lokale Engine auf.
+    Fall `previewcut_initcancel` (Abbruch beim Log „Parsing ES file“, das
+    Fenster per Message-Handler 200 ms aufgehalten): vorher 5 von 5 SIGSEGV
+    in `smartCutFrames` mit `this=0x0`, danach 20 von 20 grün. Ohne das
+    Aufhalten 0 Abstürze in 150 Läufen. Der Init-Zweig wirft jetzt selbst
+    `TTAbortException`.
+  - Nicht gemessen: was das Hauptfenster bei der alten leeren Vorschau
+    zeigte; wie lange der verlorene Abbruch bei einer abendfüllenden
+    Aufnahme gedauert hätte.
+
 - **Öffnen-Tasks und Ton-/Untertitelstreams wurden nie freigegeben** →
   **ERLEDIGT (2026-10-17)**, Zweig `fix/open-task-lifetime`, Commit
   `7d38cc65` (gefunden beim Fix des H.26x-Öffnen-Abbruchs).
