@@ -1,6 +1,6 @@
 ---
-base_commit: 7d38cc6524b96780321851b669b361eba1129f9a
-last_verified: 2026-10-14
+base_commit: 5df23670a91c7aa65afd3df6825fd55e8cb6fa3c
+last_verified: 2026-10-17
 sources:
   - gui/ttcuttreeview.h
   - gui/ttcuttreeview.cpp
@@ -56,7 +56,7 @@ flowchart TD
     PL["preview TTCutList<br/>createPreviewCutList"]
     BCL["ttBuildClipCutList"]
     SRC["ttResolvePreviewSource"]
-    ENG["TTESSmartCut<br/>shared / clip-local"]
+    ENG["TTESSmartCut<br/>shared"]
     M2V["TTCutVideoTask<br/>(nested)"]
     AUD["TTAVData::cutAudioTracks<br/>/ cutSubtitleTracks"]
     TMP["intermediate files<br/>preview_*_temp.*, preview_NNN.m2v/.ac3"]
@@ -114,7 +114,7 @@ Direction measured with `mmdc` (2026-09-25): `TD` viewBox ratio 0.57, `LR` 10.41
 | `TASK` → `PL` | `createPreviewCutList`: two entries per job cut, from the shared window rules in `data/ttpreviewclip`: `ttPreviewFrames` = `cutPreviewSeconds · fps / 2` (half the setting per side; the first entry's stream decides it for all), `ttPreviewCutInWindow` = `[cutIn, min(cutIn + frames, cutOut)]` with the end moved forward past B-frames (`frameType == 3`) but not past `cutOut`, `ttPreviewCutOutWindow` = `[max(cutOut − frames, cutIn), cutOut]` with the start moved back to `findIDRBefore` only while that stays `≥ cutIn`. Both windows stay inside their cut: a cut shorter than the window is shown whole (both entries then equal the cut). |
 | `PL` → `BCL` | `ttBuildClipCutList(list, i)`: `ttPreviewClipCount` = `count / 2 + 1` clips; `ttPreviewCutOutEntry(i)` = `2i − 1` is clip i's first entry. Clip 0 = entry 0 (first cut-in), clip i (0 &lt; i &lt; last) = entries `2i−1` and `2i` (cut-out of cut i, cut-in of cut i+1), last clip = entry `2(n−1)+1` (last cut-out). Entries keep their `avDataItem`, so a clip can span two videos. |
 | `BCL` → `SRC` | `ttResolvePreviewSource` reads everything off clip entry 0: item, video stream, source file, suffix, frame rate (stream first, `.info` only when the stream has none), `.info` A/V offset, audio track 0 (`hasAudio`, `audioFile`). The H.26x branch of `operation()` also resolves entry 0 of the **job** list once, for the shared engine. The MPEG-2 branch of `operation()` calls it only after the video, audio and subtitle cuts (for the mux); those cuts read `tmpCutList->at(0).avDataItem()` themselves. Both rebuilds and `createH264PreviewClip` resolve first. |
-| `SRC` → `ENG` | H.26x: one shared `TTESSmartCut` for the whole run, `initialize(source, fps)` (full ES parse), preview preset and the stream's display-order map (`ttApplyPreviewEncoderSettings`). Registered in `mpActiveSmartCut` under `mSmartCutMutex` before the parse, so a cancel reaches it. If the shared init fails, `createH264PreviewClip` builds a clip-local engine per clip; it is registered in `mpActiveSmartCut` only around its `smartCutFrames` call, not around its `initialize` (the full ES parse), so a cancel cannot interrupt that parse. |
+| `SRC` → `ENG` | H.26x: one shared `TTESSmartCut` for the whole run, `initialize(source, fps)` (full ES parse), preview preset and the stream's display-order map (`ttApplyPreviewEncoderSettings`). Registered in `mpActiveSmartCut` under `mSmartCutMutex` before the parse, so a cancel reaches it. If the init fails without a cancel, the preview fails: `mErrorMessage` carries `lastError()`, `TTIOException`. A cancel during the init throws `TTAbortException` right there — not left to the clip loop's `isAborted()`, which `onUserAbort` sets only after it reached the engine (gate case `previewcut_initcancel`). |
 | `SRC` → `M2V` | MPEG-2: `cutVideoTask->init(preview_NNN.m2v, clipList)` and `threadTaskPool()->startNested` (synchronous, outside the pool queue; `onUserAbort` forwards the cancel to it). |
 | `SRC` → `AUD` | `cutAudioTracks(item, {0}, keepList, normalizeAcmod, …, shouldAbort)` — track 0 only, keep list from `buildVideoKeepList(clipList, fps)`; `cutSubtitleTracks(item, {0}, …)` — subtitle 0 only. The audio cut uses the same effective delay (user delay + `.info` start offset). The audio file keeps the source suffix. |
 | `ENG` / `M2V` / `AUD` → `TMP` | H.26x: `preview_video_temp.<suffix>` and `preview_audio_temp.<ext>` (fixed names, one at a time); MPEG-2: `preview_NNN.m2v` and `preview_NNN.<audio ext>`. The task keeps the H.26x temp video after the mux ("for debugging"), the rebuild removes it; audio is removed by both. |
@@ -149,15 +149,14 @@ Direction measured with `mmdc` (2026-09-25): `TD` viewBox ratio 0.57, `LR` 10.41
   `preview*` file at task start and on dialog close; the H.26x temp names
   are fixed. A second TTCut-ng instance or harness on the same temp
   directory collides (TODO „Weitere geteilte Temp-Namen“).
-- **Cancel reaches:** the shared engine (registered), a clip-local
-  fallback engine's `smartCutFrames` call (registered for that call), the
-  nested MPEG-2 video task (forwarded), the audio cut (predicate), the clip
-  loop (top of each iteration). **Not:** the ES parse of a clip-local
-  fallback engine, the mux, the dialog's rebuild.
+- **Cancel reaches:** the shared engine (registered), the nested MPEG-2
+  video task (forwarded), the audio cut (predicate), the clip loop (top of
+  each iteration). **Not:** the mux, the dialog's rebuild.
 - **Error reporting differs by codec.** MPEG-2: a failed audio cut, mux or
-  rename throws with a message. H.26x: a failed Smart Cut ("too damaged") and a failed mux throw with a
-  message; a failed audio cut only logs and the clip is muxed without audio; a failed local-engine
-  init or an invalid source returns without a clip and without a message
+  rename throws with a message. H.26x: a failed engine init (`lastError()`, gate case
+  `previewcut_noread`), a failed Smart Cut ("too damaged") and a failed mux throw with a
+  message; a failed audio cut only logs and the clip is muxed without audio; an invalid source
+  returns without a clip and without a message
   (not reproduced so far - kept with TODO P3).
 - **Pitfall — `preview_NNN.mkv` can be raw MPEG-2.** Without audio the
   `.m2v` is renamed, not muxed; mpv sniffs the content.

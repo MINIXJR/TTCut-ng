@@ -1,6 +1,6 @@
 ---
-base_commit: 7d38cc6524b96780321851b669b361eba1129f9a
-last_verified: 2026-10-14
+base_commit: 5df23670a91c7aa65afd3df6825fd55e8cb6fa3c
+last_verified: 2026-10-17
 sources:
   - common/ttexception.cpp
   - data/tth26xcuttask.cpp
@@ -230,19 +230,12 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   `operation()` releases the shared engine in exactly one place: the
   `releaseEngine` lambda clears `mpActiveSmartCut` under `mSmartCutMutex`
   **before** it deletes the engine. A `qScopeGuard` (`engineGuard`) runs it on
-  every exit of `operation()`, including the loop-top `isAborted()` throw; the
-  explicit `releaseEngine` calls at the init-failure branch and at the end of
-  the function run earlier, so the guard then finds a null engine and does
-  nothing. `~TTCutPreviewTask` deletes `cutVideoTask` and `mpPreviewCutList`.
-
-  **Open gap:** `createH264PreviewClip`'s **local fallback engine**
-  (`localSmartCut`, used only when `sharedSmartCut` failed to initialize) is
-  published to `mpActiveSmartCut` only around its `smartCutFrames()` call, not
-  around its `initialize()`. `onUserAbort()` therefore cannot reach it during
-  that `initialize()` — a full ES parse — which is not cancellable. It runs
-  once per clip, so a recording damaged enough to fail the shared init
-  produces N uncancellable full-ES parses in a row, with a cancel only
-  landing at the clip-loop top in `operation()`.
+  every exit of `operation()`, including the loop-top `isAborted()` throw and
+  the two throws of a failed or cancelled init; the explicit `releaseEngine`
+  call at the end of the function runs earlier, so the guard then finds a null
+  engine and does nothing. `~TTCutPreviewTask` deletes
+  `cutVideoTask` and `mpPreviewCutList`. There is no clip-local engine: a
+  failed shared init fails the preview (`docs/completed-work.md`).
 
 - **`analyzeCutPoints`** — assumes: a keyframe exists within the segment,
   otherwise it degrades to a full re-encode. The `endFrame` search window is

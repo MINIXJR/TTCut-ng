@@ -1,5 +1,5 @@
 ---
-base_commit: 7d38cc6524b96780321851b669b361eba1129f9a
+base_commit: 5df23670a91c7aa65afd3df6825fd55e8cb6fa3c
 last_verified: 2026-10-14
 sources:
   - gui/ttcutframenavigation.h
