@@ -107,7 +107,13 @@ int TTH26xVideoStream::createHeaderList()
             int mapped = 10 + percent * 70 / 100;
             quint64 value = static_cast<quint64>(mapped) * total / 100;
             emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), value);
-        });
+        }, &mAbort);
+    if (!indexed && indexer.wasCancelled()) {
+        // A cancel, not a failure: no Error report. Cleared as the MPEG-2
+        // reader clears it, so the next operation on this stream runs.
+        mAbort = false;
+        throw TTAbortException(tr("Index list creation aborted!"));
+    }
     if (!indexed) {
         mLog->errorMsg(__FILE__, __LINE__,
             QString("Failed to build frame index: %1").arg(indexer.lastError()));

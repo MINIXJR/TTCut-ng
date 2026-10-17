@@ -25,6 +25,26 @@
 //       gdb: constructor 1, destructor 0 until the process ended). With an
 //       extra-frame dialog the pool run ends INSIDE that modal dialog, while
 //       onOpenVideoFinished still holds the item - it must survive.
+//   test_open_cancel index <video>
+//       an H.264/H.265 fresh open, cancelled from inside the frame index
+//       build: at the video task's first progress report past the 10 %
+//       milestone, which only the packet loop of TTFrameIndexer sends. A
+//       fixed time cannot promise that. Afterwards no item may be alive or
+//       listed, and no report at or past 82 % ("Building GOP index...", sent
+//       only after the scan) may have arrived - with it the scan ran to its
+//       end although the cancel had come. Until 2026-10-17 neither
+//       createHeaderList nor the indexer polled the abort flag.
+//   test_open_cancel index <video> <cancel ms>
+//       the same verdict, the cancel after <ms> instead. At 0 ms it lands
+//       while the task runs but has no stream yet (3 of 3 runs, 2026-10-17),
+//       so onUserAbort has no stream to flag; the index was built in full
+//       and only then thrown away.
+//   test_open_cancel index <video> late
+//       the cancel at the header list's Finished report: the scan is over,
+//       the task still builds the index list and sorts it (25 of 25 runs
+//       listed the video before 2026-10-17). In every index case the video
+//       stream must be gone too - the task kept it on the abort route and
+//       nobody freed it (1 left after every cancel, MPEG-2 as well).
 //
 // Build via `cmake --build build --target test_open_cancel`.
 #include <QApplication>
@@ -38,8 +58,10 @@
 #include <clocale>
 #include <cstdio>
 
+#include "common/istatusreporter.h"
 #include "common/ttsettings.h"
 #include "common/ttthreadtaskpool.h"
+#include "avstream/ttavstream.h"
 #include "data/ttavdata.h"
 #include "data/ttavlist.h"
 #include "data/ttopenvideotask.h"
@@ -71,6 +93,15 @@ static QList<TTAVItem*> liveItems()
   for (QObject* o : gLive)
     if (auto* item = qobject_cast<TTAVItem*>(o)) items.append(item);
   return items;
+}
+
+static int liveVideoStreams()
+{
+  QMutexLocker l(&gLiveMutex);
+  int n = 0;
+  for (QObject* o : gLive)
+    if (dynamic_cast<TTVideoStream*>(o)) ++n;   // no Q_OBJECT of its own
+  return n;
 }
 
 static void closeMessageBoxes()
@@ -122,6 +153,62 @@ static int pendingCase(const QString& video, int cancelMs, int expected)
          ok ? "PASS" : "FAIL", qPrintable(video.section('/', -1)), cancelMs, exits,
          (long long)live.size(), data.avCount(), expected,
          expected == 1 ? ", the listed one with its video stream" : "");
+  return ok ? 0 : 1;
+}
+
+// cancelMs -1: at the first report past 10 %; -2 ("late"): at the header
+// list's Finished report, after the scan.
+static int indexCase(const QString& video, int cancelMs)
+{
+  const bool late = cancelMs == -2;
+  TTAVData data;
+  QTimer watch;
+  watch.setInterval(100);
+  QObject::connect(&watch, &QTimer::timeout, closeMessageBoxes);
+  watch.start();
+
+  int exits = 0;
+  quint64 total = 0, cancelValue = 0;
+  bool cancelled = false, afterScan = false;
+  QObject::connect(data.threadTaskPool(), &TTThreadTaskPool::exit, [&exits] { ++exits; });
+  QObject::connect(data.threadTaskPool(), &TTThreadTaskPool::statusReport,
+      [&](TTThreadTask* task, int state, const QString&, quint64 value) {
+        if (task->taskName() != "OpenVideoTask") return;
+        if (state == StatusReportArgs::Start) total = value;
+        if (state == StatusReportArgs::Finished && late && !cancelled) {
+          cancelled = true;
+          cancelValue = value;
+          data.threadTaskPool()->onUserAbortRequest();
+        }
+        if (state != StatusReportArgs::Step || total == 0) return;
+        if (value >= 82 * total / 100) afterScan = true;
+        if (!cancelled && cancelMs == -1 && value > total / 10) {
+          cancelled = true;
+          cancelValue = value;
+          data.threadTaskPool()->onUserAbortRequest();
+        }
+      });
+  data.openAVStreams(video);
+  if (cancelMs >= 0)
+    QTimer::singleShot(cancelMs, [&] { cancelled = true; data.threadTaskPool()->onUserAbortRequest(); });
+
+  QElapsedTimer t;
+  t.start();
+  qint64 since = -1;
+  while (t.elapsed() < 120000) {
+    QApplication::processEvents(QEventLoop::AllEvents, 20);
+    if (exits > 0 && !messageBoxOpen()) { if (since < 0) since = t.elapsed(); else if (t.elapsed() - since > 1000) break; }
+    else since = -1;
+  }
+
+  const QList<TTAVItem*> live = liveItems();
+  const int streams = liveVideoStreams();
+  const bool ok = cancelled && exits > 0 && (late || !afterScan) && live.isEmpty() && data.avCount() == 0
+                  && streams == 0;
+  printf("%s: %s, cancel at %llu of %llu - pool runs ended %d, report past the scan %s, live TTAVItem %lld, listed %d, live TTVideoStream %d (expected 0)\n",
+         ok ? "PASS" : "FAIL", qPrintable(video.section('/', -1)),
+         (unsigned long long)cancelValue, (unsigned long long)total, exits,
+         afterScan ? "yes" : "no", (long long)live.size(), data.avCount(), streams);
   return ok ? 0 : 1;
 }
 
@@ -194,6 +281,11 @@ int main(int argc, char** argv)
     if (!hooks) { fprintf(stderr, "Qt object hooks not available\n"); return 2; }
     return pendingCase(QString::fromLocal8Bit(argv[2]), atoi(argv[3]), atoi(argv[4]));
   }
-  fprintf(stderr, "usage: %s unit | cancel <video or .ttcut> <ms> | pending <video> <cancel ms|-1> <items>\n", argv[0]);
+  if (mode == "index" && argc > 2) {
+    if (!hooks) { fprintf(stderr, "Qt object hooks not available\n"); return 2; }
+    const QString when = argc > 3 ? QString::fromLocal8Bit(argv[3]) : QString();
+    return indexCase(QString::fromLocal8Bit(argv[2]), when.isEmpty() ? -1 : when == "late" ? -2 : when.toInt());
+  }
+  fprintf(stderr, "usage: %s unit | cancel <video or .ttcut> <ms> | pending <video> <cancel ms|-1> <items> | index <video> [<cancel ms> | late]\n", argv[0]);
   return 2;
 }

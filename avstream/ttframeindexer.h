@@ -17,6 +17,7 @@
 #ifndef TTFRAMEINDEXER_H
 #define TTFRAMEINDEXER_H
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 
@@ -50,7 +51,12 @@ public:
     // file. videoStreamIndex -1 = best video stream. progress may be null.
     // Returns true even when the scan found no video packet (frames=0), as
     // TTFFmpegWrapper::buildFrameIndex() did; callers check the bundle size.
-    bool build(const QString& filePath, int videoStreamIndex, const ProgressFn& progress);
+    // cancel may be null; the scan reads it before every packet. A set flag
+    // ends the build without post-processing: false, wasCancelled() true,
+    // the bundle is incomplete. The flag is left as it is for the caller.
+    bool build(const QString& filePath, int videoStreamIndex, const ProgressFn& progress,
+               const std::atomic<bool>* cancel = nullptr);
+    bool wasCancelled() const { return mCancelled; }
     const TTFrameIndexBundle& bundle() const { return mBundle; }
     QString lastError() const { return mLastError; }
 
@@ -83,7 +89,9 @@ private:
     // Leaves gopIndex and frameIndex at -1 (filled in by finalizeFrameIndex).
     // Reports progress through progressFn, which may be null. The callback is
     // NOT named "progress" here: the loop has its own int64_t progress.
-    void scanPacketsIntoRawIndex(int videoStreamIndex, const ProgressFn& progressFn);
+    // A set cancel flag (may be null) ends the loop and sets mCancelled.
+    void scanPacketsIntoRawIndex(int videoStreamIndex, const ProgressFn& progressFn,
+                                 const std::atomic<bool>* cancel);
 
     // PAFF post-processing: walk mBundle.index, collapse adjacent
     // top+bottom field pairs (matching paffFrameNum) into a single entry
@@ -115,6 +123,7 @@ private:
     AVFormatContext*   mFormatCtx = nullptr;
     TTFrameIndexBundle mBundle;
     QString            mLastError;
+    bool               mCancelled = false;
 };
 
 #endif // TTFRAMEINDEXER_H
