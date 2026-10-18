@@ -184,9 +184,9 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     Allokation; kein Speichermangel: 91 GB RAM, 82 GB frei). Plausibel
     geworden, aber unbewiesen: die EAGAIN-Kaskade las die 502-MB-Datei
     wiederholt komplett — was dabei an Puffern anfällt, war nie im Blick.
-    Das Helferskript liegt wieder unter
-    `CLAUDE_TMP/TTCut-ng/uhd/start-gdb.sh` (TTCut-ng unter gdb, beim Absturz
-    alle Fäden + Core, Logfile wird danach weggesichert).
+    Das Helferskript ist `tools/diag/start-gdb.sh` (TTCut-ng unter gdb, beim
+    Absturz alle Fäden + Core, Logfile und Build-ID werden danach
+    weggesichert).
   - **Zwei Messfallen aus der ersten Runde** (Beweise gingen verloren):
     abgeschnittener Core durch Shell-Zeitlimit beim Schreiben; die
     `Q_ASSERT`-Meldung geht ins Logfile, das beim Absturz nicht geschrieben
