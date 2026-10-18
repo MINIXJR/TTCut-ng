@@ -176,6 +176,11 @@ int TTMpeg2Decoder::decodeNextFrame()
           isStreamEnd = false;
         else
         {
+          // End of file: hand libmpeg2 the sequence end code once, so it
+          // flushes the last picture. libmpeg2 may answer it with
+          // STATE_BUFFER only, never STATE_END - feeding it again on every
+          // empty read then never ended (field-picture stream, asked for an
+          // index past its last picture, measured 2026-10-18).
           if (!isStreamEnd)
           {
             readSize = 4;
@@ -183,6 +188,7 @@ int TTMpeg2Decoder::decodeNextFrame()
             streamBuffer[1] = 0x00;
             streamBuffer[2] = 0x01;
             streamBuffer[3] = 0xb7;
+            isStreamEnd = true;
           }
         }
         mpeg2_buffer (mpeg2Decoder, streamBuffer, streamBuffer + readSize);

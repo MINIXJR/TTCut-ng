@@ -129,6 +129,7 @@ slider_wheel           tux   300  test_slider_latency
 slider_click           tux   300  test_slider_latency
 slider_end             tux   300  test_slider_latency
 keyframe_preview_identity tux 300 test_keyframe_preview_identity
+mpeg2_end_frame        tux   300  test_slider_latency
 logo_roi               tux   300  test_logo_roi
 open_cancel            tux   840  test_open_cancel
 mpeg2_framerate_cut    tux   600  -
@@ -674,6 +675,24 @@ gate_keyframe_preview_identity() {
   local f rc=0
   for f in "$V264" "$PAFF" "$MBAFF" "$H265"; do
     "$D/test_keyframe_preview_identity" "$f" 20 || rc=1
+  done
+  return $rc
+}
+# The End key shows the last frame on every Tux format (2026-10-18: the
+# field-picture MPEG-2 video hung in TTMpeg2Decoder::decodeNextFrame).
+gate_mpeg2_end_frame() {
+  need "$M2V" "$MP2" "$M2VFP" "${M2VFP%.m2v}.mp2" "$V264" "$A264" "$PAFF" "${PAFF%.264}.ac3" \
+       "$MBAFF" "${MBAFF%.264}.ac3" "$H265" "${H265%.265}.ac3"
+  local rc=0
+  ttcut_project_xml "$M2V" "$MP2" deu 100:599 > "$W/m2v.ttcut"
+  ttcut_project_xml "$M2VFP" "${M2VFP%.m2v}.mp2" deu 100:599 > "$W/m2vfp.ttcut"
+  ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/h264.ttcut"
+  ttcut_project_xml "$PAFF" "${PAFF%.264}.ac3" deu 100:599 > "$W/paff.ttcut"
+  ttcut_project_xml "$MBAFF" "${MBAFF%.264}.ac3" deu 100:599 > "$W/mbaff.ttcut"
+  ttcut_project_xml "$H265" "${H265%.265}.ac3" deu 100:599 > "$W/hevc.ttcut"
+  for p in m2v m2vfp h264 paff mbaff hevc; do
+    echo "== $p"
+    LC_ALL=C.UTF-8 "$D/test_slider_latency" "$W/$p.ttcut" 0 40 gateend || rc=1
   done
   return $rc
 }
