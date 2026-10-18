@@ -25,6 +25,7 @@
 #include "../data/ttplaybackmuxtask.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttavtypes.h"
+#include "../avstream/ttvideoindexlist.h"
 #include "../avstream/ttcommon.h"
 #include "../avstream/ttesinfo.h"
 #include "../extern/ttmkvmergeprovider.h"
@@ -65,6 +66,11 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   setupUi( this );
 
   laCurrentPosition->installEventFilter(this);
+
+  mpWheelTimer = new QTimer(this);
+  mpWheelTimer->setSingleShot(true);
+  mpWheelTimer->setInterval(50);
+  connect(mpWheelTimer, &QTimer::timeout, this, &TTCurrentFrame::onWheelTimer);
   laCurrentPosition->setCursor(Qt::PointingHandCursor);
   laCurrentPosition->setToolTip(tr("Click to go to a frame or timecode"));
 
@@ -190,6 +196,8 @@ void TTCurrentFrame::setPlayingButtonState(bool playing)
 
 void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
 {
+	dropPendingWheel();
+	mExactDecodeMs.clear();
 	// Stop any running playback and clean up temp file
 	if (mPlayer && mPlayer->isPlaying())
 		mPlayer->stop();
@@ -266,19 +274,34 @@ void TTCurrentFrame::refreshCurrentFrame()
   mpegWindow->showVideoFrame();
 }
 
+//! A notch only records the target and starts the timer. Decoding every
+//! notch exactly, at once, cost 1.0-1.6 s each on UHD, and five quick
+//! notches froze the window for 6 s while only the last picture was ever
+//! painted (measured 2026-10-17, test_slider_latency). Counted from the
+//! pending target, not from the stream position: a preview moves that to
+//! the keyframe.
+//! With FastSlider on the wheel goes to I-frames like the slider: forward the
+//! first at/after the target (the last one behind it, iFrameForward()),
+//! backward the last at/before it. The exact frame
+//! 120 frames on cost 1.1-2.4 s on UHD with the window frozen, and notches
+//! more than 150 ms apart paid it for every notch (measured 2026-10-18).
+//! FastSlider off and exact decodes cheap (HD: 40-150 ms): every notch is
+//! decoded exactly at once, as before the coalescing; waiting for the wheel
+//! to rest made it ~220 ms instead of ~70 ms per notch there.
 void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
 {
   if (!isControlEnabled)
     return;
 
-  int currentPosition = videoStream->currentIndex();
+  int currentPosition = (mWheelTarget >= 0) ? mWheelTarget : videoStream->currentIndex();
   int wheelDelta      = TTSettings::instance()->stepMouseWheel();
 
   if ( e->modifiers() == Qt::ControlModifier )
         wheelDelta += TTSettings::instance()->stepPlusCtrl();
 
   //wheel was rotated forwards away from the user
-  if ( e->angleDelta().y() > 0 )
+  const bool backward = e->angleDelta().y() > 0;
+  if ( backward )
     currentPosition -= wheelDelta;
   else
     currentPosition += wheelDelta;
@@ -289,7 +312,78 @@ void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
   if( currentPosition >= (int)videoStream->frameCount() )
     currentPosition = videoStream->frameCount()-1;
 
-  onGotoFrame(currentPosition, 0);
+  const bool keyframesOnly = TTSettings::instance()->fastSlider();
+  if (keyframesOnly) {
+    TTVideoIndexList* index = videoStream->indexList();
+    const int key = backward ? index->moveToPrevIndexPos(currentPosition + 1, 1)
+                             : index->iFrameForward(currentPosition);
+    if (key < 0) return;   // no I-frame that way (stream start)
+    currentPosition = key;
+  }
+
+  mWheelTarget = currentPosition;
+  mWheelClock.restart();
+  // Keyframes and cheap exact frames: show at once, a 0 ms timer still
+  // coalesces notches that queued up during a decode.
+  if (!mpWheelTimer->isActive())
+    mpWheelTimer->start((keyframesOnly || exactDecodeIsCheap()) ? 0 : 50);
+}
+
+//! FastSlider on: the target is an I-frame, the fast keyframe decode shows it
+//! exactly (an I-frame needs no DPB prefill). Off and exact decodes cheap:
+//! decode the target exactly. Off and expensive: while notches keep coming
+//! (the last one less than 150 ms ago) show the keyframe preview of the
+//! target, like a held slider; once the wheel has rested 150 ms decode the
+//! exact frame once.
+void TTCurrentFrame::onWheelTimer()
+{
+  if (mWheelTarget < 0) return;
+  if (!isControlEnabled) { dropPendingWheel(); return; }
+
+  const qint64 rest = mWheelClock.elapsed();
+  mInWheelDecode = true;
+  if (TTSettings::instance()->fastSlider()) {
+    const int target = mWheelTarget;
+    mWheelTarget    = -1;
+    mWheelPreviewed = -1;
+    onGotoFramePreview(target);
+  } else if (exactDecodeIsCheap()) {
+    const int target = mWheelTarget;
+    mWheelTarget    = -1;
+    mWheelPreviewed = -1;
+    onGotoFrame(target, 0);
+  } else if (rest < 150) {
+    if (mWheelTarget != mWheelPreviewed) {
+      mWheelPreviewed = mWheelTarget;
+      onGotoFramePreview(mWheelTarget);
+    }
+    mpWheelTimer->start(int(qBound(qint64(10), 150 - mWheelClock.elapsed(), qint64(50))));
+  } else {
+    const int target = mWheelTarget;
+    mWheelTarget    = -1;
+    mWheelPreviewed = -1;
+    onGotoFrame(target, 0);
+  }
+  mInWheelDecode = false;
+}
+
+//! Three, because a frame-cache hit costs ~0 ms: one cheap decode must not
+//! switch UHD to the per-notch path, where every notch froze the window for
+//! over a second. 200 ms lies between HD (40-150 ms) and the Tux H.265 4K
+//! test video (420-760 ms; measured 2026-10-18, test_slider_decode_cost).
+bool TTCurrentFrame::exactDecodeIsCheap() const
+{
+  for (qint64 ms : mExactDecodeMs)
+    if (ms >= 200) return false;
+  return true;
+}
+
+void TTCurrentFrame::dropPendingWheel()
+{
+  if (mInWheelDecode) return;
+  mWheelTarget    = -1;
+  mWheelPreviewed = -1;
+  mpWheelTimer->stop();
 }
 
 bool TTCurrentFrame::eventFilter(QObject* watched, QEvent* event)
@@ -435,13 +529,15 @@ void TTCurrentFrame::onGotoFrame(int pos, int fast)
   navigateAndUpdate(videoStream->moveToIndexPos(pos, fast));
 }
 
-//! Slider-drag preview: show the nearest keyframe quickly; the exact frame
-//! follows via onGotoFrame() once the slider is released. Keeps the stream's
-//! current index in sync so the position readout and cut checks stay honest
-//! about what is on screen.
+//! Show the keyframe at/before pos quickly, without the DPB prefill. For a
+//! held slider that is a preview, the exact frame follows on release; with
+//! FastSlider on pos is an I-frame and this is its exact picture. Keeps the
+//! stream's current index in sync so the position readout and cut checks
+//! stay honest about what is on screen.
 void TTCurrentFrame::onGotoFramePreview(int pos)
 {
   if (pos < 0) return;
+  dropPendingWheel();
 
   clearCutContext();
 
@@ -485,8 +581,13 @@ void TTCurrentFrame::updateCurrentPosition(int pos)
 
 void TTCurrentFrame::navigateAndUpdate(int newFramePos)
 {
+  dropPendingWheel();
   currentCutPosition = newFramePos;
+  QElapsedTimer cost;
+  cost.start();
   mpegWindow->showFrameAt(newFramePos);
+  mExactDecodeMs.append(cost.elapsed());
+  if (mExactDecodeMs.size() > 3) mExactDecodeMs.removeFirst();
   updateCurrentPosition(newFramePos);
 }
 

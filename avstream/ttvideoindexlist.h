@@ -39,6 +39,9 @@ class TTVideoIndexList : public QVector<TTVideoIndex*>
   int moveToNextIndexPos(int start_pos, int frame_type=0);
   int moveToPrevIndexPos(int start_pos, int frame_type=0);
   int moveToIndexPos(int index, int frame_type=0);
+  //! The first I-frame at/after index, else the last one before it (the
+  //! stream ends behind its last I-frame); -1 only without any I-frame.
+  int iFrameForward(int index);
 
   int  streamOrder(int index);
   int  headerListIndex(int index);

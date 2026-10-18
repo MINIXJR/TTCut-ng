@@ -65,6 +65,8 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     int headlessExitCode() const { return mHeadlessExitCode; }
 
     void keyPressEvent(QKeyEvent* e);
+    //! Watches the mouse button on the video slider (mSliderMousePressed).
+    bool eventFilter(QObject* watched, QEvent* event);
 
   public slots:
     void onOpenVideoFile();
@@ -204,6 +206,15 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     // onVideoSliderChanged() for why.
     QTimer* mpSliderDebounce  = nullptr;
     int     mPendingSliderPos = -1;
+    // Mouse button held on the slider, and the value changes since the press.
+    // A press into the groove does not set isSliderDown(); the slider repeats
+    // its page step while the button is held. The first change is the click
+    // itself, every further one a repeat (see sliderHeld()).
+    bool    mSliderMousePressed = false;
+    int     mSliderPressSteps   = 0;
+    //! Handle held (drag) or mouse held in the groove (repeating page steps):
+    //! the drag preview applies.
+    bool    sliderHeld() const;
 
     // Opens the settings dialog; category >= 0 selects a sidebar entry.
     void openSettingsDialog(int category);

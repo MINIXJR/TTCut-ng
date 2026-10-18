@@ -123,6 +123,12 @@ log_app_file_off       tux   300  -
 log_qdebug_context     tux   300  -
 acm_cut_isolated       tux   300  -
 navigator_refresh      tux   300  test_navigator_refresh
+slider_drag            tux   300  test_slider_latency
+slider_hold            tux   300  test_slider_latency
+slider_wheel           tux   300  test_slider_latency
+slider_click           tux   300  test_slider_latency
+slider_end             tux   300  test_slider_latency
+keyframe_preview_identity tux 300 test_keyframe_preview_identity
 logo_roi               tux   300  test_logo_roi
 open_cancel            tux   840  test_open_cancel
 mpeg2_framerate_cut    tux   600  -
@@ -618,6 +624,58 @@ gate_navigator_refresh() {
   need "$V264" "$A264"
   ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/p.ttcut"
   LC_ALL=C.UTF-8 "$D/test_navigator_refresh" "$W/p.ttcut"
+}
+# A held slider shows pictures while it moves, not only after 50 ms of rest.
+gate_slider_drag() {
+  need "$V264" "$A264"
+  ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/p.ttcut"
+  LC_ALL=C.UTF-8 "$D/test_slider_latency" "$W/p.ttcut" 1 40 gate
+}
+# The same for a mouse held in the groove (repeated page steps).
+gate_slider_hold() {
+  need "$V264" "$A264"
+  ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/p.ttcut"
+  LC_ALL=C.UTF-8 "$D/test_slider_latency" "$W/p.ttcut" 1 40 gatehold
+}
+# Mouse wheel over the current frame: queued notches are not decoded one by
+# one; with FastSlider on every notch lands on an I-frame, with it off on the
+# exact frame.
+gate_slider_wheel() {
+  need "$V264" "$A264"
+  ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/p.ttcut"
+  LC_ALL=C.UTF-8 "$D/test_slider_latency" "$W/p.ttcut" 1 40 gatewheel &&
+  LC_ALL=C.UTF-8 "$D/test_slider_latency" "$W/p.ttcut" 0 40 gatewheel
+}
+# FastSlider on: a click or jump shows its I-frame with the fast keyframe
+# decode (Tux H.265 4K: the exact path takes ~600-750 ms).
+gate_slider_click() {
+  need "$H265" "${H265%.265}.ac3"
+  ttcut_project_xml "$H265" "${H265%.265}.ac3" deu 100:599 > "$W/p.ttcut"
+  LC_ALL=C.UTF-8 "$D/test_slider_latency" "$W/p.ttcut" 1 40 gateclick
+}
+# FastSlider on, behind the last I-frame: the End key on the slider and a
+# wheel notch reach the last I-frame (before 2026-10-18 nothing moved).
+gate_slider_end() {
+  need "$M2V" "$MP2" "$V264" "$A264" "$H265" "${H265%.265}.ac3"
+  local rc=0
+  ttcut_project_xml "$M2V" "$MP2" deu 100:599 > "$W/m2v.ttcut"
+  ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/h264.ttcut"
+  ttcut_project_xml "$H265" "${H265%.265}.ac3" deu 100:599 > "$W/hevc.ttcut"
+  for p in m2v h264 hevc; do
+    echo "== $p"
+    LC_ALL=C.UTF-8 "$D/test_slider_latency" "$W/$p.ttcut" 1 40 gatesliderend || rc=1
+  done
+  return $rc
+}
+# That fast decode shows the same picture as the exact one, for every codec
+# shape it serves.
+gate_keyframe_preview_identity() {
+  need "$V264" "$PAFF" "$MBAFF" "$H265"
+  local f rc=0
+  for f in "$V264" "$PAFF" "$MBAFF" "$H265"; do
+    "$D/test_keyframe_preview_identity" "$f" 20 || rc=1
+  done
+  return $rc
 }
 # A logo area is reported as a profile only when the detector built one.
 gate_logo_roi() {

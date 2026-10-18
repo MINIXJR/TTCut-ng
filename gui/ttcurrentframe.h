@@ -20,7 +20,11 @@
 #include "../common/ttcut.h"
 #include "../avstream/ttavstream.h"
 
+#include <QElapsedTimer>
+#include <QList>
+
 class QProgressDialog;
+class QTimer;
 class QStackedLayout;
 class TTAVItem;
 // moc must see TTAVItem complete to register TTAVItem* in its signals/slots
@@ -125,9 +129,24 @@ void onGotoFramePreview(int pos);
 
   private:
     void                applySpeedStep();
+    //! Shows the pending wheel target (see wheelEvent()).
+    void                onWheelTimer();
+    //! Forgets a pending wheel target - any other navigation or a stream
+    //! change wins over it. No-op while the wheel's own decode runs.
+    void                dropPendingWheel();
+    //! True when none of the last three exact decodes took 200 ms or more
+    //! (also when none was measured yet).
+    bool                exactDecodeIsCheap() const;
 
   private:
     bool                isControlEnabled;
+    // Mouse wheel: a notch only records the target, mpWheelTimer shows it.
+    QTimer*             mpWheelTimer = nullptr;
+    QElapsedTimer       mWheelClock;            // since the last notch
+    int                 mWheelTarget = -1;      // -1: none pending
+    int                 mWheelPreviewed = -1;   // target of the last preview
+    bool                mInWheelDecode = false;
+    QList<qint64>       mExactDecodeMs;         // last three, navigateAndUpdate()
     TTVideoStream*      videoStream;
     TTAVItem*           mAVItem;
     TTAVItem*           currentCutAVItem;
