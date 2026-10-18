@@ -1728,6 +1728,50 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Schieber und Mausrad auf allen Codecs gleich schnell** (TODO
+  „H.265-UHD: Schieber reagiert träge") → **DONE (2026-10-18, Zweig
+  `fix/slider-drag-preview`)**. Vorgabe des Users: „bei Codecwechsel nie die
+  Einstellung ändern müssen".
+  - **Ausgangslage, gemessen**: genaues `decodeFrame()` auf UHD
+    `Designermode` 1262 ms (Ziehen) / 1390 ms (Sprung) im Median
+    (2026-08-28); je Codec 2026-10-18 (`test_slider_decode_cost`, 10
+    Sprünge, Median/Max): Tux H.264 84/121 ms, PAFF 39/150, MBAFF 44/124,
+    Tux H.265 4K 689/756, UHD 1396/1631. Neues Harness
+    `tools/diag/test_slider_latency` (echtes Hauptfenster offscreen, Stil
+    Breeze, Bildwechsel = Paint mit neuem Pixmap-Schlüssel, 10-ms-Herzschlag
+    für Stillstand): Ziehen zeigte **0 Bilder** (Entprellung startete bei
+    jeder Bewegung neu), Festhalten in der Leiste ebenso, fünf Mausrad-Rasten
+    froren 6 s ein, ein Klick 1,07 s.
+  - **Umbau in Schritten**, jeder mit User-Rückmeldung: Ziehen im Takt statt
+    entprellt („viel besser"); Festhalten in der Leiste per Event-Filter wie
+    Ziehen, vorwärts aufs I-Bild danach (Seitenschritt 40 < GOP 49 stand
+    sonst still); Mausrad gesammelt — auf HD langsamer als vorher (~220 statt
+    ~70 ms je Raste, „träger"), daher ersetzt: **FastSlider an** → Rad,
+    Klick, Sprung und Loslassen nur zu I-Frames über den schnellen
+    Keyframe-Weg (pixelgleich zum genauen, Gate `keyframe_preview_identity`,
+    auch UHD 20/20); **FastSlider aus** → Rad nach Kosten der letzten drei
+    genauen Bilder (< 200 ms sofort genau). Hinter dem letzten I-Frame bewegte
+    sich mit FastSlider nichts (Taste „Ende" auf dem Schieber, auch master) →
+    `TTVideoIndexList::iFrameForward`. Beschriftung „Schieber und Mausrad nur
+    zu I-Frames springen".
+  - **Ergebnis FastSlider an** (Median, freie Maschine): Klick/Sprung MPEG-2
+    49–50 ms, H.264 53–59, H.265 4K 95–97, UHD 197–203 ms; Rad je Raste 2–7 /
+    6 / 139 ms; längster Stillstand UHD 175 ms (vorher 1,4–2,4 s).
+    User 2026-10-18 mit H.265: „Scrollen und Slider verschieben fühlen sich
+    beide gut an".
+  - **Unterwegs gefunden**: MPEG-2-Decoder hing am Dateiende eines
+    Halbbild-Videos endlos (`decodeNextFrame`, auch master; Gate
+    `mpeg2_end_frame`). Absturz beim Schließen eines Meldungsfensters nach
+    dem Dateidialog = KDE-Bug 523039 (plasma-integration 6.7.4, behoben in
+    6.7.5), nicht TTCut-ng; User wartet auf das Paket.
+  - **Messfallen**: Ziel-Orakel vor der Messung füllt den Bildcache (alle
+    Bilder nach 5 ms); `join()` des Sender-Threads blockiert den GUI-Thread;
+    die GUI sortiert die Indexliste bei Öffnen (`sortDisplayOrder`), ein
+    Harness ohne das vergleicht falsche Stellen.
+  - Gates: `slider_drag`, `slider_hold`, `slider_wheel`, `slider_click`,
+    `slider_end`, `keyframe_preview_identity`, `mpeg2_end_frame`. Spec
+    `docs/superpowers/specs/2026-10-17-slider-drag-preview-design.md` (lokal).
+
 - **Vorschau ohne geteilte Smart-Cut-Engine: stilles Ende, Abbruch
   verloren** (TODO „Vorschau-Rückfall-Engine ist nicht abbrechbar“,
   Kartenbefund 2026-08-15) → **ERLEDIGT (2026-10-17)**, Zweig

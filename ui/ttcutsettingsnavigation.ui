@@ -134,8 +134,8 @@
      <layout class="QVBoxLayout">
       <item>
        <widget class="QCheckBox" name="cbQuickSearch">
-        <property name="text"><string>Snap to I-frames only while dragging</string></property>
-        <property name="toolTip"><string>While dragging the position slider in the main window, snap only to the nearest I-frame (faster) instead of the exact frame position (frame-accurate, but slower while dragging).</string></property>
+        <property name="text"><string>Snap slider and mouse wheel to I-frames only</string></property>
+        <property name="toolTip"><string>The position slider in the main window and the mouse wheel over the current frame go to I-frames only (fast, also on UHD material) instead of the exact frame position (frame-accurate, but slower on material that is expensive to decode).</string></property>
        </widget>
       </item>
      </layout>

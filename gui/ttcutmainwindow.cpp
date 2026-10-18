@@ -60,6 +60,7 @@
 #include "../mpeg2window/ttmpeg2window2.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttaudioheaderlist.h"
+#include "../avstream/ttvideoindexlist.h"
 
 #include "../ui//pixmaps/downarrow_18.xpm"
 #include "../ui/pixmaps/uparrow_18.xpm"
@@ -370,6 +371,7 @@ void TTCutMainWindow::connectVideoSliderSignals()
   connect(mpSliderDebounce, &QTimer::timeout, this, &TTCutMainWindow::onSliderDecodeTimer);
   connect(streamNavigator->slider(), &QAbstractSlider::sliderReleased,
           this, &TTCutMainWindow::onSliderDecodeTimer);
+  streamNavigator->slider()->installEventFilter(this);
 }
 
 // Cut-out frame, current frame and cut-list widgets.
@@ -915,8 +917,50 @@ void TTCutMainWindow::onVideoSliderChanged(int sPos)
   // event); decoding every valueChanged of a drag multiplied that by the
   // event count and froze the window. Stale intermediate positions are now
   // simply never decoded.
+  //
+  // While the handle is held the timer paces instead of debouncing: it is
+  // started only when it is not already running. Restarting it on every
+  // move meant a continuous drag never reached 50 ms of rest and showed no
+  // picture at all until the hand stopped (measured 2026-10-17,
+  // test_slider_latency: 0 pictures in a 3 s drag). Now the newest position
+  // is shown every 50 ms plus one keyframe decode, and the event loop gets
+  // those 50 ms for mouse moves and repaints. The same for a mouse held in
+  // the groove (sliderHeld()): its repeated page steps restarted the timer
+  // every 50 ms as well (2 pictures in a 3 s hold on Tux H.264).
   mPendingSliderPos = sPos;
-  mpSliderDebounce->start();
+  if (mSliderMousePressed) ++mSliderPressSteps;
+  if (!sliderHeld() || !mpSliderDebounce->isActive())
+    mpSliderDebounce->start();
+}
+
+bool TTCutMainWindow::sliderHeld() const
+{
+  // The first change after a press into the groove is the click itself; it
+  // keeps the exact decode of a single click. Only the repeats that follow
+  // while the button stays down count as holding.
+  return streamNavigator->slider()->isSliderDown()
+      || (mSliderMousePressed && mSliderPressSteps > 1);
+}
+
+bool TTCutMainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+  if (watched == streamNavigator->slider()) {
+    if (event->type() == QEvent::MouseButtonPress) {
+      mSliderMousePressed = true;
+      mSliderPressSteps   = 0;
+    } else if (event->type() == QEvent::MouseButtonRelease && mSliderMousePressed) {
+      const bool repeated = mSliderPressSteps > 1;
+      mSliderMousePressed = false;
+      mSliderPressSteps   = 0;
+      // A released handle gets sliderReleased (connected above). A groove
+      // hold does not: decode the position that is still pending, the way
+      // a handle release does. The filter runs before the slider sees the
+      // release, so a held handle still reads isSliderDown() here.
+      if (repeated && !streamNavigator->slider()->isSliderDown())
+        onSliderDecodeTimer();
+    }
+  }
+  return QMainWindow::eventFilter(watched, event);
 }
 
 void TTCutMainWindow::onSliderDecodeTimer()
@@ -926,15 +970,37 @@ void TTCutMainWindow::onSliderDecodeTimer()
   if (sPos < 0) return;
   mPendingSliderPos = -1;
 
-  // While the handle is held down, show the nearest keyframe without the
-  // DPB prefill - fast enough to track the drag. The exact frame (full
-  // prefill, identical to every other decoder instance, WYSIWYG for cuts)
-  // follows from the sliderReleased-driven call, where isSliderDown() is
-  // already false.
-  if (streamNavigator->slider()->isSliderDown()) {
-    currentFrame->onGotoFramePreview(sPos);
+  // While the slider is held (handle or groove, sliderHeld()), show the
+  // nearest keyframe without the DPB prefill - fast enough to track the
+  // drag. The exact frame (full prefill, identical to every other decoder
+  // instance, WYSIWYG for cuts) follows from the release-driven call, where
+  // the slider no longer counts as held.
+  if (sliderHeld()) {
+    // A groove hold steps relative to the slider value, and the preview
+    // snaps that value back to the keyframe at/before its target. With a
+    // page step shorter than the GOP every forward step snapped back to the
+    // same keyframe and the hold stood still (UHD Designermode: GOP ~49,
+    // page step 40, measured 2026-10-17). Forward, aim at the I-frame
+    // at/after the target instead - the one the fast-slider path goes to.
+    int target = sPos;
+    TTVideoStream* vs = mpCurrentAVDataItem ? mpCurrentAVDataItem->videoStream() : nullptr;
+    if (!streamNavigator->slider()->isSliderDown() && vs && vs->indexList()
+        && sPos > vs->currentIndex()) {
+      const int next = vs->indexList()->iFrameForward(sPos);
+      if (next >= 0) target = next;
+    }
+    currentFrame->onGotoFramePreview(target);
   } else if (TTSettings::instance()->fastSlider()) {
-    currentFrame->onGotoFrame(sPos, 1);
+    // The I-frame at/after the value (the last one behind it), shown by the
+    // fast keyframe decode: an I-frame needs no DPB prefill and comes out
+    // pixel-identical (test_keyframe_preview_identity), while the exact path
+    // took 1.07 s on UHD with the window frozen (measured 2026-10-18).
+    TTVideoStream* vs = mpCurrentAVDataItem ? mpCurrentAVDataItem->videoStream() : nullptr;
+    const int key = (vs && vs->indexList()) ? vs->indexList()->iFrameForward(sPos) : -1;
+    if (key >= 0)
+      currentFrame->onGotoFramePreview(key);
+    else
+      currentFrame->onGotoFrame(sPos, 1);
   } else {
     currentFrame->onGotoFrame(sPos, 0);
   }

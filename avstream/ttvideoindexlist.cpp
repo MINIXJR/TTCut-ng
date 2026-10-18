@@ -182,6 +182,20 @@ int TTVideoIndexList::moveToIndexPos(int index, int frame_type)
 }
 
 /*! /////////////////////////////////////////////////////////////////////////////
+ * The first I-frame at/after index, else the last one before it. The slider
+ * and the mouse wheel snap forward to I-frames with FastSlider on; behind the
+ * last I-frame there is none, and without the fallback they did not move at
+ * all (End key on the slider, measured 2026-10-18).
+ */
+int TTVideoIndexList::iFrameForward(int index)
+{
+  if (count() == 0) return -1;
+  index = qBound(0, index, count() - 1);
+  const int next = moveToIndexPos(index, 1);
+  return (next >= 0) ? next : moveToPrevIndexPos(index + 1, 1);
+}
+
+/*! /////////////////////////////////////////////////////////////////////////////
  * Check if given index is in list range and throw an exception if index isn't
  * in range
  */
