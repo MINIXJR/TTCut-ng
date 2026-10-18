@@ -209,6 +209,15 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   Bild, das ein Schnitt an derselben Position liefert. Vom User 2026-10-18
   ins TODO gestellt, nicht beauftragt.
 
+- **FastSlider ab Werk einschalten?** (Hinweis 2026-10-18, vom User für
+  v0.86.2 zurückgestellt: Changelog klargestellt statt Werkseinstellung
+  geändert). `TTSettings::mFastSlider` ist ab Werk `false`. Ohne die
+  Einstellung bleibt auf UHD ein Klick bei ~1–1,5 s mit stehendem Fenster,
+  das Mausrad erreicht sein Ziel nach 2–2,5 s; mit ihr ~0,2 s bzw. 0,14 s
+  je Raste. Vorgabe des Users: „bei Codecwechsel nie die Einstellung ändern
+  müssen". Eine Änderung träfe nur Installationen ohne gespeicherten Wert;
+  Verhaltensänderung → eher MINOR.
+
 - **FastSlider aus: zwei Schieber-/Mausrad-Reste** (benannt 2026-10-17/18,
   nicht entschieden). Nach einem Ziehen mit Ruhepause dekodiert das
   Loslassen nichts mehr (`mPendingSliderPos == -1`): stehen bleibt das

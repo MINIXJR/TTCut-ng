@@ -2,6 +2,64 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.86.2 (2026-10-18)
+
+**Bugfix release: a more responsive slider and mouse wheel on UHD material, cancelling an open works, a hang on MPEG-2 field pictures is gone**
+
+### Fixed
+- **Slider and mouse wheel are more responsive on UHD material.** Dragging
+  the slider showed no picture until it rested, holding the mouse in the
+  slider groove neither, a click took about a second with the window frozen,
+  and five quick wheel notches over the current frame froze it for six
+  seconds. Dragging and holding now show a picture about every 0.2 s on UHD,
+  and turning the wheel reaches its target after 2-2.5 s instead of 10-12 s.
+  For clicks and the wheel to be fast as well, switch on **"Snap slider and
+  mouse wheel to I-frames only"** (Settings → Navigation, off by default):
+  then a click shows its picture after about 0.2 s on UHD, 0.1 s on 4K and
+  0.05 s on HD, and every wheel notch goes to an I-frame just as fast.
+  Without it, a click on UHD still takes about a second, because the exact
+  frame has to be decoded.
+- **The slider reaches the end of the video again.** With I-frame snapping
+  on, the End key on the slider, a click behind the last I-frame and a wheel
+  notch past it did nothing; the slider jumped back. They now go to the last
+  I-frame.
+- **Going to the last frame of an MPEG-2 video with field pictures no longer
+  hangs the program.** The End key on such a video never came back.
+- **Cancelling the open of an H.264/H.265 video cancels it.** The open ran to
+  its end and the video appeared anyway.
+- **Cancelling a video open or a project load no longer crashes.**
+- **An AC3 track with signal loss is read to its end.** Behind a broken
+  frame the track could end early: a DVB recording of 61:30 was listed with
+  10:53 of audio. At the very end of a track a cut-off header could add a
+  phantom frame.
+- **The preview reports when it cannot start.** When the H.264/H.265 Smart
+  Cut engine could not be set up (for example an unreadable file), the
+  preview ended without a clip and without a message. It now shows the
+  error.
+- **A logo area that cannot be used is reported.** An area that was too
+  small, or a saved area from a video of another size, still said "Logo
+  profile created", and the search then did nothing. It now says that no
+  profile was created.
+- **SRT files with a UTF-8 BOM read correctly.** The first subtitle could be
+  dropped and a false "missing subtitle" warning appeared.
+- **Opening files no longer leaks memory** (open tasks, audio and subtitle
+  streams, the item of a failed or cancelled video open).
+
+### Changed
+- **The setting "Snap to I-frames only while dragging" is now "Snap slider
+  and mouse wheel to I-frames only"** (Settings → Navigation). It now also
+  applies to the mouse wheel over the current frame. With it off, every
+  wheel notch shows the exact frame at once on material that decodes
+  quickly, as before.
+
+### Known issue
+- **On KDE Plasma with plasma-integration 6.7.4, closing a message box can
+  crash the program** once a file dialog has been open — including the
+  "Save changes before closing?" question at exit, before anything is
+  saved. This is KDE bug 523039, fixed in plasma-integration 6.7.5, and
+  affects other Qt programs too. Until that update: save with Ctrl+S before
+  quitting.
+
 ## v0.86.1 (2026-10-14)
 
 **Bugfix release: a recording with one unreadable picture can be cut again; runs without a window leave the settings alone**

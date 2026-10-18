@@ -1185,12 +1185,12 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <translation>Klick: zu Frame oder Timecode springen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcurrentframe.cpp" line="868"/>
+        <location filename="../gui/ttcurrentframe.cpp" line="869"/>
         <source>Preparing playback (muxing video and audio)...</source>
         <translation>Wiedergabe wird vorbereitet (Video und Ton werden gemuxt) …</translation>
     </message>
     <message>
-        <location filename="../gui/ttcurrentframe.cpp" line="869"/>
+        <location filename="../gui/ttcurrentframe.cpp" line="870"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
