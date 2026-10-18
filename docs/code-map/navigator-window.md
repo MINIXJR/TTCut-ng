@@ -1,6 +1,6 @@
 ---
-base_commit: 7d38cc6524b96780321851b669b361eba1129f9a
-last_verified: 2026-10-14
+base_commit: 3fa8c16cd36a5f8f184d66209f986785b4a2621a
+last_verified: 2026-10-18
 sources:
   - gui/ttstreamnavigator.h
   - gui/ttstreamnavigator.cpp
@@ -79,7 +79,7 @@ flowchart LR
 | `SN` -.-> `ND` | The navigator forwards the item and the enable state. The display keeps its own `mControlEnabled` and sets it to `true` on every non-null item, independently of the slider. `mMaxValue = frameCount()-1` (at least 1), `mMinValue = 0`. |
 | `AVI` → `ND` | `paintEvent` draws only with an item and enabled: dark background (= removed), then per cut of `mAVDataItem` (`cutListItemAt`, read at every paint) a green gradient from `cutIn*scale` over `(cutOut-cutIn)*scale` pixels, a green line at the cut-in and a gold one at the cut-out; `scale = width / (mMaxValue - mMinValue)`, computed in `drawCutList`, positions truncated to int. Only the current video's cuts. The item is a raw pointer, replaced only through `onAVItemChanged`. |
 | `TV` -.-> `SN` | `refreshDisplay` → `onRefreshDisplay` → `update()` of the display (coalesced: a project load appends its cuts one by one). Emitted by `TTCutTreeView::onAppendItem`, `onUpdateItem` and `onRemoveItem` — every change of the cut list the tree shows, the delete button's included. Other repaints: `controlEnabled` (`repaint`), `onAVItemChanged` (`update`), resizes. |
-| `SN` → `DEC` | `valueChanged` → `sliderValueChanged(pos)` → `TTCutMainWindow::onVideoSliderChanged` (debounced decode, [frame-order.md](frame-order.md)). No `sliderMoved` → `processEvents` coupling any more. |
+| `SN` → `DEC` | `valueChanged` → `sliderValueChanged(pos)` → `TTCutMainWindow::onVideoSliderChanged` (decode paced while held, debounced otherwise, [frame-order.md](frame-order.md)). No `sliderMoved` → `processEvents` coupling any more. |
 | `CF` → `SN` | `TTCurrentFrame::newFramePosition` → `TTCutMainWindow::onNewFramePos`: `setValue` with the slider's signals blocked, so a position set from outside never decodes a second time. |
 | `SET` -.-> `SN` | Page step = `TTSettings::stepSliderClick()` at construction and on `stepSliderClickChanged`. |
 | `MWG` → `WG` | Restore, in the main window's constructor: `ttMigrateGeometryBlob` and `ttImportStrayQuickJumpSize` (one-time upgrades), `ttLoadWindowGeometry("MainWindow")`, then the screen whose available area contains the saved rect's centre, `ttClampToArea` into it, `showMaximized` when saved so. No such screen or no valid group: 80 % of the primary screen, centred. Save, in `closeEvent` **before** the unsaved-project question: `normalGeometry()` + `isMaximized()`; `TTSettings::save()` follows there too. |

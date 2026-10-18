@@ -173,41 +173,49 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `TTSettings::instance()`) — oder es bewusst so lassen und hier stehen
     haben.
 
-- **H.265-UHD: Schieber reagiert träge; Absturz (SIGABRT) unerklärt**
-  (Rest des Befunds von 2026-08-15; der Minuten-Hänger selbst ist GELÖST —
-  siehe `docs/completed-work.md`, „EAGAIN-Paketverlust")
-  - **Was der Hänger war**: `skipCurrentFrame()` verwarf bei
-    `avcodec_send_packet == EAGAIN` das Paket samt vergebenem Decode-Tag.
-    Bei B-Hierarchie blieb die Dekoder-Warteschlange voll, jedes weitere
-    Paket bis Dateiende wurde einzeln gelesen und verworfen, das Ziel-Tag
-    erschien nie, und die Wiederhol-plus-Rekursionskaskade in `decodeFrame()`
-    machte aus **einem** Schieber-Ereignis Minuten bis Stunden GUI-Rechenzeit.
-    Gefixt (korrekte Send/Receive-Pumpe mit schwebendem Paket); UHD-Sprung
-    jetzt 2,6 s statt nie.
-  - **Gemessen 2026-08-28** (Regressionslauf zum Frame-Index-Bündel, UHD
-    `Designermode`, 178 224 AUs): `decodeFrame()` kostet auf diesem Material
-    im Median **1262 ms** (Ziehen) bzw. **1390 ms** (Sprung); eine Ziehbewegung
-    mit 50 Ereignissen sind damit rund **63 s** GUI-Zeit. Der Restbefund
-    „Schieber reagiert träge" ist also **echte Dekodierkosten**, keine Schleife
-    mehr — die Bündel-/Schleifenarbeit von 2026-08-28 ändert daran nichts und
-    war dafür auch nicht gedacht. Wer das angeht, muss die Zahl der synchronen
-    `onGotoFrame()`-Aufrufe pro Ziehbewegung senken (Entprellen/Abbrechen),
-    nicht die Dekodierung schneller machen.
-  - **Offen B — der SIGABRT** aus der GUI-Abnahme 2026-08-15 ist weiter
+- **H.265-UHD: Absturz (SIGABRT) unerklärt** (Rest des Befunds von
+  2026-08-15; der Minuten-Hänger ist GELÖST — `docs/completed-work.md`,
+  „EAGAIN-Paketverlust"; der träge Schieber ebenfalls — dort „Schieber und
+  Mausrad auf allen Codecs gleich schnell", 2026-10-18)
+  - **2026-10-17**: im 2-min-GUI-Lauf des Users unter gdb (UHD
+    `Designermode`) nicht aufgetreten.
+  - **Der SIGABRT** aus der GUI-Abnahme 2026-08-15 ist weiter
     unerklärt (Zusicherung, ungefangene Ausnahme oder fehlgeschlagene
     Allokation; kein Speichermangel: 91 GB RAM, 82 GB frei). Plausibel
-    geworden, aber unbewiesen: die Kaskade oben las die 502-MB-Datei
+    geworden, aber unbewiesen: die EAGAIN-Kaskade las die 502-MB-Datei
     wiederholt komplett — was dabei an Puffern anfällt, war nie im Blick.
-    Nach dem Fix neu provozieren, bevor jemand tiefer gräbt. Das Helferskript
-    `abnahme/start-gdb.sh` ist **gelöscht** (CLAUDE_TMP-Purge 2026-08-16) —
-    neu zu schreiben ist es in Minuten: TTCut-ng unter gdb starten, beim
-    Absturz alle Fäden dumpen und das Logfile wegsichern (es wird beim
-    Absturz nicht geschrieben und beim Neustart überschrieben, siehe
-    Messfallen unten).
+    Das Helferskript liegt wieder unter
+    `CLAUDE_TMP/TTCut-ng/uhd/start-gdb.sh` (TTCut-ng unter gdb, beim Absturz
+    alle Fäden + Core, Logfile wird danach weggesichert).
   - **Zwei Messfallen aus der ersten Runde** (Beweise gingen verloren):
     abgeschnittener Core durch Shell-Zeitlimit beim Schreiben; die
     `Q_ASSERT`-Meldung geht ins Logfile, das beim Absturz nicht geschrieben
     und beim Neustart überschrieben wird.
+
+- **MPEG-2 mit Halbbildern: Standbild mitten im GOP womöglich ein Bild zu
+  spät** (Befund 2026-10-18, nur Dateiende gemessen).
+  `TTMpeg2Decoder::moveToFrameIndex` ruft `skipFrames(pos − Ipos)` mit
+  Indexeinträgen, ein Halbbild-Frame belegt aber zwei. Am Dateiende von
+  `tux_mpeg2_576i_fieldpic_test.m2v` (Position 3059) wurden 5 Bilder
+  verlangt und 4 waren übrig — das ließ `decodeNextFrame` endlos laufen
+  (behoben, Gate `mpeg2_end_frame`). Ob eine Position hinter einem
+  Halbbildpaar mitten im Video ein späteres Bild zeigt, ist ungeprüft.
+  Folge, falls ja: das Standbild beim Setzen eines Schnittpunkts wäre nicht
+  das Bild, an dem geschnitten wird. `docs/code-map/mpeg2-cut.md`
+  („Field-picture coding") nennt das Doppelzählen für den **Schnitt**
+  harmlos (gemessen 2026-07-16), über das **Standbild** sagt sie nichts.
+  Messvorschlag: am Tux-Video mit Halbbildern Positionen kurz hinter einem
+  Halbbildpaar — Standbild (`TTMpeg2Decoder::moveToFrameIndex`) gegen das
+  Bild, das ein Schnitt an derselben Position liefert. Vom User 2026-10-18
+  ins TODO gestellt, nicht beauftragt.
+
+- **FastSlider aus: zwei Schieber-/Mausrad-Reste** (benannt 2026-10-17/18,
+  nicht entschieden). Nach einem Ziehen mit Ruhepause dekodiert das
+  Loslassen nichts mehr (`mPendingSliderPos == -1`): stehen bleibt das
+  Keyframe der Vorschau, nicht das genaue Bild der Schieberstelle. Und auf
+  teurem Material (Tux H.265 4K, UHD) zeigt das Mausrad beim Drehen
+  Keyframe-Vorschauen — wer genau dann Cut-In/Out setzt, setzt ihn aufs
+  Keyframe. Mit FastSlider an (Einstellung des Users) entfällt beides.
 
 - **Vorschau: Abbruch beim Aufbau der geteilten Engine kann als Fehlschlag
   gelten oder verloren gehen** (Review-Befund 2026-10-17, nur gelesen).
