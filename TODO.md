@@ -272,6 +272,16 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   nächsten Schnitt, der dann grundlos abbräche. Alle drei Öffnen-Tasks,
   bestand schon vorher.
 
+- **Freigabe des nie übergebenen Video-Streams: kein ASan-Lauf**
+  (2026-10-17 offen gelassen, ins TODO 2026-10-19). Seit `6a910649` löscht
+  `TTOpenVideoTask::cleanUp` bei Abbruch oder Fehlschlag den Stream samt
+  offener Datei (`!mStreamHandedOver`, unter `mStreamMutex` gegen
+  `onUserAbort`). Belegt ist das nur über das Gate `open_cancel` (zählt
+  lebende `TTAVItem` und stürzt nicht ab) — einen Zugriff nach dem
+  Löschen, etwa durch `setAbort` aus `onUserAbort`, sähe nur ein
+  ASan-Build. Bau wie unter „SIGSEGV nach Smart Cut in `doH264Cut`“ (Low
+  Priority), Lauf: `test_open_cancel` mit allen Fällen des Gates.
+
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an zwei Stellen: `data/ttpreviewclip.cpp` und
     `data/ttcutpreviewtask.cpp` — beide schreiben `preview_audio_temp.<ext>`
@@ -939,6 +949,15 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
   unter Last zu spät, und der Lauf ist der Fall „Abbruch nach dem Ende“)
   oder ob ein Abbruch im letzten Augenblick eines laufenden mplex verloren
   geht.
+
+- **`test_slider_decode_cost`: Schlusstext veraltet** (2026-10-17 bemerkt,
+  ins TODO 2026-10-19). Das Messprogramm rechnet am Ende „50
+  valueChanged-Ereignisse × Median“ hoch und begründet das mit „because
+  onVideoSliderChanged() decodes synchronously“. Das stimmt nicht mehr:
+  `TTCutMainWindow::onVideoSliderChanged` merkt sich nur die Position, das
+  Dekodieren macht `onSliderDecodeTimer` im 50-ms-Takt (beim Ziehen eine
+  Keyframe-Vorschau). Die Messwerte je Aufruf bleiben gültig; nur die
+  Hochrechnung und ihre Begründung sind zu ersetzen.
 
 - **Verification-Test-Policy: Tux-Videos bevorzugen**
   - Bei Cut-Verification + Pipeline-Validation IMMER zuerst die Tux-Test-Videos verwenden
