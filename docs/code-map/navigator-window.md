@@ -1,6 +1,6 @@
 ---
-base_commit: 3fa8c16cd36a5f8f184d66209f986785b4a2621a
-last_verified: 2026-10-18
+base_commit: adcc21c5532964f19532d3e40890ff94e71ae29b
+last_verified: 2026-10-25
 sources:
   - gui/ttstreamnavigator.h
   - gui/ttstreamnavigator.cpp
@@ -17,6 +17,8 @@ sources:
   - gui/ttcutsettingspaths.cpp
   - data/ttavdata.cpp
   - gui/ttcutmain.cpp
+  - gui/ttcutaboutdlg.cpp
+  - ui/mainwindow.qrc
   - ui/streamnavigationwidget.ui
   - ui/navigatordisplaywidget.ui
 ---
@@ -101,6 +103,12 @@ flowchart LR
   the three folder buttons of `gui/ttcutsettingspaths.cpp` take the style's
   `SP_DirOpenIcon` directly, without a theme name). What a button shows therefore depends on the icon theme of the
   session; offscreen runs and screenshot runs get whatever theme is found.
+  The one exception is the application icon: `ttAppIcon()` (same header) is
+  built from the PNGs bundled in `ui/mainwindow.qrc`, one per size, and does
+  not ask the theme — Qt's fallback search path includes `/usr/share/pixmaps`,
+  where older packages put the previous logo. `main` (`gui/ttcutmain.cpp`)
+  sets it as the window icon and names the desktop file `ttcut-ng` for
+  Wayland; the About dialog shows its 128 px pixmap (gate `app_icon`).
 - **The display's item pointer is raw.** `TTAVData::onRemoveAVItem` hands the
   GUI a neighbour before removing an item and a null item right after the last
   one, without an event loop in between, so the display never paints a freed

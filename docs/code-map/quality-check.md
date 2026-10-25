@@ -1,5 +1,5 @@
 ---
-base_commit: 763fc714e12f17eb84aff76595a20fcbf5eb9dd4
+base_commit: adcc21c5532964f19532d3e40890ff94e71ae29b
 last_verified: 2026-10-14
 sources:
   - tools/ttcut-quality-check/ttcut-quality-check.py

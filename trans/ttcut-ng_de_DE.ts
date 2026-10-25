@@ -1361,12 +1361,12 @@ existiert bereits. Überschreiben?</translation>
         <translation>TTCut-ng</translation>
     </message>
     <message>
-        <location filename="../ui/aboutdlg.ui" line="61"/>
+        <location filename="../ui/aboutdlg.ui" line="74"/>
         <source>GPL</source>
         <translation>GPL</translation>
     </message>
     <message>
-        <location filename="../ui/aboutdlg.ui" line="470"/>
+        <location filename="../ui/aboutdlg.ui" line="483"/>
         <source>&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
 p, li { white-space: pre-wrap; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:&apos;Sans Serif&apos;; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
@@ -1381,17 +1381,17 @@ p, li { white-space: pre-wrap; }
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
-        <location filename="../ui/aboutdlg.ui" line="515"/>
+        <location filename="../ui/aboutdlg.ui" line="528"/>
         <source>OK</source>
         <translation>Ok</translation>
     </message>
     <message>
-        <location filename="../ui/aboutdlg.ui" line="536"/>
+        <location filename="../ui/aboutdlg.ui" line="549"/>
         <source>About</source>
         <translation>Über</translation>
     </message>
     <message>
-        <location filename="../ui/aboutdlg.ui" line="960"/>
+        <location filename="../ui/aboutdlg.ui" line="973"/>
         <source>&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
 p, li { white-space: pre-wrap; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:&apos;Sans Serif&apos;; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;

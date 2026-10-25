@@ -1728,6 +1728,34 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Logo für TTCut-ng** → **DONE (2026-10-25, branch `feature/logo-redo`,
+  commits `caf10ce2`, `031723e1`, `d77ed64c`, merge `adcc21c5`; released in
+  v0.86.5)**
+  - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
+  - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
+  - **Result:** hand-built SVG from a generator (`tools/logo/gen-logo.py`,
+    `tools/logo/render-icons.sh`): curved film strip, scissors, Tux.svg
+    unchanged in the last frame. 16/22/32 px are a separate, bolder drawing.
+    Spec `docs/superpowers/specs/2026-10-25-ttcut-logo-redo-design.md`, plan
+    `docs/superpowers/plans/2026-10-25-ttcut-logo-redo.md`.
+  - **Qt findings (measured, Qt 6.11.2):** the SVG icon engine Plasma uses
+    draws nothing inside a nested `<svg>`, ignores `clip-path` entirely and
+    skips `feComponentTransfer`; `<mask>` and `feColorMatrix` work. The
+    generator turns Tux's 13 clipPaths into white masks. RMSE could not
+    detect the "clips ignored" case (0.01336 vs limit 0.0134); gate check
+    `qt_matches_rsvg` counts pixels differing >10 % at 512 px instead (good
+    5.3-6.1, limit 9.2, regressions >= 80).
+  - **App icon:** `ttAppIcon()` (`gui/ttthemedicon.h`) uses the bundled PNGs
+    only; `QIcon::fromTheme("ttcut-ng")` found the old package's
+    `/usr/share/pixmaps/ttcut-ng.png` and the About dialog showed the old
+    logo (measured; `test_app_icon` case `stale_fallback_ignored`
+    RED→GREEN). `debian/rules` installs into the hicolor theme instead.
+  - **Gates:** `logo` (`tools/diag/gate_logo.sh`, 15 checks: assets equal
+    generator output, Tux attribution, ring/film separation, Qt vs librsvg)
+    and `app_icon`. Full gate run 145 PASS / 0 FAIL / 0 SKIP. The user
+    checked Plasma on both screens (scale 1.5/1.75): new logo in title bar,
+    task bar, launcher, Alt+Tab and About dialog, all sharp.
+
 - **Schieber und Mausrad auf allen Codecs gleich schnell** (TODO
   „H.265-UHD: Schieber reagiert träge") → **DONE (2026-10-18, Zweig
   `fix/slider-drag-preview`)**. Vorgabe des Users: „bei Codecwechsel nie die
@@ -5312,6 +5340,10 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 Kurzfassung ausgelieferter Funktionen, neueste zuerst. Ausführlich zu den
 Punkten, die oben einen eigenen Abschnitt haben, steht es dort.
 
+- [x] New logo (2026-10-25, v0.86.5) — film strip with scissors and Tux,
+      simplified drawing for 16-32 px, window icon and About dialog, hicolor
+      icons in the package; gates `logo` and `app_icon`. See "Logo für
+      TTCut-ng" under GUI und Wiedergabe.
 - [x] A marker jump lands on the marker itself — `onStreamPointJump` went
       through `onVideoSliderChanged`, whose second argument is a FRAME TYPE,
       not a speed switch, so with FastSlider on (the default) every jump

@@ -2,6 +2,22 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.86.5 (2026-10-25)
+
+**New logo**
+
+### Changed
+- **TTCut-ng has a new logo:** a curved film strip with scissors, and Tux
+  in the last frame. The small sizes (16-32 px) use a simplified, bolder
+  drawing so the icon stays readable in the title bar and the task bar.
+- **The logo is the window icon and appears in the About dialog.** The
+  About dialog shows it above the text and is taller for that.
+- **The package installs the icon into the hicolor icon theme** (PNG
+  16-512 px plus a scalable SVG) instead of `/usr/share/pixmaps`.
+  Installing it removes the old `/usr/share/pixmaps/ttcut-ng.png`.
+- **The credits name all Tux authors.** CREDITS.md, the README and
+  `debian/copyright` name Larry Ewing, Simon Budig and Garrett LeSage.
+
 ## v0.86.2 (2026-10-18)
 
 **Bugfix release: a more responsive slider and mouse wheel on UHD material, cancelling an open works, a hang on MPEG-2 field pictures is gone**

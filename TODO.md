@@ -5,9 +5,7 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## High Priority
 
-- **Logo für TTCut-ng**
-  - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
-  - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
+_None._
 
 ## Medium Priority
 
