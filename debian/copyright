@@ -17,12 +17,28 @@ License: GPL-3+
 
 Files: ui/pixmaps/Tux.svg
 Copyright: 1996 Larry Ewing <lewing@isc.tamu.edu>
+           Simon Budig
+           Garrett LeSage
+License: Tux-Permission
+Comment: Created with The GIMP; vector version by Larry Ewing, Simon Budig
+ and Garrett LeSage, taken unchanged from Wikimedia Commons
+ <https://commons.wikimedia.org/wiki/File:Tux.svg>.
+
+Files: ui/pixmaps/ttcut-ng.svg
+       ui/pixmaps/ttcut-ng-small-*.svg
+       ui/pixmaps/icons/*
+       tools/logo/reference/*
+Copyright: 2026 MINIXJR
+           1996 Larry Ewing <lewing@isc.tamu.edu>
+           Simon Budig
+           Garrett LeSage
+License: GPL-3+ and Tux-Permission
+Comment: The TTCut-ng application logo (film strip and scissors, GPL-3+)
+ contains Tux unchanged from ui/pixmaps/Tux.svg (Tux-Permission).
+
 License: Tux-Permission
  Permission to use and/or modify this image is granted provided you
  acknowledge me lewing@isc.tamu.edu and The GIMP if someone asks.
- .
- Created with The GIMP. Not part of the installed application logo;
- shipped in the source tree only.
 
 License: GPL-3+
  This program is free software; you can redistribute it and/or modify

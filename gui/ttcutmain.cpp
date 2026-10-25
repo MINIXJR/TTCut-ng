@@ -26,6 +26,7 @@
 // class declaration for the main window class
 #include "ttcentredtitlestyle.h"
 #include "ttcutmainwindow.h"
+#include "ttthemedicon.h"
 
 #include "../common/ttmessagelogger.h"
 #include "../common/ttcut.h"
@@ -96,6 +97,11 @@ int main( int argc, char **argv )
     // "Unknown Organization" — which is where TTQuickJumpDialog's size used to
     // land, in a second file next to the real one.
     a.setOrganizationName("TTCut-ng");
+    // Window icon for X11 and the title bar; on Wayland the compositor takes the
+    // icon from the desktop file the application names - debian/rules installs
+    // ttcut.desktop as ttcut-ng.desktop.
+    QApplication::setWindowIcon(ttAppIcon());
+    QGuiApplication::setDesktopFileName(QStringLiteral("ttcut-ng"));
 
     // Command line options
     QCommandLineParser parser;

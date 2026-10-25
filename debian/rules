@@ -33,7 +33,12 @@ override_dh_auto_install:
 	install -D -m 0755 tools/ttcut-pts-analyze/ttcut-pts-analyze $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-pts-analyze
 	install -D -m 0755 tools/ttcut-quality-check/ttcut-quality-check.py $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-quality-check
 	install -D -m 0644 ttcut.desktop $(CURDIR)/debian/ttcut-ng/usr/share/applications/ttcut-ng.desktop
-	install -D -m 0644 ui/pixmaps/ttcut_logo_001.png $(CURDIR)/debian/ttcut-ng/usr/share/pixmaps/ttcut-ng.png
+	# Application icon: hicolor theme, one PNG per size (16-32 px are the simplified
+	# small drawing) plus the scalable SVG - see tools/logo/render-icons.sh
+	for n in 16 22 24 32 48 64 128 256 512; do \
+		install -D -m 0644 ui/pixmaps/icons/$$n/ttcut-ng.png $(CURDIR)/debian/ttcut-ng/usr/share/icons/hicolor/$${n}x$$n/apps/ttcut-ng.png; \
+	done
+	install -D -m 0644 ui/pixmaps/ttcut-ng.svg $(CURDIR)/debian/ttcut-ng/usr/share/icons/hicolor/scalable/apps/ttcut-ng.svg
 	# Install translation files
 	install -d $(CURDIR)/debian/ttcut-ng/usr/share/ttcut-ng/trans
 	install -D -m 0644 trans/*.qm $(CURDIR)/debian/ttcut-ng/usr/share/ttcut-ng/trans/
