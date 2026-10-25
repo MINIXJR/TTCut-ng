@@ -513,6 +513,7 @@ diag_tool(test_pulse_animation    WIDGETS SOURCES)
 diag_tool(test_cutlist_minsize    AV WIDGETS SOURCES)
 diag_tool(test_output_name        AV WIDGETS SOURCES)
 diag_tool(test_mux_script         AV WIDGETS SOURCES)
+diag_tool(test_logo_render)
 diag_tool(test_mpeg2_framerate    AV WIDGETS SOURCES)
 diag_tool(test_project_missing_video AV WIDGETS SOURCES)
 diag_tool(test_pulse_stylesheet   WIDGETS SOURCES
@@ -557,7 +558,7 @@ add_custom_target(diag DEPENDS
   test_frameindex_dump test_au_count_match test_h26x_idr_before test_h26x_framerate test_framerate_hint test_mpeg2_decoder_contract test_subtitle_core test_logging test_navigator_refresh test_slider_latency test_keyframe_preview_identity test_logo_roi test_open_cancel test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args
   test_mpv_channels test_mkvmux_inputs test_mkvmux test_mux_script test_partial_track
-  test_mka_interleave test_mpeg2_framerate test_project_missing_video
+  test_mka_interleave test_mpeg2_framerate test_project_missing_video test_logo_render
   test_abort_after_finish test_acmod_majority test_audio_order_reset
   test_auto_anomaly_scan_trigger test_cutlist_minsize test_decode_cancel
   test_decode_cancel_yuv test_mpeg2order test_output_name
