@@ -256,6 +256,20 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   steht noch in `TTCutMainWindow::startAnalysisTask` und beim Start der Suche
   (`TTCutMainWindow`, `mpRunningSearch`) — dort nicht gemessen. Lösungsform:
   `startOwned`. Gate-Vorbild: `open_cancel_index_264_repeat`.
+- **Suche meldet einen echten Fehler als Abbruch** (Rest von Teil B der
+  Schnitt-Ausgangs-Arbeit, `docs/completed-work.md`; 2026-10-25 nur aus dem
+  Code gelesen, nicht gemessen). `TTThreadTask::run()` sendet für
+  `TTException` wie für `TTAbortException` `aborted`; den Grund hält es seit
+  `0bd07c93` in `failureMessage()` fest und schreibt ihn ins
+  Log. Der Pool-Weg und `TTCurrentFrame` lesen ihn, die Suche nicht: der
+  `aborted`-Empfänger in `TTCutMainWindow` (beim Start der Suche, neben
+  `mpRunningSearch = task`) ruft `finished(-1, true)`, und
+  `finishDirectedSearch` zeigt dann „… search aborted“. Lösungsform: im
+  `aborted`-Empfänger `task->failureMessage()` auswerten und den Grund statt
+  „abgebrochen“ melden. Dass der Task dort noch lebt, ist wegen des
+  Wettrennens im Eintrag oben (`deleteLater` des Besitzers) nicht gesichert —
+  deshalb zusammen mit der Umstellung auf `startOwned` angehen; beide
+  betreffen dieselben Verbindungen.
 - **Ton- und Untertitel-Öffnen: Abbruch vor dem Stream wirkt nicht**
   (2026-10-17, nur aus dem Code gelesen, nicht gemessen). `TTOpenAudioTask`
   und `TTOpenSubtitleTask` prüfen `isAborted()` nirgends; kommt der Abbruch,
