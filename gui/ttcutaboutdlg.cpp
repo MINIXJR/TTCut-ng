@@ -13,6 +13,7 @@
 // ----------------------------------------------------------------------------
 
 #include "ttcutaboutdlg.h"
+#include "ttthemedicon.h"
 
 
 TTCutAboutDlg::TTCutAboutDlg(QWidget* parent)
@@ -20,6 +21,7 @@ TTCutAboutDlg::TTCutAboutDlg(QWidget* parent)
 {
 
   setupUi( this );
+  lbLogo->setPixmap(ttAppIcon().pixmap(QSize(128, 128)));
   
   // signals and slot connection
   // ------------------------------------------------------------------

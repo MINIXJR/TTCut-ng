@@ -6,7 +6,7 @@
     <x>0</x>
     <y>0</y>
     <width>475</width>
-    <height>600</height>
+    <height>734</height>
    </rect>
   </property>
   <property name="sizePolicy" >
@@ -18,13 +18,13 @@
   <property name="minimumSize" >
    <size>
     <width>475</width>
-    <height>600</height>
+    <height>734</height>
    </size>
   </property>
   <property name="maximumSize" >
    <size>
     <width>475</width>
-    <height>600</height>
+    <height>734</height>
    </size>
   </property>
   <property name="windowTitle" >
@@ -49,7 +49,20 @@
    <property name="verticalSpacing" >
     <number>6</number>
    </property>
-   <item row="1" column="0" >
+   <item row="0" column="0" >
+    <widget class="QLabel" name="lbLogo" >
+     <property name="minimumSize" >
+      <size>
+       <width>128</width>
+       <height>128</height>
+      </size>
+     </property>
+     <property name="alignment" >
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0" >
     <widget class="QGroupBox" name="gbGPL" >
      <property name="sizePolicy" >
       <sizepolicy vsizetype="Minimum" hsizetype="Preferred" >
@@ -479,7 +492,7 @@ p, li { white-space: pre-wrap; }
      </layout>
     </widget>
    </item>
-   <item row="2" column="0" >
+   <item row="3" column="0" >
     <layout class="QHBoxLayout" >
      <property name="spacing" >
       <number>6</number>
@@ -524,7 +537,7 @@ p, li { white-space: pre-wrap; }
      </item>
     </layout>
    </item>
-   <item row="0" column="0" >
+   <item row="1" column="0" >
     <widget class="QGroupBox" name="gbAbout" >
      <property name="sizePolicy" >
       <sizepolicy vsizetype="Minimum" hsizetype="Preferred" >

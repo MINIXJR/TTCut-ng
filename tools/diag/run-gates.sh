@@ -182,6 +182,7 @@ audiofix_assemble      unit  120  -
 ac3fix_contract        unit  120  -
 screenshots_script     unit  60   -
 logo                   unit  120  test_logo_render
+app_icon               unit  60   test_app_icon
 h264_leading           tux   600  test_h264_leading
 sar                    tux   120  test_sar
 decode_cancel          tux   300  test_decode_cancel
@@ -526,6 +527,7 @@ gate_screenshots_script() {
 }
 gate_ac3fix_contract()       { need "$AC3FIX" "$DEMUX"; "$D/gate_ac3fix_contract.sh" "$AC3FIX" "$DEMUX" "$W"; }
 gate_logo()                  { "$D/gate_logo.sh" "$ROOT" "$W"; }
+gate_app_icon()              { "$D/test_app_icon"; }
 
 # ---- tier tux ----------------------------------------------------------------
 # Only the progressive fixture has a documented drop count (0, IDR start); the
