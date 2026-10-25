@@ -1,3 +1,5 @@
+<p align="center"><img src="ui/pixmaps/icons/128/ttcut-ng.png" alt="TTCut-ng logo" width="128" height="128"></p>
+
 # TTCut-ng
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
@@ -101,9 +103,10 @@ Issues und Pull Requests sind willkommen.
 
 Ursprünglich basierend auf TTCut von B. Altendorf (2005-2008).
 
-Das Tux-Maskottchen (`ui/pixmaps/Tux.svg`) wurde 1996 von Larry Ewing
-(`lewing@isc.tamu.edu`) mit The GIMP erstellt — Details und die vollständige
-Erlaubnis in [CREDITS.md](CREDITS.md).
+Das Tux-Maskottchen im Programm-Logo (`ui/pixmaps/Tux.svg`, unverändert) wurde
+1996 von Larry Ewing (`lewing@isc.tamu.edu`) mit The GIMP erstellt; die
+Vektorfassung stammt von Larry Ewing, Simon Budig und Garrett LeSage — Details
+und die vollständige Erlaubnis in [CREDITS.md](CREDITS.md).
 
 ## Lizenz
 
