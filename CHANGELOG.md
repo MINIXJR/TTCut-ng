@@ -2,6 +2,40 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.86.6 (2026-10-29)
+
+**Keyboard shortcuts for menus and playback, reverse playback starts at once**
+
+### Added
+- **The menu entries have keyboard shortcuts.** New, Open, Save, Save as,
+  Exit, Settings and Keyboard Shortcuts use the standard keys of the
+  desktop (for example Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctrl+Q, F1).
+  The menus and their entries can be opened with Alt and the underlined
+  letter.
+- **Playback keys as in other video editors:** Space starts and stops like
+  the play button, L starts playback and then speeds it up, J slows it down
+  and on into reverse, K stops. Ctrl+G opens the time warp dialog, Del
+  deletes the selected cut while the cut list has the focus.
+- **The keyboard shortcuts dialog lists every key**, with the key names of
+  the desktop and the language in use.
+
+### Changed
+- **j and k no longer step single frames.** They are now playback keys; the
+  arrow keys and B/F step frames as before.
+
+### Fixed
+- **Reverse playback of MPEG-2 starts at once.** With a separate audio
+  file, J took seconds to start reversing, the later in the recording the
+  longer (over 12 s near the end of a 30-minute recording). The audio track
+  is now switched off while playing backwards and comes back when playback
+  goes forward again.
+- **Play after a reverse run to the start of the video plays normally.**
+  It ran backwards, at double speed and without sound, while the speed
+  display said 1×.
+- **The navigation keys work after a click into a list.** With the focus in
+  the cut list (or the video, audio, subtitle or stream-point list), I, P,
+  B, F, J, K, L, G and [ ] searched the list instead of moving in the video.
+
 ## v0.86.5 (2026-10-25)
 
 **New logo**

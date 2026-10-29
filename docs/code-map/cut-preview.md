@@ -1,5 +1,5 @@
 ---
-base_commit: 3fa8c16cd36a5f8f184d66209f986785b4a2621a
+base_commit: 6dd2d5585a25572facffdf41dafb423b2102bd93
 last_verified: 2026-10-17
 sources:
   - gui/ttcuttreeview.h

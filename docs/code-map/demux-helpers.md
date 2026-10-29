@@ -1,5 +1,5 @@
 ---
-base_commit: adcc21c5532964f19532d3e40890ff94e71ae29b
+base_commit: 6dd2d5585a25572facffdf41dafb423b2102bd93
 last_verified: 2026-10-14
 sources:
   - tools/ttcut-demux/ttcut-ocr-glyphs
