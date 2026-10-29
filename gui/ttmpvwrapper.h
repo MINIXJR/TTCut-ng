@@ -14,7 +14,10 @@
 #include <QObject>
 
 #include "../avstream/ttavtypes.h"
+#include <QList>
+#include <QPair>
 #include <QString>
+#include <QVariant>
 
 class ITTMpvBackend;
 class QWidget;
@@ -56,6 +59,19 @@ public:
   bool   isPlaying() const                  { return mPlaying; }
 
   void   setSpeed(double factor);            // ±-Faktor; <0 → play-dir=backward
+
+  //! The mpv properties setSpeed(\a factor) sets, in the order it sets them.
+  //! load() applies the list for 1× before every file, because these are
+  //! runtime properties: they outlive `loadfile` (measured 2026-10-28), so a
+  //! reverse run that ended at the file start would leave the next Play
+  //! running backwards, at 2×, muted and without its audio track.
+  //!
+  //! Reverse deselects the audio track (`aid=no`) before switching direction:
+  //! muting alone keeps mpv decoding an external audio ES backwards, which has
+  //! no index - on a 1800 s recording the reverse start took over 12 s
+  //! instead of 0.1-0.2 s (measured 2026-10-28, MP2 and AC3). Forward selects
+  //! it again with `aid=auto`.
+  static QList<QPair<QString, QVariant>> speedPropertiesFor(double factor);
   //! The value for mpv's `audio-channels` that this audio track should be
   //! played with, or an empty string when mpv is to be left alone.
   //!

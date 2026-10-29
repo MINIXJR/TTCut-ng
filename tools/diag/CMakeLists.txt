@@ -442,6 +442,10 @@ target_link_libraries(test_mpv_loadfile_args PRIVATE ttcut-core PkgConfig::MPV)
 # real libmpv instance.
 diag_tool(test_mpv_channels AV WIDGETS SOURCES)
 target_link_libraries(test_mpv_channels PRIVATE ttcut-core PkgConfig::MPV)
+# Same shape: the speed property list lives in TTMpvWrapper, part 2 drives a
+# real libmpv instance.
+diag_tool(test_mpv_speed AV WIDGETS SOURCES)
+target_link_libraries(test_mpv_speed PRIVATE ttcut-core PkgConfig::MPV)
 # Same rationale as test_h26xcut_abort: drives TTAVData::onDoCut()'s MPEG-2
 # branch (TTCutVideoTask on the pool, mplex for the mux stage), so it needs
 # the whole core library, not a curated source list.
@@ -564,7 +568,7 @@ add_custom_target(diag DEPENDS
   test_audiorepair_cut test_repairdialog_model test_audio_es_input test_donorfill_app
   test_frameindex_dump test_au_count_match test_h26x_idr_before test_h26x_framerate test_framerate_hint test_mpeg2_decoder_contract test_subtitle_core test_logging test_navigator_refresh test_slider_latency test_keyframe_preview_identity test_logo_roi test_open_cancel test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args
-  test_mpv_channels test_mkvmux_inputs test_mkvmux test_mux_script test_partial_track
+  test_mpv_channels test_mpv_speed test_mkvmux_inputs test_mkvmux test_mux_script test_partial_track
   test_mka_interleave test_mpeg2_framerate test_project_missing_video test_logo_render test_app_icon
   test_abort_after_finish test_acmod_majority test_audio_order_reset
   test_auto_anomaly_scan_trigger test_cutlist_minsize test_keyboard_shortcuts test_decode_cancel

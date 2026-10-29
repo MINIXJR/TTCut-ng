@@ -100,6 +100,11 @@ void TTMpvWrapper::load(const QString& file, double startSec,
 
   mBackend->start();
 
+  // Direction, speed, mute and audio track are runtime properties and survive
+  // loadfile: a reverse run that reached the file start would otherwise carry
+  // over into this file. Back to normal before loading.
+  setSpeed(1.0);
+
   // Start position, extra audio track, subtitle file and pause state are
   // passed as mpv CLI options. mpv applies them when it loads the file —
   // race-free, independent of when the IPC socket connects.
@@ -183,17 +188,29 @@ void TTMpvWrapper::finishPlayback()
   emit playerFinished();
 }
 
-void TTMpvWrapper::setSpeed(double factor)
+QList<QPair<QString, QVariant>> TTMpvWrapper::speedPropertiesFor(double factor)
 {
+  QList<QPair<QString, QVariant>> props;
   if (factor >= 0.0) {
-    mBackend->setProperty("play-dir", QString("forward"));
-    mBackend->setProperty("speed", factor == 0.0 ? 1.0 : factor);
+    props.append({QStringLiteral("play-dir"), QStringLiteral("forward")});
+    props.append({QStringLiteral("speed"),    factor == 0.0 ? 1.0 : factor});
+    props.append({QStringLiteral("aid"),      QStringLiteral("auto")});
   } else {
-    mBackend->setProperty("play-dir", QString("backward"));
-    mBackend->setProperty("speed", -factor);
+    // Deselect the audio track first, so mpv never starts decoding it
+    // backwards.
+    props.append({QStringLiteral("aid"),      QStringLiteral("no")});
+    props.append({QStringLiteral("play-dir"), QStringLiteral("backward")});
+    props.append({QStringLiteral("speed"),    -factor});
   }
   // Mute audio at any non-normal speed (fast forward / reverse)
-  mBackend->setProperty("mute", factor != 1.0);
+  props.append({QStringLiteral("mute"), factor != 1.0});
+  return props;
+}
+
+void TTMpvWrapper::setSpeed(double factor)
+{
+  for (const auto& p : speedPropertiesFor(factor))
+    mBackend->setProperty(p.first, p.second);
 }
 
 void TTMpvWrapper::setSubtitleFile(const QString& path)
