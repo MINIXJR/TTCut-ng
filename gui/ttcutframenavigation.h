@@ -40,6 +40,9 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void setThresholds(float blackThreshold, float sceneThreshold);
     void checkCutPosition(const TTAVItem* avData, int pos = -1);
     void keyPressEvent(QKeyEvent* e);
+    //! The letter and bracket keys of keyPressEvent. Item views take letters
+    //! for their type-ahead search, so TTCutMainWindow routes these here first.
+    static bool isLetterKey(int key);
 
   public slots:
     void onPrevIFrame();
@@ -79,6 +82,9 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void moveToEnd();
     void setMarker();
     void openQuickJump();
+    void shuttleBackward();
+    void shuttleStop();
+    void shuttleForward();
     void searchBlackFrame(int currentPos, int direction, float threshold);
     void abortBlackSearch();
     void searchSceneChange(int currentPos, int direction, float threshold);

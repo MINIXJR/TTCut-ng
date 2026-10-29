@@ -159,6 +159,7 @@ duplicate_cut          tux   600  test_duplicate_cut
 pool_abort             unit  120  test_pool_abort
 abort_after_finish     unit  120  test_abort_after_finish
 cutlist_minsize        unit  120  test_cutlist_minsize
+keyboard_shortcuts     unit  120  test_keyboard_shortcuts
 output_name            unit  120  test_output_name
 progressbar_reshow     unit  120  test_progressbar_reshow
 silence_unavailable    unit  120  test_silence_unavailable
@@ -208,6 +209,7 @@ hint_column            tux   300  test_hint_column
 audiocutter_paths      tux   300  test_audiocutter_paths
 mpv_loadfile_args      tux   300  test_mpv_loadfile_args
 mpv_channels           unit  300  test_mpv_channels
+mpv_speed              tux   300  test_mpv_speed
 subtitle_delay         tux   600  test_subtitle_delay
 audiorepair_persist    tux   600  test_audiorepair_persist
 donorfill_app          tux   600  test_donorfill_app
@@ -481,6 +483,7 @@ case_duplicate_cut_fits()   { need "$M2V"; need "$M2VFP"; "$D/test_duplicate_cut
 gate_pool_abort()            { "$D/test_pool_abort"; }
 gate_abort_after_finish()    { "$D/test_abort_after_finish"; }
 gate_cutlist_minsize()       { "$D/test_cutlist_minsize"; }
+gate_keyboard_shortcuts()    { "$D/test_keyboard_shortcuts"; }
 gate_output_name()           { "$D/test_output_name"; }
 gate_progressbar_reshow()    { "$D/test_progressbar_reshow"; }
 gate_silence_unavailable()   { "$D/test_silence_unavailable"; }
@@ -1037,6 +1040,7 @@ gate_audiocutter_paths() { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_aud
 # A subtitle path with a comma, a space and an umlaut (reference_mpv_loadfile_comma).
 gate_mpv_loadfile_args() { need "$V264" "$SRT"; mkdir -p "$W/kömma, tést"; cp "$SRT" "$W/kömma, tést/a,b_deu.srt"
                            "$D/test_mpv_loadfile_args" "$V264" "$W/kömma, tést/a,b_deu.srt"; }
+gate_mpv_speed()           { need "$M2V" "$MP2"; "$D/test_mpv_speed" "$M2V" "$MP2"; }
 gate_subtitle_delay()      { need "$A264"; "$D/test_subtitle_delay" "$A264" "$W"; }
 gate_audiorepair_persist() { need "$TESTDATA/tux_test.ttcut"; "$D/test_audiorepair_persist" "$W"; }
 gate_donorfill_app() { need "$TESTDATA/tux_test.264"; "$D/test_donorfill_app" "$W"; }

@@ -81,6 +81,12 @@ void onGotoFramePreview(int pos);
     void onMoveNumSteps(int);
     void onMoveToHome();
     void onMoveToEnd();
+    // Keyboard playback control: Space toggles like the play button, J/K/L
+    // work like the shuttle keys of video editors
+    void onTogglePlayback();
+    void onShuttleBackward();
+    void onShuttleStop();
+    void onShuttleForward();
 
   signals:
     void newFramePosition(int);

@@ -347,7 +347,7 @@
    </property>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
-     <string>Help</string>
+     <string>&amp;Help</string>
     </property>
     <addaction name="actionKeyboardShortcuts"/>
     <addaction name="separator"/>
@@ -355,7 +355,7 @@
    </widget>
    <widget class="QMenu" name="menuAction">
     <property name="title">
-     <string>Action</string>
+     <string>&amp;Action</string>
     </property>
     <addaction name="separator"/>
     <addaction name="actionSaveCurrentFrame"/>
@@ -364,11 +364,11 @@
    </widget>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>File</string>
+     <string>&amp;File</string>
     </property>
     <widget class="QMenu" name="menuRecentProjects">
      <property name="title">
-      <string>Recent Projects</string>
+      <string>&amp;Recent Projects</string>
      </property>
     </widget>
     <addaction name="actionOpenVideo"/>
@@ -395,16 +395,13 @@
      <normaloff>:/pixmaps/pixmaps/filenew_16.xpm</normaloff>:/pixmaps/pixmaps/filenew_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>New Project</string>
+    <string>&amp;New Project</string>
    </property>
    <property name="iconText">
     <string>New Project</string>
    </property>
    <property name="toolTip">
     <string>New Project</string>
-   </property>
-   <property name="shortcut">
-    <string/>
    </property>
   </action>
   <action name="actionFileOpen">
@@ -413,7 +410,7 @@
      <normaloff>:/pixmaps/pixmaps/fileopen_16.xpm</normaloff>:/pixmaps/pixmaps/fileopen_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>Open Project...</string>
+    <string>&amp;Open Project...</string>
    </property>
    <property name="iconText">
     <string>Open Project</string>
@@ -428,7 +425,7 @@
      <normaloff>:/pixmaps/pixmaps/filesave_16.xpm</normaloff>:/pixmaps/pixmaps/filesave_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>Save Project</string>
+    <string>&amp;Save Project</string>
    </property>
    <property name="iconText">
     <string>Save Project</string>
@@ -443,7 +440,7 @@
      <normaloff>:/pixmaps/pixmaps/filesaveas_16.xpm</normaloff>:/pixmaps/pixmaps/filesaveas_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>Save Project as...</string>
+    <string>Save Project &amp;as...</string>
    </property>
    <property name="iconText">
     <string>Save Project as</string>
@@ -458,7 +455,7 @@
      <normaloff>:/pixmaps/pixmaps/exit_16.xpm</normaloff>:/pixmaps/pixmaps/exit_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>Exit</string>
+    <string>E&amp;xit</string>
    </property>
   </action>
   <action name="actionSaveCurrentFrame">
@@ -467,7 +464,7 @@
      <normaloff>:/pixmaps/pixmaps/saveimage_16.xpm</normaloff>:/pixmaps/pixmaps/saveimage_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>Save current frame...</string>
+    <string>Save current &amp;frame...</string>
    </property>
   </action>
   <action name="actionSettings">
@@ -476,20 +473,17 @@
      <normaloff>:/pixmaps/pixmaps/settings_16.xpm</normaloff>:/pixmaps/pixmaps/settings_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>Settings...</string>
-   </property>
-   <property name="shortcut">
-    <string/>
+    <string>&amp;Settings...</string>
    </property>
   </action>
   <action name="actionAbout">
    <property name="text">
-    <string>About</string>
+    <string>&amp;About</string>
    </property>
   </action>
   <action name="actionKeyboardShortcuts">
    <property name="text">
-    <string>Keyboard Shortcuts...</string>
+    <string>&amp;Keyboard Shortcuts...</string>
    </property>
   </action>
   <action name="actionOpenVideo">
@@ -498,7 +492,7 @@
      <normaloff>:/pixmaps/pixmaps/fileopen_16.xpm</normaloff>:/pixmaps/pixmaps/fileopen_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>Open Video...</string>
+    <string>Open &amp;Video...</string>
    </property>
    <property name="iconText">
     <string>Open Video...</string>
@@ -513,7 +507,7 @@
      <normaloff>:/pixmaps/pixmaps/fileopen_16.xpm</normaloff>:/pixmaps/pixmaps/fileopen_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>Open Audio...</string>
+    <string>Open A&amp;udio...</string>
    </property>
    <property name="iconText">
     <string>Open Audio...</string>
@@ -528,7 +522,7 @@
      <normaloff>:/pixmaps/pixmaps/fileopen_16.xpm</normaloff>:/pixmaps/pixmaps/fileopen_16.xpm</iconset>
    </property>
    <property name="text">
-    <string>Open Subtitle...</string>
+    <string>Open Subti&amp;tle...</string>
    </property>
    <property name="iconText">
     <string>Open Subtitle...</string>

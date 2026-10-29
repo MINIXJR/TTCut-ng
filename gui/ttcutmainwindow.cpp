@@ -22,6 +22,8 @@
 #include <QTimer>
 #include <QFileInfo>
 #include <QThreadPool>
+#include <QShortcut>
+#include <QAbstractItemView>
 
 #include "ttcutmainwindow.h"
 #include "ttthemedicon.h"
@@ -299,6 +301,15 @@ void TTCutMainWindow::connectMenuSignals()
   connect(actionAbout,             &QAction::triggered, this, &TTCutMainWindow::onHelpAbout);
   connect(actionKeyboardShortcuts, &QAction::triggered, this, &TTCutMainWindow::onHelpKeyboardShortcuts);
 
+  // Standard keys: Qt picks the binding of the desktop (KDE, GNOME, ...)
+  actionFileNew->setShortcuts(QKeySequence::New);
+  actionFileOpen->setShortcuts(QKeySequence::Open);
+  actionFileSave->setShortcuts(QKeySequence::Save);
+  actionFileSaveAs->setShortcuts(QKeySequence::SaveAs);
+  actionExit->setShortcuts(QKeySequence::Quit);
+  actionSettings->setShortcuts(QKeySequence::Preferences);
+  actionKeyboardShortcuts->setShortcuts(QKeySequence::HelpContents);
+
   // recent files
   for (int i = 0; i < MaxRecentFiles; ++i) {
     recentFileAction[i] = new QAction(this);
@@ -341,6 +352,22 @@ void TTCutMainWindow::connectNavigationSignals()
   connect(navigation, &TTCutFrameNavigation::moveToHome,    currentFrame, &TTCurrentFrame::onMoveToHome);
   connect(navigation, &TTCutFrameNavigation::moveToEnd,     currentFrame, &TTCurrentFrame::onMoveToEnd);
   connect(navigation, &TTCutFrameNavigation::openQuickJump, this,         &TTCutMainWindow::onQuickJump);
+  connect(navigation, &TTCutFrameNavigation::shuttleBackward, currentFrame, &TTCurrentFrame::onShuttleBackward);
+  connect(navigation, &TTCutFrameNavigation::shuttleStop,     currentFrame, &TTCurrentFrame::onShuttleStop);
+  connect(navigation, &TTCutFrameNavigation::shuttleForward,  currentFrame, &TTCurrentFrame::onShuttleForward);
+
+  // Space as a window shortcut, not in keyPressEvent: a focused push button
+  // takes Space as its own click before keyPressEvent sees it. Text fields
+  // still get it - they claim Space through ShortcutOverride.
+  QShortcut* playShortcut = new QShortcut(QKeySequence(Qt::Key_Space), this);
+  connect(playShortcut, &QShortcut::activated, currentFrame, &TTCurrentFrame::onTogglePlayback);
+
+  // The letter keys of the navigation must work while a list has the focus;
+  // eventFilter() takes them from the item views of this window. Views of
+  // popups (combo box lists) have a window of their own and are left alone.
+  for (QAbstractItemView* view : findChildren<QAbstractItemView*>())
+    if (view->window() == this)
+      view->installEventFilter(this);
 }
 
 // Stream-point widget requests.
@@ -759,39 +786,72 @@ void TTCutMainWindow::onHelpAbout()
  */
 void TTCutMainWindow::onHelpKeyboardShortcuts()
 {
-  QString shortcuts = tr(
-    "<h3>Navigation</h3>"
-    "<table>"
-    "<tr><td><b>Left/Right</b></td><td>Previous/Next frame</td></tr>"
-    "<tr><td><b>j / k</b></td><td>Next / Previous frame (vim-style)</td></tr>"
-    "<tr><td><b>Ctrl+Left/Right</b></td><td>Jump %1 frames</td></tr>"
-    "<tr><td><b>Shift+Left/Right</b></td><td>Jump %2 frames</td></tr>"
-    "<tr><td><b>Alt+Left/Right</b></td><td>Jump %3 frames</td></tr>"
-    "<tr><td><b>Page Up/Down</b></td><td>Jump %4 frames</td></tr>"
-    "<tr><td><b>Home / g</b></td><td>Go to first frame</td></tr>"
-    "<tr><td><b>End / G</b></td><td>Go to last frame</td></tr>"
-    "</table>"
-    "<h3>Frame Types</h3>"
-    "<table>"
-    "<tr><td><b>I / Ctrl+I</b></td><td>Next / Previous I-frame</td></tr>"
-    "<tr><td><b>P / Ctrl+P</b></td><td>Next / Previous P- or I-frame</td></tr>"
-    "<tr><td><b>B / Ctrl+B</b></td><td>Next / Previous frame (B, P, or I)</td></tr>"
-    "<tr><td><b>F / Ctrl+F</b></td><td>Next / Previous frame (same as B)</td></tr>"
-    "</table>"
-    "<h3>Cutting</h3>"
-    "<table>"
-    "<tr><td><b>[</b></td><td>Set cut-in point</td></tr>"
-    "<tr><td><b>]</b></td><td>Set cut-out point</td></tr>"
-    "</table>"
-    "<h3>Mouse</h3>"
-    "<table>"
-    "<tr><td><b>Mouse wheel</b></td><td>Navigate frames</td></tr>"
-    "<tr><td><b>Ctrl+Wheel</b></td><td>Navigate faster</td></tr>"
-    "</table>"
-  ).arg(TTSettings::instance()->stepPlusCtrl())
-   .arg(TTSettings::instance()->stepPlusShift())
-   .arg(TTSettings::instance()->stepPlusAlt())
-   .arg(TTSettings::instance()->stepPgUpDown());
+  // Key names come from QKeySequence, so they follow the desktop and the Qt
+  // translation (Strg, Umschalt, Leertaste); the menu rows read the bound
+  // shortcut from the action itself and cannot drift from it.
+  auto key = [](QKeyCombination combination) {
+    return QKeySequence(combination).toString(QKeySequence::NativeText).toHtmlEscaped();
+  };
+  auto pair = [&key](QKeyCombination first, QKeyCombination second) {
+    return key(first) + " / " + key(second);
+  };
+  // A modifier on its own, for the rows that combine it with a mouse action
+  auto modifier = [](Qt::KeyboardModifier mod) {
+    const QString withKey = QKeySequence(mod | Qt::Key_A).toString(QKeySequence::NativeText);
+    return withKey.left(withKey.lastIndexOf('+')).toHtmlEscaped();
+  };
+  QString shortcuts;
+  auto section = [&shortcuts](const QString& title) {
+    if (!shortcuts.isEmpty()) shortcuts += "</table>";
+    shortcuts += "<h3>" + title.toHtmlEscaped() + "</h3><table>";
+  };
+  auto row = [&shortcuts](const QString& keys, const QString& what) {
+    shortcuts += "<tr><td><b>" + keys + "</b></td><td>" + what.toHtmlEscaped() + "</td></tr>";
+  };
+  auto actionRow = [&row](const QAction* action) {
+    QString what = action->text().remove('&');
+    if (what.endsWith("...")) what.chop(3);
+    row(action->shortcut().toString(QKeySequence::NativeText).toHtmlEscaped(), what);
+  };
+  const TTSettings* settings = TTSettings::instance();
+
+  section(tr("File and program"));
+  for (const QAction* action : {actionFileNew, actionFileOpen, actionFileSave, actionFileSaveAs,
+                                actionSettings, actionKeyboardShortcuts, actionExit})
+    if (!action->shortcut().isEmpty()) actionRow(action);
+  row(modifier(Qt::AltModifier) + tr("+underlined letter"), tr("Open a menu"));
+
+  section(tr("Playback"));
+  row(key(Qt::Key_Space), tr("Start / stop playback"));
+  row(key(Qt::Key_L), tr("Start playback, while playing: faster"));
+  row(key(Qt::Key_J), tr("Slower while playing, down to reverse"));
+  row(key(Qt::Key_K), tr("Stop playback"));
+
+  section(tr("Navigation"));
+  row(pair(Qt::Key_Left, Qt::Key_Right), tr("Previous / next frame"));
+  row(pair(Qt::CTRL | Qt::Key_Left, Qt::CTRL | Qt::Key_Right), tr("Jump %1 frames").arg(settings->stepPlusCtrl()));
+  row(pair(Qt::SHIFT | Qt::Key_Left, Qt::SHIFT | Qt::Key_Right), tr("Jump %1 frames").arg(settings->stepPlusShift()));
+  row(pair(Qt::ALT | Qt::Key_Left, Qt::ALT | Qt::Key_Right), tr("Jump %1 frames").arg(settings->stepPlusAlt()));
+  row(pair(Qt::Key_PageUp, Qt::Key_PageDown), tr("Jump %1 frames").arg(settings->stepPgUpDown()));
+  row(pair(Qt::Key_Home, Qt::Key_G), tr("Go to first frame"));
+  row(pair(Qt::Key_End, Qt::SHIFT | Qt::Key_G), tr("Go to last frame"));
+  row(key(Qt::CTRL | Qt::Key_G), tr("Time warp: jump to a frame or time"));
+
+  section(tr("Frame Types"));
+  row(pair(Qt::Key_I, Qt::CTRL | Qt::Key_I), tr("Next / previous I-frame"));
+  row(pair(Qt::Key_P, Qt::CTRL | Qt::Key_P), tr("Next / previous P- or I-frame"));
+  row(pair(Qt::Key_B, Qt::CTRL | Qt::Key_B), tr("Next / previous frame (B, P, or I)"));
+  row(pair(Qt::Key_F, Qt::CTRL | Qt::Key_F), tr("Next / previous frame (same as B)"));
+
+  section(tr("Cutting"));
+  row(key(Qt::Key_BracketLeft), tr("Set cut-in point"));
+  row(key(Qt::Key_BracketRight), tr("Set cut-out point"));
+  row(key(Qt::Key_Delete), tr("Delete the selected cut (in the cut list)"));
+
+  section(tr("Mouse"));
+  row(tr("Mouse wheel"), tr("Navigate frames"));
+  row(modifier(Qt::ControlModifier) + tr("+Wheel"), tr("Navigate faster"));
+  shortcuts += "</table>";
 
   QMessageBox msgBox(this);
   msgBox.setWindowTitle(tr("Keyboard Shortcuts"));
@@ -944,6 +1004,18 @@ bool TTCutMainWindow::sliderHeld() const
 
 bool TTCutMainWindow::eventFilter(QObject* watched, QEvent* event)
 {
+  // An item view would use I/P/B/F, J/K/L, G and [ ] for its type-ahead
+  // search; they go to the frame navigation instead. Other letters still
+  // search the list. Inline editors are widgets of their own and get their
+  // keys directly, so typing into them is not affected.
+  if (event->type() == QEvent::KeyPress && qobject_cast<QAbstractItemView*>(watched)) {
+    auto* keyEvent = static_cast<QKeyEvent*>(event);
+    if (TTCutFrameNavigation::isLetterKey(keyEvent->key())) {
+      navigation->keyPressEvent(keyEvent);
+      return true;
+    }
+  }
+
   if (watched == streamNavigator->slider()) {
     if (event->type() == QEvent::MouseButtonPress) {
       mSliderMousePressed = true;
