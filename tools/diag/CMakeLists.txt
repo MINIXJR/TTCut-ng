@@ -511,6 +511,11 @@ target_link_libraries(test_open_cancel PRIVATE ttcut-core)
 diag_tool(test_audio_header_strings AV WIDGETS SOURCES)
 diag_tool(test_pulse_animation    WIDGETS SOURCES)
 diag_tool(test_cutlist_minsize    AV WIDGETS SOURCES)
+# QTest drives the keys through ShortcutOverride and the shortcut map;
+# Qt6Test ships with qt6-base-dev like the other Qt modules.
+find_package(Qt6 REQUIRED COMPONENTS Test)
+diag_tool(test_keyboard_shortcuts AV WIDGETS SOURCES)
+target_link_libraries(test_keyboard_shortcuts PRIVATE Qt6::Test)
 diag_tool(test_output_name        AV WIDGETS SOURCES)
 diag_tool(test_mux_script         AV WIDGETS SOURCES)
 diag_tool(test_logo_render)
@@ -537,6 +542,7 @@ target_link_libraries(test_audio_order_reset PRIVATE ttcut-core)
 target_link_libraries(test_quickjump_thumbheight PRIVATE ttcut-core)
 target_link_libraries(test_auto_anomaly_scan_trigger PRIVATE ttcut-core)
 target_link_libraries(test_cutlist_minsize PRIVATE ttcut-core)
+target_link_libraries(test_keyboard_shortcuts PRIVATE ttcut-core)
 target_link_libraries(test_output_name PRIVATE ttcut-core)
 target_link_libraries(test_mux_script PRIVATE ttcut-core)
 target_link_libraries(test_mpeg2_framerate PRIVATE ttcut-core)
@@ -561,7 +567,7 @@ add_custom_target(diag DEPENDS
   test_mpv_channels test_mkvmux_inputs test_mkvmux test_mux_script test_partial_track
   test_mka_interleave test_mpeg2_framerate test_project_missing_video test_logo_render test_app_icon
   test_abort_after_finish test_acmod_majority test_audio_order_reset
-  test_auto_anomaly_scan_trigger test_cutlist_minsize test_decode_cancel
+  test_auto_anomaly_scan_trigger test_cutlist_minsize test_keyboard_shortcuts test_decode_cancel
   test_decode_cancel_yuv test_mpeg2order test_output_name
   test_quickjump_thumbheight test_sar test_segshape test_smartcut_seam
   test_stale_abort

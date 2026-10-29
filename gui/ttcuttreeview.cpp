@@ -832,6 +832,10 @@ void TTCutTreeView::createActions()
 
   mpItemDeleteAction = ttMakeAction(this, tr("&Delete"), "edit-delete", QStyle::SP_TrashIcon, tr("Remove selected cut from list"));
   connect(mpItemDeleteAction, &QAction::triggered, this, &TTCutTreeView::onEntryDelete);
+  // Del deletes only while the cut list has the focus; the context menu shows the key
+  mpItemDeleteAction->setShortcuts(QKeySequence::Delete);
+  mpItemDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  videoCutList->addAction(mpItemDeleteAction);
 
   mpItemDuplicateAction = ttMakeAction(this, tr("Duplicate Cut"), "edit-copy", QStyle::SP_FileDialogNewFolder, tr("Duplicate the selected cut"));
   connect(mpItemDuplicateAction, &QAction::triggered, this, &TTCutTreeView::onEntryDuplicate);

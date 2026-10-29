@@ -338,21 +338,28 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
     break;
 
   // ---------------------------------------------------------------------------
-  // Vim-like navigation: j/k for frame, g/G for home/end
+  // Playback shuttle as in video editors: J slower/reverse, K stop, L play/faster
   // ---------------------------------------------------------------------------
   case Qt::Key_J:
-    // j = next frame (vim: down/forward)
-    emit nextBFrame();
+    if (e->modifiers() == Qt::NoModifier)
+      emit shuttleBackward();
     break;
 
   case Qt::Key_K:
-    // k = previous frame (vim: up/backward)
-    emit prevBFrame();
+    if (e->modifiers() == Qt::NoModifier)
+      emit shuttleStop();
+    break;
+
+  case Qt::Key_L:
+    if (e->modifiers() == Qt::NoModifier)
+      emit shuttleForward();
     break;
 
   case Qt::Key_G:
-    // G (shift+g) = end, g = home
-    if (e->modifiers() == Qt::ShiftModifier)
+    // Ctrl+G = time warp dialog, Shift+G = end, g = home
+    if (e->modifiers() == Qt::ControlModifier)
+      emit openQuickJump();
+    else if (e->modifiers() == Qt::ShiftModifier)
       emit moveToEnd();
     else
       emit moveToHome();
@@ -373,6 +380,18 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 
   default:
     break;
+  }
+}
+
+bool TTCutFrameNavigation::isLetterKey(int key)
+{
+  switch (key) {
+  case Qt::Key_I: case Qt::Key_P: case Qt::Key_B: case Qt::Key_F:
+  case Qt::Key_J: case Qt::Key_K: case Qt::Key_L: case Qt::Key_G:
+  case Qt::Key_BracketLeft: case Qt::Key_BracketRight:
+    return true;
+  default:
+    return false;
   }
 }
 

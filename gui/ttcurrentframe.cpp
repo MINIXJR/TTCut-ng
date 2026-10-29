@@ -1111,6 +1111,37 @@ void TTCurrentFrame::onPlayFaster()
   }
 }
 
+//! Space: the same as a click on the play/stop button. click() does nothing
+//! while the button is disabled (no stream, playback mux running).
+void TTCurrentFrame::onTogglePlayback()
+{
+  pbPlayVideo->click();
+}
+
+//! J: one speed step down, into reverse (-2x, -4x). Stopped: nothing - there
+//! is no playback to slow down, and starting in reverse is not supported.
+void TTCurrentFrame::onShuttleBackward()
+{
+  if (mPlayer && mPlayer->isPlaying())
+    onPlaySlower();
+}
+
+//! K: stop a running playback (TTCut-ng has no pause).
+void TTCurrentFrame::onShuttleStop()
+{
+  if (mPlayer && mPlayer->isPlaying())
+    pbPlayVideo->click();
+}
+
+//! L: start the playback, or one speed step up while it runs.
+void TTCurrentFrame::onShuttleForward()
+{
+  if (mPlayer && mPlayer->isPlaying())
+    onPlayFaster();
+  else
+    pbPlayVideo->click();
+}
+
 //! Apply current speed step to the player and update the label
 void TTCurrentFrame::applySpeedStep()
 {

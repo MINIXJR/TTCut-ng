@@ -159,6 +159,7 @@ duplicate_cut          tux   600  test_duplicate_cut
 pool_abort             unit  120  test_pool_abort
 abort_after_finish     unit  120  test_abort_after_finish
 cutlist_minsize        unit  120  test_cutlist_minsize
+keyboard_shortcuts     unit  120  test_keyboard_shortcuts
 output_name            unit  120  test_output_name
 progressbar_reshow     unit  120  test_progressbar_reshow
 silence_unavailable    unit  120  test_silence_unavailable
@@ -481,6 +482,7 @@ case_duplicate_cut_fits()   { need "$M2V"; need "$M2VFP"; "$D/test_duplicate_cut
 gate_pool_abort()            { "$D/test_pool_abort"; }
 gate_abort_after_finish()    { "$D/test_abort_after_finish"; }
 gate_cutlist_minsize()       { "$D/test_cutlist_minsize"; }
+gate_keyboard_shortcuts()    { "$D/test_keyboard_shortcuts"; }
 gate_output_name()           { "$D/test_output_name"; }
 gate_progressbar_reshow()    { "$D/test_progressbar_reshow"; }
 gate_silence_unavailable()   { "$D/test_silence_unavailable"; }

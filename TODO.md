@@ -589,6 +589,13 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
     demselben Ton.
 ## Low Priority
 
+- **H.265-Rückwärtswiedergabe startet erst nach ~2 s** (gemessen 2026-10-28,
+  nicht untersucht). mpv ohne Fenster auf dem Abspiel-MKV, wie
+  `repro_playback_mkv` es baut: Tux-4K-HEVC (`tux_hevc4k_cra_test.265` +
+  `.ac3`) bei 100 s, 2 s vorwärts, dann `play-dir=backward`, `speed=2` —
+  2,1 s bis `time-pos` sinkt, mit abgewählter Tonspur 1,9 s. Der Ton ist
+  also nicht die Ursache; H.264 im Abspiel-MKV startet nach 0,1–0,2 s.
+  Ursache offen, nur das Tux-4K-Material gemessen.
 - **Zu prüfen/entscheiden: Verschiebe-Knopf in der Vorschau bei
   AC3-Formatwechsel am Schnittrand** (Frage des Anwenders, 2026-10-11; nichts
   entschieden, nichts gebaut).
