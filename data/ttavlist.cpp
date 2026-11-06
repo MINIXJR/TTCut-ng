@@ -186,6 +186,32 @@ void TTAVItem::onAudioDelayChanged(int index, int delayMs)
   mpAudioList->update(item, updated);
 }
 
+void TTAVItem::onAudioTrackPropsChanged(int index, const TTTrackProps& props)
+{
+  if (index < 0 || index >= audioCount()) return;
+  TTAudioItem item = mpAudioList->at(index);
+  if (item.getTrackProps() == props) return;
+  TTAudioItem updated(item);
+  updated.setTrackProps(props);
+  mpAudioList->update(item, updated);
+}
+
+void TTAVItem::onAudioTrackNameChanged(int index, const QString& name)
+{
+  if (index < 0 || index >= audioCount()) return;
+  TTTrackProps props = mpAudioList->at(index).getTrackProps();
+  props.name = name;
+  onAudioTrackPropsChanged(index, props);
+}
+
+void TTAVItem::onAudioTrackFlagChanged(int index, int flag, bool on)
+{
+  if (index < 0 || index >= audioCount()) return;
+  TTTrackProps props = mpAudioList->at(index).getTrackProps();
+  props.setFlag(static_cast<TTTrackProps::Flag>(flag), on);
+  onAudioTrackPropsChanged(index, props);
+}
+
 /* ///////////////////////////////////////////////////////////////////////////////////////
  *
  */
@@ -222,6 +248,32 @@ void TTAVItem::onSubtitleDelayChanged(int index, int delayMs)
   TTSubtitleItem updated(item);
   updated.setDelayMs(delayMs);
   mpSubtitleList->update(item, updated);
+}
+
+void TTAVItem::onSubtitleTrackPropsChanged(int index, const TTTrackProps& props)
+{
+  if (index < 0 || index >= subtitleCount()) return;
+  TTSubtitleItem item = mpSubtitleList->at(index);
+  if (item.getTrackProps() == props) return;
+  TTSubtitleItem updated(item);
+  updated.setTrackProps(props);
+  mpSubtitleList->update(item, updated);
+}
+
+void TTAVItem::onSubtitleTrackNameChanged(int index, const QString& name)
+{
+  if (index < 0 || index >= subtitleCount()) return;
+  TTTrackProps props = mpSubtitleList->at(index).getTrackProps();
+  props.name = name;
+  onSubtitleTrackPropsChanged(index, props);
+}
+
+void TTAVItem::onSubtitleTrackFlagChanged(int index, int flag, bool on)
+{
+  if (index < 0 || index >= subtitleCount()) return;
+  TTTrackProps props = mpSubtitleList->at(index).getTrackProps();
+  props.setFlag(static_cast<TTTrackProps::Flag>(flag), on);
+  onSubtitleTrackPropsChanged(index, props);
 }
 
 /* ///////////////////////////////////////////////////////////////////////////////////////

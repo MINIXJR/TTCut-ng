@@ -57,6 +57,7 @@ TTAudioItem::TTAudioItem(const TTAudioItem& item)
   audioLength   = item.audioLength;
   mAudioDelayMs = item.mAudioDelayMs;
   mLanguage     = item.mLanguage;
+  mTrackProps   = item.mTrackProps;
 }
 
 /*!
@@ -87,6 +88,7 @@ const TTAudioItem& TTAudioItem::operator=(const TTAudioItem& item)
   audioLength   = item.audioLength;
   mAudioDelayMs = item.mAudioDelayMs;
   mLanguage     = item.mLanguage;
+  mTrackProps   = item.mTrackProps;
 
   return *this;
 }

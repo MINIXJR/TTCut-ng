@@ -20,8 +20,8 @@ class QTreeWidgetItem;
 //! Common part of the three file-list widgets (video, audio, subtitle): the
 //! button row and the context menu (insert / up / delete / down), the
 //! selection-based up/down/remove slots that turn into the removeItem/
-//! swapItems signals, and the per-row delay spin box and language combo of
-//! the track lists. Each subclass keeps its own .ui form and hands the
+//! swapItems signals, and the per-row delay spin box, language combo, track
+//! name edit and MKV flag check boxes of the track lists. Each subclass keeps its own .ui form and hands the
 //! widgets over with bindListWidgets() after setupUi(); the model wiring
 //! (which TTAVItem/TTAVData signals feed the list) stays in the subclass
 //! because the signal sets differ.
@@ -39,6 +39,8 @@ class TTTrackTreeView : public QWidget
     void swapItems(int oldIndex, int newIndex);
     void languageChanged(int index, const QString& language);
     void delayChanged(int index, int delayMs);
+    void trackNameChanged(int index, const QString& name);
+    void trackFlagChanged(int index, int flag, bool on);   // flag: TTTrackProps::Flag
 
   public slots:
     virtual void onItemUp();
@@ -71,6 +73,10 @@ class TTTrackTreeView : public QWidget
     //! edit time (rows move when items are swapped or removed).
     void addDelaySpin(QTreeWidgetItem* item, int column, int delayMs, const QString& toolTip);
     void addLanguageCombo(QTreeWidgetItem* item, int column, const QString& currentLang);
+    //! MKV track name; emitted when editing is finished, not per keystroke.
+    void addTrackNameEdit(QTreeWidgetItem* item, int column, const QString& name, const QString& toolTip);
+    //! One MKV track flag (TTTrackProps::Flag) as a centred check box.
+    void addTrackFlagCheck(QTreeWidgetItem* item, int column, int flag, bool on, const QString& toolTip);
 
     QTreeWidget* mpListView = nullptr;
 

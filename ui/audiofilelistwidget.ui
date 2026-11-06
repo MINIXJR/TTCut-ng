@@ -275,6 +275,21 @@
       </property>
      </column>
      <column>
+      <property name ="text" >
+       <string>Track name</string>
+      </property>
+     </column>
+     <column>
+      <property name ="text" >
+       <string>Original</string>
+      </property>
+     </column>
+     <column>
+      <property name ="text" >
+       <string>Visually impaired</string>
+      </property>
+     </column>
+     <column>
       <property name="text" >
        <string notr="true"/>
       </property>

@@ -163,10 +163,19 @@ class TTAVItem : public QObject
     void onSwapAudioItems(int oldIndex, int newIndex);
     void onAudioLanguageChanged(int index, const QString& language);
     void onAudioDelayChanged(int index, int delayMs);
+    //! MKV track name / flags (TTTrackProps). The name and flag slots are
+    //! what the track list's editors drive; the props slot sets both at once
+    //! (project load).
+    void onAudioTrackPropsChanged(int index, const TTTrackProps& props);
+    void onAudioTrackNameChanged(int index, const QString& name);
+    void onAudioTrackFlagChanged(int index, int flag, bool on);
     void onRemoveSubtitleItem(int index);
     void onSwapSubtitleItems(int oldIndex, int newIndex);
     void onSubtitleLanguageChanged(int index, const QString& language);
     void onSubtitleDelayChanged(int index, int delayMs);
+    void onSubtitleTrackPropsChanged(int index, const TTTrackProps& props);
+    void onSubtitleTrackNameChanged(int index, const QString& name);
+    void onSubtitleTrackFlagChanged(int index, int flag, bool on);
 
   signals:
 		void updated(TTAVItem* avItem);

@@ -36,6 +36,8 @@ struct TTMuxTaskParams
   QStringList subtitleFiles;         // cut subtitle files, in track order
   QStringList audioLanguages;        // ISO 639-2/B tags, per audio file
   QStringList subtitleLanguages;     // ISO 639-2/B tags, per subtitle file
+  TTTrackPropsList audioTrackProps;     // MKV track name/flags, per audio file
+  TTTrackPropsList subtitleTrackProps;  // MKV track name/flags, per subtitle file
   QString     chapterFile;           // empty = no chapters
   TTMkvVideoOptions video;           // frame rate, PAFF, codec, A/V offset
   qint64      totalDurationMs = 0;   // 0 = do not set one (chapter end calc)

@@ -24,6 +24,7 @@
 #include <atomic>
 #include <functional>
 #include "../avstream/ttavtypes.h"
+#include "../common/tttrackprops.h"
 
 // Libav forward decls — keep heavy headers out of this public header.
 struct AVFormatContext;
@@ -101,6 +102,12 @@ public:
     void setAudioLanguages(const QStringList& languages);
     void setSubtitleLanguages(const QStringList& languages);
 
+    // MKV track name and flags per audio/subtitle file, same indexing as the
+    // language lists (missing entries = no name, no flags). Also used by
+    // muxAudioOnly().
+    void setAudioTrackProps(const TTTrackPropsList& props) { mAudioTrackProps = props; }
+    void setSubtitleTrackProps(const TTTrackPropsList& props) { mSubtitleTrackProps = props; }
+
     // A/V sync offset in milliseconds (from .info file)
     void setAudioSyncOffset(int offsetMs);
 
@@ -157,6 +164,8 @@ private:
     QVector<int> mVideoDisplayOrder;  // display-PTS order for video ES (may be empty)
     QStringList mAudioLanguages;
     QStringList mSubtitleLanguages;
+    TTTrackPropsList mAudioTrackProps;
+    TTTrackPropsList mSubtitleTrackProps;
     bool        mRequireAllInputs = true;
     QStringList mDroppedInputs;
 
@@ -214,6 +223,7 @@ private:
     static bool addMediaInputs(AVFormatContext* outCtx,
                         const QStringList& files,
                         const QStringList& languages,
+                        const TTTrackPropsList& trackProps,
                         int mediaType,
                         int& nextOutIdx,
                         QList<MuxInput>& inputs,

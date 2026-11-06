@@ -103,6 +103,8 @@ class TTAVData : public QObject
     void      setPendingAudioRepairs(TTAVItem* avItem, int order, const QList<TTAudioRepairItem>& repairs);
     void      setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QString& lang);
     void      setPendingSubtitleDelay(TTAVItem* avItem, int order, int delayMs);
+    void      setPendingAudioTrackProps(TTAVItem* avItem, int order, const TTTrackProps& props);
+    void      setPendingSubtitleTrackProps(TTAVItem* avItem, int order, const TTTrackProps& props);
     void      doCutPreview(TTCutList* cutList);
 
     int       totalProcess() const;
@@ -349,6 +351,10 @@ class TTAVData : public QObject
     // Pending delay overrides from project file (applied after async stream open)
     QMap<QPair<TTAVItem*, int>, int> mPendingAudioDelays;
     QMap<QPair<TTAVItem*, int>, int> mPendingSubtitleDelays;
+
+    // Pending MKV track name/flags from project file (same mechanism)
+    QMap<QPair<TTAVItem*, int>, TTTrackProps> mPendingAudioTrackProps;
+    QMap<QPair<TTAVItem*, int>, TTTrackProps> mPendingSubtitleTrackProps;
 
     // Pending audio repair items from project file (applied after async
     // stream open, same mechanism as mPendingAudioDelays).

@@ -300,14 +300,17 @@ void TTH26xCutTask::runCut()
 
   // Collect audio languages from data model
   QStringList cutAudioLanguages;
+  TTTrackPropsList cutAudioTrackProps;
   for (int i = 0; i < mpAVItem->audioCount(); i++) {
     cutAudioLanguages.append(mpAVItem->audioListItemAt(i).getLanguage());
+    cutAudioTrackProps.append(mpAVItem->audioListItemAt(i).getTrackProps());
   }
 
   // Cut subtitle tracks against the same (B-frame-adjusted) keepList as
   // the audio (consolidated onto TTAVData::cutSubtitleTracks)
   QStringList cutSubtitleFiles;
   QStringList cutSubtitleLanguages;
+  TTTrackPropsList cutSubtitleTrackProps;
   mpAVData->cutSubtitleTracks(mpAVItem, keepList,
       [&](int i) { return cutFilePath(QString("_sub%1.srt").arg(i+1)); },
       [&](int i, const QString& path, const QString& lang, bool ok) {
@@ -317,6 +320,7 @@ void TTH26xCutTask::runCut()
         if (ok) {
           cutSubtitleFiles.append(path);
           cutSubtitleLanguages.append(lang);
+          cutSubtitleTrackProps.append(mpAVItem->subtitleListItemAt(i).getTrackProps());
           log->infoMsg(__FILE__, __LINE__,
               QString("Subtitle track %1 cut: %2").arg(i+1).arg(path));
         }
@@ -350,6 +354,8 @@ void TTH26xCutTask::runCut()
 
   mMkvProvider.setAudioLanguages(cutAudioLanguages);
   mMkvProvider.setSubtitleLanguages(cutSubtitleLanguages);
+  mMkvProvider.setAudioTrackProps(cutAudioTrackProps);
+  mMkvProvider.setSubtitleTrackProps(cutSubtitleTrackProps);
 
   // Add chapters in first mux pass (no second container remux needed)
   QString chapterFile;

@@ -73,6 +73,7 @@ pkg_check_modules(ZLIB REQUIRED IMPORTED_TARGET zlib)
 
 set(TTCUT_HEADERS
   common/ttcut.h
+  common/tttrackprops.h
   common/ttsettings.h
   common/ttthreadtask.h
   common/ttthreadtaskpool.h

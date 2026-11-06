@@ -98,6 +98,7 @@ void TTAudioOnlyCutTask::runAudioCut()
   // TTAVData::cutAudioTracks).
   QStringList trackFiles;
   QStringList trackLanguages;
+  TTTrackPropsList trackProps;
   QList<float> firstTrackDrifts = mpAVData->cutAudioTracks(
       mpAVItem, mParams.videoKeepList, mParams.normalizeAcmod,
       [&](int i, const QString& /*ext*/) {
@@ -113,6 +114,7 @@ void TTAudioOnlyCutTask::runAudioCut()
         if (ok) {
           trackFiles     << path;
           trackLanguages << lang;
+          trackProps     << mpAVItem->audioListItemAt(i).getTrackProps();
           log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(path));
         }
         reportStep(TTAVData::tr("Audio track %1 done").arg(i+1),
@@ -191,6 +193,7 @@ void TTAudioOnlyCutTask::runAudioCut()
       // Registered unconditionally, like the per-track files above: a
       // cancelled or failed mux still leaves a partial .mka on disk.
       mCreatedFiles.append(mParams.mkaOutputPath);
+      mMkvProvider.setAudioTrackProps(trackProps);
       if (!mMkvProvider.muxAudioOnly(mParams.mkaOutputPath, trackFiles, trackLanguages)) {
         // A cancel comes back through the same false return as a real mux
         // failure.

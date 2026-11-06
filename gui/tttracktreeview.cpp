@@ -12,7 +12,10 @@
 #include "../common/ttcut.h"
 
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
+#include <QHBoxLayout>
+#include <QLineEdit>
 #include <QMenu>
 #include <QPushButton>
 #include <QSpinBox>
@@ -152,4 +155,41 @@ void TTTrackTreeView::addLanguageCombo(QTreeWidgetItem* item, int column, const 
   });
 
   mpListView->setItemWidget(item, column, combo);
+}
+
+void TTTrackTreeView::addTrackNameEdit(QTreeWidgetItem* item, int column, const QString& name, const QString& toolTip)
+{
+  QLineEdit* edit = new QLineEdit(name);
+  edit->setToolTip(toolTip);
+  edit->setClearButtonEnabled(true);
+  mpListView->setItemWidget(item, column, edit);
+
+  // editingFinished also fires on a plain focus change without an edit;
+  // isModified() filters those out.
+  connect(edit, &QLineEdit::editingFinished, this, [this, column, edit]() {
+    if (!edit->isModified()) return;
+    edit->setModified(false);
+    int row = ttRowOfItemWidget(mpListView, column, edit);
+    if (row >= 0) emit trackNameChanged(row, edit->text().trimmed());
+  });
+}
+
+void TTTrackTreeView::addTrackFlagCheck(QTreeWidgetItem* item, int column, int flag, bool on, const QString& toolTip)
+{
+  // Wrapped so the check box sits centred in its column.
+  QWidget*   cell  = new QWidget();
+  QCheckBox* check = new QCheckBox(cell);
+  QHBoxLayout* layout = new QHBoxLayout(cell);
+  layout->setContentsMargins(0, 0, 0, 0);
+  layout->setAlignment(Qt::AlignCenter);
+  layout->addWidget(check);
+  check->setChecked(on);
+  cell->setToolTip(toolTip);
+  check->setToolTip(toolTip);
+  mpListView->setItemWidget(item, column, cell);
+
+  connect(check, &QCheckBox::toggled, this, [this, column, cell, flag](bool checked) {
+    int row = ttRowOfItemWidget(mpListView, column, cell);
+    if (row >= 0) emit trackFlagChanged(row, flag, checked);
+  });
 }

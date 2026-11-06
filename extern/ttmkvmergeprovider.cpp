@@ -502,9 +502,14 @@ bool TTMkvMergeProvider::setupVideoInput(AVFormatContext* outCtx,
 // the disposition, and without it only the first track would be default)
 // and carry the .info A/V sync offset; per-track user delay is already baked
 // into the cut audio file's keepList times, so it is NOT added here again.
+// Track name and flags (trackProps, same indexing as languages) become the
+// stream's "title" metadata (Matroska TrackName) and AV_DISPOSITION_* bits,
+// which the matroska muxer writes as FlagOriginal / FlagVisualImpaired /
+// FlagHearingImpaired / FlagForced.
 bool TTMkvMergeProvider::addMediaInputs(AVFormatContext* outCtx,
                                          const QStringList& files,
                                          const QStringList& languages,
+                                         const TTTrackPropsList& trackProps,
                                          int mediaType,
                                          int& nextOutIdx,
                                          QList<MuxInput>& inputs,
@@ -564,6 +569,18 @@ bool TTMkvMergeProvider::addMediaInputs(AVFormatContext* outCtx,
         if (!lang.isEmpty())
             av_dict_set(&out->metadata, "language", lang.toUtf8().constData(), 0);
 
+        const TTTrackProps props = (i < trackProps.size()) ? trackProps[i] : TTTrackProps();
+        if (!props.name.isEmpty())
+            av_dict_set(&out->metadata, "title", props.name.toUtf8().constData(), 0);
+        if (props.hasFlag(TTTrackProps::Original))
+            out->disposition |= AV_DISPOSITION_ORIGINAL;
+        if (props.hasFlag(TTTrackProps::VisualImpaired))
+            out->disposition |= AV_DISPOSITION_VISUAL_IMPAIRED;
+        if (props.hasFlag(TTTrackProps::HearingImpaired))
+            out->disposition |= AV_DISPOSITION_HEARING_IMPAIRED;
+        if (props.hasFlag(TTTrackProps::Forced))
+            out->disposition |= AV_DISPOSITION_FORCED;
+
         MuxInput in;
         in.fmtCtx  = inCtx;
         in.srcIdx  = srcIdx;
@@ -580,9 +597,11 @@ bool TTMkvMergeProvider::addMediaInputs(AVFormatContext* outCtx,
 
         if (TTSettings::instance()->logMkvMux()) {
             if (isAudio)
-                qDebug() << "  Audio" << i << ":" << files[i] << "lang=" << lang << "outIdx=" << in.outIdx;
+                qDebug() << "  Audio" << i << ":" << files[i] << "lang=" << lang
+                         << "name=" << props.name << "flags=" << props.flags << "outIdx=" << in.outIdx;
             else
-                qDebug() << "  Subtitle" << i << ":" << files[i];
+                qDebug() << "  Subtitle" << i << ":" << files[i]
+                         << "name=" << props.name << "flags=" << props.flags;
         }
     }
     return true;
@@ -595,7 +614,7 @@ bool TTMkvMergeProvider::addAudioInputs(AVFormatContext* outCtx,
                                          QList<MuxInput>& inputs,
                                          int audioSyncMs)
 {
-    return addMediaInputs(outCtx, audioFiles, languages, AVMEDIA_TYPE_AUDIO,
+    return addMediaInputs(outCtx, audioFiles, languages, mAudioTrackProps, AVMEDIA_TYPE_AUDIO,
                           nextOutIdx, inputs, audioSyncMs, mDroppedInputs);
 }
 
@@ -604,7 +623,7 @@ bool TTMkvMergeProvider::addSubtitleInputs(AVFormatContext* outCtx,
                                             int& nextOutIdx,
                                             QList<MuxInput>& inputs)
 {
-    return addMediaInputs(outCtx, subtitleFiles, mSubtitleLanguages, AVMEDIA_TYPE_SUBTITLE,
+    return addMediaInputs(outCtx, subtitleFiles, mSubtitleLanguages, mSubtitleTrackProps, AVMEDIA_TYPE_SUBTITLE,
                           nextOutIdx, inputs, 0, mDroppedInputs);
 }
 

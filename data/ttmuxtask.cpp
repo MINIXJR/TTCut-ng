@@ -101,6 +101,8 @@ void TTMuxTask::operation()
   mMkvProvider.setVideoOptions(mParams.video);
   mMkvProvider.setAudioLanguages(mParams.audioLanguages);
   mMkvProvider.setSubtitleLanguages(mParams.subtitleLanguages);
+  mMkvProvider.setAudioTrackProps(mParams.audioTrackProps);
+  mMkvProvider.setSubtitleTrackProps(mParams.subtitleTrackProps);
 
   if (mParams.totalDurationMs > 0)
     mMkvProvider.setTotalDurationMs(mParams.totalDurationMs);

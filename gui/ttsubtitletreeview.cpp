@@ -43,6 +43,10 @@ TTSubtitleTreeView::TTSubtitleTreeView(QWidget* parent)
   header->resizeSection(1, 220);
   header->resizeSection(2, 140);
   header->resizeSection(3, 100);
+  header->resizeSection(4, 180);
+  header->resizeSection(5,  70);
+  header->resizeSection(6, 110);
+  header->resizeSection(7,  70);
 
   bindListWidgets(subtitleListView, pbSubtitleFileOpen, pbSubtitleEntryUp, pbSubtitleEntryDown, pbSubtitleEntryDelete,
       { tr("&Insert subtitlefile"), tr("Open a new subtitlefile and insert to list"),
@@ -67,6 +71,8 @@ void TTSubtitleTreeView::onAVDataChanged(const TTAVItem* avData)
     disconnect(this,     &TTSubtitleTreeView::swapItems,        mpAVItem, &TTAVItem::onSwapSubtitleItems);
     disconnect(this,     &TTSubtitleTreeView::languageChanged,  mpAVItem, &TTAVItem::onSubtitleLanguageChanged);
     disconnect(this,     &TTSubtitleTreeView::delayChanged,     mpAVItem, &TTAVItem::onSubtitleDelayChanged);
+    disconnect(this, &TTSubtitleTreeView::trackNameChanged, mpAVItem, &TTAVItem::onSubtitleTrackNameChanged);
+    disconnect(this, &TTSubtitleTreeView::trackFlagChanged, mpAVItem, &TTAVItem::onSubtitleTrackFlagChanged);
 
     disconnect(mpAVItem, &TTAVItem::subtitleItemAppended,        this, &TTSubtitleTreeView::onAppendItem);
     disconnect(mpAVItem, qOverload<int>(&TTAVItem::subtitleItemRemoved), this, &TTSubtitleTreeView::onItemRemoved);
@@ -83,6 +89,8 @@ void TTSubtitleTreeView::onAVDataChanged(const TTAVItem* avData)
   connect(this,     &TTSubtitleTreeView::swapItems,         mpAVItem, &TTAVItem::onSwapSubtitleItems);
   connect(this,     &TTSubtitleTreeView::languageChanged,   mpAVItem, &TTAVItem::onSubtitleLanguageChanged);
   connect(this,     &TTSubtitleTreeView::delayChanged,      mpAVItem, &TTAVItem::onSubtitleDelayChanged);
+  connect(this, &TTSubtitleTreeView::trackNameChanged, mpAVItem, &TTAVItem::onSubtitleTrackNameChanged);
+  connect(this, &TTSubtitleTreeView::trackFlagChanged, mpAVItem, &TTAVItem::onSubtitleTrackFlagChanged);
 
   onReloadList(mpAVItem);
 }
@@ -98,6 +106,16 @@ void TTSubtitleTreeView::onAppendItem(const TTSubtitleItem& item)
   treeItem->setText(1, item.getLength());
   addDelaySpin(treeItem, 2, item.getDelayMs(), tr("Positive values show the subtitles later, negative values earlier (mkvmerge convention)"));
   addLanguageCombo(treeItem, 3, item.getLanguage());
+
+  // MKV track properties: only the flags that mean something for subtitles.
+  const TTTrackProps& props = item.getTrackProps();
+  addTrackNameEdit(treeItem, 4, props.name, tr("Track name in the MKV (empty = none)"));
+  addTrackFlagCheck(treeItem, 5, TTTrackProps::Original, props.hasFlag(TTTrackProps::Original),
+                    tr("Original language of the content (MKV flag \"original\")"));
+  addTrackFlagCheck(treeItem, 6, TTTrackProps::HearingImpaired, props.hasFlag(TTTrackProps::HearingImpaired),
+                    tr("Subtitles for the deaf and hard of hearing (MKV flag \"hearing impaired\")"));
+  addTrackFlagCheck(treeItem, 7, TTTrackProps::Forced, props.hasFlag(TTTrackProps::Forced),
+                    tr("Players always show this track (MKV flag \"forced\")"));
 }
 
 /* //////////////////////////////////////////////////////////////////////////////
