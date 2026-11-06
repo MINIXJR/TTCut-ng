@@ -169,6 +169,7 @@ audiorepair_cut        unit  300  test_audiorepair_cut
 donorfill              unit  300  test_donorfill
 repairdialog_model     unit  300  test_repairdialog_model
 demux_framerate        unit  60   -
+demux_sub_hi           unit  60   -
 demux_slotplan         unit  120  -
 demux_slot_e2e         unit  300  -
 demux_trailing_nulls   unit  60   -
@@ -493,6 +494,7 @@ gate_audiorepair_cut()       { "$D/test_audiorepair_cut"; }
 gate_donorfill()             { "$D/test_donorfill"; }
 gate_repairdialog_model()    { need "$TESTDATA/tux_test.264" "$TESTDATA/tux_test.ac3"; "$D/test_repairdialog_model"; }
 gate_demux_framerate()       { need "$DEMUX"; "$D/gate_demux_framerate.sh"; }
+gate_demux_sub_hi()          { need "$DEMUX"; "$D/gate_demux_sub_hi.sh"; }
 gate_demux_slotplan()        { need "$DEMUX"; "$D/gate_demux_slotplan.sh"; }
 gate_demux_slot_e2e()        { need "$DEMUX" "$AUDIOFIX"; "$D/gate_demux_slot_e2e.sh"; }
 gate_demux_trailing_nulls()  { need "$DEMUX"; "$D/gate_demux_trailing_nulls.sh"; }

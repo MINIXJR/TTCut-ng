@@ -1068,6 +1068,21 @@ _map_to_sorted_array() {
     done
 }
 
+# Indices of the subtitle streams the broadcaster flags hearing impaired,
+# space-separated, each once. Reads the output of
+#   ffprobe -select_streams s -show_entries stream=index:stream_disposition=hearing_impaired -of csv=p=0
+# Measured on the ZDF Whitney Houston recording (2026-11-06): ffprobe prints
+# "5", an empty line and "5,1" for one DVB subtitle - only "index,flag" lines
+# carry the flag.
+subtitle_hi_indices() {
+    local idx hi out=()
+    while IFS=',' read -r idx hi; do
+        [ "$hi" = "1" ] || continue
+        [[ " ${out[*]} " == *" $idx "* ]] || out+=("$idx")
+    done
+    echo "${out[*]}"
+}
+
 # Get audio streams with language (deduplicate by index, prefer entries with language)
 # shellcheck disable=SC2034  # filled and read by name (nameref) in the two helpers
 declare -A AUDIO_MAP
@@ -1079,6 +1094,9 @@ _map_to_sorted_array AUDIO_MAP AUDIO_STREAMS "Audio"
 declare -A SUB_MAP
 _collect_streams_by_lang s SUB_MAP
 _map_to_sorted_array SUB_MAP SUBTITLE_STREAMS "Subtitle"
+# Padded with spaces for the " idx " membership test in the subtitle export.
+SUBTITLE_HI_IDX=" $(ffprobe -v error -select_streams s -show_entries stream=index:stream_disposition=hearing_impaired \
+    -of csv=p=0 "$INPUT" 2>/dev/null | subtitle_hi_indices) "
 
 echo ""
 
@@ -2043,6 +2061,9 @@ if $ES_MODE; then
     # 3. Try to extract subtitles (opt-in via --subs; an empty SUBTITLE_FILES
     # array keeps the .info [subtitles] section valid with count=0)
     SUBTITLE_FILES=()
+    # Parallel to SUBTITLE_FILES: 1 when the source stream of that file is
+    # flagged hearing impaired (written as sub_N_hearing_impaired=1).
+    SUBTITLE_HI=()
     if [ "$EXPORT_SUBS" != true ]; then
         if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
             info "Subtitle export disabled (${#SUBTITLE_STREAMS[@]} stream(s) present, use --subs to extract)"
@@ -2063,6 +2084,8 @@ if $ES_MODE; then
 
         for sub in "${SUBTITLE_STREAMS[@]}"; do
             IFS=':' read -r idx codec lang <<< "$sub"
+            sub_hi=0
+            [[ "$SUBTITLE_HI_IDX" == *" $idx "* ]] && sub_hi=1
 
             # Quick check: does the stream contain data? Sample 120s at the
             # mid-point and, if that yields nothing, 120s from the start.
@@ -2128,6 +2151,7 @@ if $ES_MODE; then
                     warn_ffmpeg_log "$MKS_MUX_LOG" "  "
                     if [ -s "$OUTPUT_SUB" ]; then
                         SUBTITLE_FILES+=("$OUTPUT_SUB")
+                        SUBTITLE_HI+=("$sub_hi")
                     else
                         rm -f "$OUTPUT_SUB"
                     fi
@@ -2260,6 +2284,7 @@ if $ES_MODE; then
                                 set -e
                             fi
                             SUBTITLE_FILES+=("$OCR_SRT")
+                            SUBTITLE_HI+=("$sub_hi")
                         else
                             rm -f "$OCR_SRT"
                             warn "  OCR produced no captions - keeping the bitmap track only"
@@ -2273,6 +2298,7 @@ if $ES_MODE; then
                     info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
                     ffmpeg -y "${ORIG_INPUT_ARGS[@]}" -map "0:$idx" "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     SUBTITLE_FILES+=("$OUTPUT_SUB")
+                    SUBTITLE_HI+=("$sub_hi")
                     ;;
                 *)
                     warn "  Subtitle $idx [$lang]: $codec - not supported"
@@ -2397,6 +2423,9 @@ EOF
 
     for i in "${!SUBTITLE_FILES[@]}"; do
         echo "sub_${i}_file=$(basename "${SUBTITLE_FILES[$i]}")" >> "$OUTPUT_INFO"
+        if [ "${SUBTITLE_HI[$i]:-0}" = 1 ]; then
+            echo "sub_${i}_hearing_impaired=1" >> "$OUTPUT_INFO"
+        fi
     done
 
     WARNINGS_HEADER_WRITTEN=false
