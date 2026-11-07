@@ -12,6 +12,8 @@
 
 #include <QWidget>
 
+#include "../common/tttrackprops.h"
+
 class QAction;
 class QPushButton;
 class QTreeWidget;
@@ -39,6 +41,8 @@ class TTTrackTreeView : public QWidget
     void swapItems(int oldIndex, int newIndex);
     void languageChanged(int index, const QString& language);
     void delayChanged(int index, int delayMs);
+    void nameChanged(int index, const QString& name);
+    void flagChanged(int index, TTTrackFlag flag, bool on);
 
   public slots:
     virtual void onItemUp();
@@ -70,7 +74,17 @@ class TTTrackTreeView : public QWidget
     //! Per-row editors, each wired to its signal with the row looked up at
     //! edit time (rows move when items are swapped or removed).
     void addDelaySpin(QTreeWidgetItem* item, int column, int delayMs, const QString& toolTip);
-    void addLanguageCombo(QTreeWidgetItem* item, int column, const QString& currentLang);
+    void addLanguageCombo(QTreeWidgetItem* item, int column, const QString& currentLang,
+                          const QString& toolTip = QString());
+    //! Track name editor; emits on every edit (textEdited), so a name typed
+    //! and cut right away by keyboard shortcut is not lost.
+    void addNameEdit(QTreeWidgetItem* item, int column, const QString& name);
+    //! Checkbox for one track flag; a prefilled flag shows its reason.
+    void addFlagCheck(QTreeWidgetItem* item, int column, TTTrackFlag flag, const TTTrackProps& props);
+    //! Tooltip naming where a prefilled value came from; empty for None.
+    static QString prefillToolTip(TTTrackPrefill prefill);
+    //! Tooltip of the language combo after the mis -> deu prefill.
+    static QString languagePrefillToolTip(const TTTrackProps& props);
 
     QTreeWidget* mpListView = nullptr;
 

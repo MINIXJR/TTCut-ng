@@ -24,10 +24,12 @@
 #include <atomic>
 #include <functional>
 #include "../avstream/ttavtypes.h"
+#include "../common/tttrackprops.h"
 
 // Libav forward decls — keep heavy headers out of this public header.
 struct AVFormatContext;
 struct AVPacket;
+struct AVStream;
 class TTVideoStream;
 
 // -----------------------------------------------------------------------------
@@ -68,7 +70,8 @@ public:
     // streams into one matroska container with optional language tags.
     bool muxAudioOnly(const QString& outputFile,
                       const QStringList& audioFiles,
-                      const QStringList& audioLanguages = QStringList());
+                      const QStringList& audioLanguages = QStringList(),
+                      const QList<TTTrackProps>& audioProps = QList<TTTrackProps>());
 
     // Always available (libav is linked at build time)
     QString lastError() const { return mLastError; }
@@ -100,6 +103,12 @@ public:
     // Language tags for audio/subtitle tracks (ISO 639-2/B)
     void setAudioLanguages(const QStringList& languages);
     void setSubtitleLanguages(const QStringList& languages);
+
+    // Track name and flags per audio/subtitle track, parallel to the files
+    // (a track beyond the list gets none). Only the flags that fit the track
+    // type are written: visually impaired on audio, forced on subtitles.
+    void setAudioTrackProps(const QList<TTTrackProps>& props) { mAudioTrackProps = props; }
+    void setSubtitleTrackProps(const QList<TTTrackProps>& props) { mSubtitleTrackProps = props; }
 
     // A/V sync offset in milliseconds (from .info file)
     void setAudioSyncOffset(int offsetMs);
@@ -157,6 +166,8 @@ private:
     QVector<int> mVideoDisplayOrder;  // display-PTS order for video ES (may be empty)
     QStringList mAudioLanguages;
     QStringList mSubtitleLanguages;
+    QList<TTTrackProps> mAudioTrackProps;
+    QList<TTTrackProps> mSubtitleTrackProps;
     bool        mRequireAllInputs = true;
     QStringList mDroppedInputs;
 
@@ -214,6 +225,7 @@ private:
     static bool addMediaInputs(AVFormatContext* outCtx,
                         const QStringList& files,
                         const QStringList& languages,
+                        const QList<TTTrackProps>& props,
                         int mediaType,
                         int& nextOutIdx,
                         QList<MuxInput>& inputs,
@@ -222,6 +234,7 @@ private:
     bool addAudioInputs(AVFormatContext* outCtx,
                          const QStringList& audioFiles,
                          const QStringList& languages,
+                         const QList<TTTrackProps>& props,
                          int& nextOutIdx,
                          QList<MuxInput>& inputs,
                          int audioSyncMs);
@@ -230,6 +243,10 @@ private:
                             const QStringList& subtitleFiles,
                             int& nextOutIdx,
                             QList<MuxInput>& inputs);
+
+    //! Stream title from props.name (when set) and the track flags as
+    //! dispositions, filtered by track type.
+    static void applyTrackProps(AVStream* out, const TTTrackProps& props, bool isAudio);
 
     // The interleave loop of mux() and muxAudioOnly() (see the .cpp).
     bool writeInterleaved(AVFormatContext* outCtx, QList<MuxInput>& inputs,

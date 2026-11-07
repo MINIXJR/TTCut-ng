@@ -82,6 +82,7 @@ set(TTCUT_HEADERS
   common/istatusreporter.h
   common/ttcalibrationstore.h
   common/ttprogressestimator.h
+  common/tttrackprops.h
   data/ttaspectdetect.h
   data/ttanalysislog.h
   data/ttaudiolist.h

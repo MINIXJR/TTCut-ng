@@ -133,6 +133,7 @@ mpeg2_end_frame        tux   300  test_slider_latency
 logo_roi               tux   300  test_logo_roi
 open_cancel            tux   840  test_open_cancel
 mpeg2_framerate_cut    tux   600  -
+trackprops_autocut     tux   900  -
 diag_target_complete   unit  60   -
 cases_verdict          unit  60   -
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
@@ -216,6 +217,7 @@ audiorepair_persist    tux   600  test_audiorepair_persist
 donorfill_app          tux   600  test_donorfill_app
 screenshots_repair     tux   600  -
 track_persist          tux   600  test_track_persist
+track_props            tux   600  test_track_props
 track_gui              tux   600  test_track_gui
 preview_drift_rows     tux   600  test_preview_drift_rows
 repair_window_edge     tux   600  test_repair_window_edge
@@ -234,6 +236,7 @@ audioonlycut_abort     tux   1800 test_audioonlycut_abort
 h26xcut_abort          tux   3600 test_h26xcut_abort
 mkvmux_abort           tux   300  test_mkvmux_abort
 mkvmux_inputs          tux   300  test_mkvmux_inputs
+mkvmux_trackprops      tux   300  test_mkvmux_trackprops
 mka_interleave         tux   300  test_mka_interleave
 mpeg2cut_abort         tux   3600 test_mpeg2cut_abort
 cutsequence_abort      tux   900  test_cutsequence_abort
@@ -454,6 +457,9 @@ gate_mpeg2_framerate_cut() {
   awk -v v="$v" -v a="$a" 'BEGIN { exit !(v > 9.93 && v < 10.03 && a > 9.8 && a < 10.2) }' \
     || { echo "FAIL: the cut does not run at 50 fps"; exit 1; }
   echo "PASS: 720p50 cut is 10 s of video and 10 s of audio"; }
+gate_trackprops_autocut() {
+  need "$TESTDATA/tux_test.264" "$TESTDATA/tux_test.ac3" "$M2V" "$MP2"
+  "$D/gate_trackprops_autocut.sh" "$W" "$ROOT/build/ttcut-ng" "$TESTDATA/tux_test.264" "$TESTDATA/tux_test.ac3" "$M2V" "$MP2"; }
 gate_quickjump_thumbheight() { "$D/test_quickjump_thumbheight"; }
 gate_audio_es_input()        { "$D/test_audio_es_input" "$W"; }
 gate_ac3_reencode()          { "$D/test_ac3_reencode" "$W"; }
@@ -1048,6 +1054,7 @@ gate_audiorepair_persist() { need "$TESTDATA/tux_test.ttcut"; "$D/test_audiorepa
 gate_donorfill_app() { need "$TESTDATA/tux_test.264"; "$D/test_donorfill_app" "$W"; }
 gate_screenshots_repair() { need "$TESTDATA/tux_test.264"; "$D/gate_screenshots_repair.sh" "$W"; }
 gate_track_persist()       { need "$TESTDATA/tux_test.264"; "$D/test_track_persist" "$W"; }
+gate_track_props()         { need "$TESTDATA/tux_test.264"; "$D/test_track_props" "$W"; }
 gate_track_gui()           { need "$TESTDATA/tux_test.264"; "$D/test_track_gui" "$W"; }
 gate_preview_drift_rows() { need "$TESTDATA/tux_test.264"; "$D/test_preview_drift_rows" "$W"; }
 gate_repair_window_edge() { need "$TESTDATA/tux_test.264"; "$D/test_repair_window_edge" "$W"; }
@@ -1099,6 +1106,7 @@ case_h26xcut_audio() { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A
 case_h26xcut_mux()   { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" mux; }
 gate_mkvmux_abort()  { need "$V264" "$A264"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_mkvmux_abort" "$V264" "$A264" 50; }
 gate_mkvmux_inputs() { need "$V264" "$A264"; "$D/test_mkvmux_inputs" "$V264" "$A264" 50 "$W"; }
+gate_mkvmux_trackprops() { need "$V264" "$A264"; "$D/test_mkvmux_trackprops" "$V264" "$A264" "$W/s.srt" 50 "$W"; }
 gate_mka_interleave() { need "$A264"; "$D/test_mka_interleave" "$A264" "$W"; }
 gate_mpeg2cut_abort() { cases 900 mpeg2cut_none mpeg2cut_audio mpeg2cut_video mpeg2cut_mux; }
 case_mpeg2cut_none()  { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" none; }

@@ -224,6 +224,76 @@ void TTAVItem::onSubtitleDelayChanged(int index, int delayMs)
   mpSubtitleList->update(item, updated);
 }
 
+// Copy the item, let edit() change its track props, store it back - the
+// copy-modify-update pattern of the language/delay slots above.
+template <typename List, typename Item, typename Edit>
+static void editTrackProps(List* list, int index, int count, Edit edit)
+{
+  if (index < 0 || index >= count) return;
+  Item item = list->at(index);
+  Item updated(item);
+  TTTrackProps props = updated.trackProps();
+  edit(props);
+  updated.setTrackProps(props);
+  list->update(item, updated);
+}
+
+void TTAVItem::onAudioNameChanged(int index, const QString& name)
+{
+  // Stored without surrounding blanks: a name of blanks only is no name.
+  editTrackProps<TTAudioList, TTAudioItem>(mpAudioList, index, audioCount(),
+      [&name](TTTrackProps& p) { p.name = name.trimmed(); });
+}
+
+void TTAVItem::onAudioFlagChanged(int index, TTTrackFlag flag, bool on)
+{
+  editTrackProps<TTAudioList, TTAudioItem>(mpAudioList, index, audioCount(),
+      [flag, on](TTTrackProps& p) { p.setFlag(flag, on); });
+}
+
+void TTAVItem::onSubtitleNameChanged(int index, const QString& name)
+{
+  editTrackProps<TTSubtitleList, TTSubtitleItem>(mpSubtitleList, index, subtitleCount(),
+      [&name](TTTrackProps& p) { p.name = name.trimmed(); });
+}
+
+void TTAVItem::onSubtitleFlagChanged(int index, TTTrackFlag flag, bool on)
+{
+  editTrackProps<TTSubtitleList, TTSubtitleItem>(mpSubtitleList, index, subtitleCount(),
+      [flag, on](TTTrackProps& p) { p.setFlag(flag, on); });
+}
+
+void TTAVItem::prefillAudioProps(int index)
+{
+  if (index < 0 || index >= audioCount()) return;
+  TTAudioItem item = mpAudioList->at(index);
+  TTAudioItem updated(item);
+  TTTrackProps props = updated.trackProps();
+  props.prefillFromAudioLanguage(updated.getLanguage());
+  if (props.languagePrefill != TTTrackPrefill::None)
+    updated.setLanguage(QStringLiteral("deu"));
+  updated.setTrackProps(props);
+  mpAudioList->update(item, updated);
+}
+
+void TTAVItem::prefillSubtitleHearingImpaired(int index)
+{
+  editTrackProps<TTSubtitleList, TTSubtitleItem>(mpSubtitleList, index, subtitleCount(),
+      [](TTTrackProps& p) { p.prefillHearingImpairedFromRecording(); });
+}
+
+void TTAVItem::applyAudioSavedProps(int index, const TTSavedTrackProps& saved)
+{
+  editTrackProps<TTAudioList, TTAudioItem>(mpAudioList, index, audioCount(),
+      [&saved](TTTrackProps& p) { p.applySaved(saved); });
+}
+
+void TTAVItem::applySubtitleSavedProps(int index, const TTSavedTrackProps& saved)
+{
+  editTrackProps<TTSubtitleList, TTSubtitleItem>(mpSubtitleList, index, subtitleCount(),
+      [&saved](TTTrackProps& p) { p.applySaved(saved); });
+}
+
 /* ///////////////////////////////////////////////////////////////////////////////////////
  *
  */

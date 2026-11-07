@@ -12,7 +12,9 @@
 #include "../common/ttcut.h"
 
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
+#include <QLineEdit>
 #include <QMenu>
 #include <QPushButton>
 #include <QSpinBox>
@@ -141,7 +143,8 @@ void TTTrackTreeView::addDelaySpin(QTreeWidgetItem* item, int column, int delayM
   });
 }
 
-void TTTrackTreeView::addLanguageCombo(QTreeWidgetItem* item, int column, const QString& currentLang)
+void TTTrackTreeView::addLanguageCombo(QTreeWidgetItem* item, int column, const QString& currentLang,
+                                       const QString& toolTip)
 {
   QComboBox* combo = new QComboBox();
   TTCut::populateLanguageCombo(combo, currentLang);
@@ -151,5 +154,65 @@ void TTTrackTreeView::addLanguageCombo(QTreeWidgetItem* item, int column, const 
     if (row >= 0) emit languageChanged(row, combo->itemData(idx).toString());
   });
 
+  combo->setToolTip(toolTip);
   mpListView->setItemWidget(item, column, combo);
+}
+
+void TTTrackTreeView::addNameEdit(QTreeWidgetItem* item, int column, const QString& name)
+{
+  QLineEdit* edit = new QLineEdit(name);
+  edit->setPlaceholderText(tr("Track name in the MKV"));
+
+  connect(edit, &QLineEdit::textEdited, this, [this, column, edit](const QString& text) {
+    int row = ttRowOfItemWidget(mpListView, column, edit);
+    if (row >= 0) emit nameChanged(row, text);
+  });
+
+  mpListView->setItemWidget(item, column, edit);
+}
+
+void TTTrackTreeView::addFlagCheck(QTreeWidgetItem* item, int column, TTTrackFlag flag, const TTTrackProps& props)
+{
+  QCheckBox* check = new QCheckBox();
+  check->setChecked(props.flag(flag));
+  TTTrackPrefill prefill = TTTrackPrefill::None;
+  if (flag == TTTrackFlag::VisualImpaired)  prefill = props.visualImpairedPrefill;
+  if (flag == TTTrackFlag::HearingImpaired) prefill = props.hearingImpairedPrefill;
+  check->setToolTip(prefillToolTip(prefill));
+
+  connect(check, &QCheckBox::toggled, this, [this, column, check, flag](bool on) {
+    int row = ttRowOfItemWidget(mpListView, column, check);
+    if (row >= 0) emit flagChanged(row, flag, on);
+  });
+
+  mpListView->setItemWidget(item, column, check);
+}
+
+QString TTTrackTreeView::prefillToolTip(TTTrackPrefill prefill)
+{
+  switch (prefill) {
+    case TTTrackPrefill::LanguageMis:
+      return tr("Prefilled from language code \"mis\"");
+    case TTTrackPrefill::LanguageQks:
+      return tr("Prefilled from language code \"qks\"");
+    case TTTrackPrefill::RecordingHearingImpaired:
+      return tr("Prefilled from the recording: the broadcaster flags this subtitle for the hard of hearing");
+    case TTTrackPrefill::None:
+      break;
+  }
+  return QString();
+}
+
+QString TTTrackTreeView::languagePrefillToolTip(const TTTrackProps& props)
+{
+  switch (props.languagePrefill) {
+    case TTTrackPrefill::LanguageMis:
+      return tr("Prefilled: the recording marks this track \"mis\" (audio description)");
+    case TTTrackPrefill::LanguageQks:
+      return tr("Prefilled: the recording marks this track \"qks\" (clear speech)");
+    case TTTrackPrefill::RecordingHearingImpaired:
+    case TTTrackPrefill::None:
+      break;
+  }
+  return QString();
 }

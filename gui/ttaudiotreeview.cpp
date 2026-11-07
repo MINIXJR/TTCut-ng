@@ -47,6 +47,10 @@ TTAudioTreeView::TTAudioTreeView(QWidget* parent)
   header->resizeSection(5, 100);
   header->resizeSection(6,  60);
   header->resizeSection(7, 100);
+  header->resizeSection(8, 180);
+  // Flag columns as wide as their (translated) header text.
+  for (int c = 9; c <= 11; ++c)
+    header->setSectionResizeMode(c, QHeaderView::ResizeToContents);
 
   bindListWidgets(audioListView, pbAudioFileOpen, pbAudioEntryUp, pbAudioEntryDown, pbAudioEntryDelete,
       { tr("&Insert audiofile"), tr("Open a new audiofile and insert to list"),
@@ -71,6 +75,8 @@ void TTAudioTreeView::onAVDataChanged(const TTAVItem* avData)
   disconnect(this,     &TTAudioTreeView::swapItems,        mpAVItem, &TTAVItem::onSwapAudioItems);
   disconnect(this,     &TTAudioTreeView::languageChanged,  mpAVItem, &TTAVItem::onAudioLanguageChanged);
   disconnect(this,     &TTAudioTreeView::delayChanged,     mpAVItem, &TTAVItem::onAudioDelayChanged);
+  disconnect(this,     &TTAudioTreeView::nameChanged,      mpAVItem, &TTAVItem::onAudioNameChanged);
+  disconnect(this,     &TTAudioTreeView::flagChanged,      mpAVItem, &TTAVItem::onAudioFlagChanged);
 
   disconnect(mpAVItem, &TTAVItem::audioItemAppended,        this, &TTAudioTreeView::onAppendItem);
   disconnect(mpAVItem, qOverload<int>(&TTAVItem::audioItemRemoved), this, &TTAudioTreeView::onItemRemoved);
@@ -87,6 +93,8 @@ void TTAudioTreeView::onAVDataChanged(const TTAVItem* avData)
   connect(this,     &TTAudioTreeView::swapItems,         mpAVItem, &TTAVItem::onSwapAudioItems);
   connect(this,     &TTAudioTreeView::languageChanged,   mpAVItem, &TTAVItem::onAudioLanguageChanged);
   connect(this,     &TTAudioTreeView::delayChanged,      mpAVItem, &TTAVItem::onAudioDelayChanged);
+  connect(this,     &TTAudioTreeView::nameChanged,       mpAVItem, &TTAVItem::onAudioNameChanged);
+  connect(this,     &TTAudioTreeView::flagChanged,       mpAVItem, &TTAVItem::onAudioFlagChanged);
 
   onReloadList(mpAVItem);
 }
@@ -105,7 +113,12 @@ void TTAudioTreeView::onAppendItem(const TTAudioItem& item)
   treeItem->setText(4, item.getSamplerate());
   treeItem->setText(5, item.getMode());
   addDelaySpin(treeItem, 6, item.getDelayMs(), tr("Positive values play the track later, negative values earlier (mkvmerge convention)"));
-  addLanguageCombo(treeItem, 7, item.getLanguage());
+  const TTTrackProps& props = item.trackProps();
+  addLanguageCombo(treeItem, 7, item.getLanguage(), languagePrefillToolTip(props));
+  addNameEdit(treeItem, 8, props.name);
+  addFlagCheck(treeItem, 9,  TTTrackFlag::Original,        props);
+  addFlagCheck(treeItem, 10, TTTrackFlag::VisualImpaired,  props);
+  addFlagCheck(treeItem, 11, TTTrackFlag::HearingImpaired, props);
 }
 
 /* //////////////////////////////////////////////////////////////////////////////

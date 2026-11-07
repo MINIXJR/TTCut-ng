@@ -426,7 +426,8 @@ void TTCutMainWindow::connectFrameAndCutListSignals()
   connect(cutList, &TTCutTreeView::itemUpdated,      cutOutFrame,     &TTCutOutFrame::onCutOutChanged);
 }
 
-// TTAVData notifications, including the dirty tracking that sets mProjectModified.
+// TTAVData notifications, and the dirty tracking that sets mProjectModified
+// (TTAVData changes and edits in the audio and subtitle lists).
 void TTCutMainWindow::connectAVDataSignals()
 {
   connect(mpAVData, &TTAVData::currentAVItemChanged, this, &TTCutMainWindow::onAVItemChanged);
@@ -446,6 +447,19 @@ void TTCutMainWindow::connectAVDataSignals()
   connect(mpAVData, &TTAVData::cutOrderUpdated,    this, &TTCutMainWindow::onProjectModified);
   connect(mpAVData, &TTAVData::avItemAppended,     this, &TTCutMainWindow::onProjectModified);
   connect(mpAVData, &TTAVData::avItemRemoved,      this, &TTCutMainWindow::onProjectModified);
+
+  // Track edits, moves and removals are stored in the project file too. The
+  // views emit these only for user input: each widget gets its value before
+  // it is connected.
+  for (TTTrackTreeView* view : {static_cast<TTTrackTreeView*>(audioFileList),
+                                static_cast<TTTrackTreeView*>(subtitleFileList)}) {
+    connect(view, &TTTrackTreeView::swapItems,       this, &TTCutMainWindow::onProjectModified);
+    connect(view, &TTTrackTreeView::removeItem,      this, &TTCutMainWindow::onProjectModified);
+    connect(view, &TTTrackTreeView::delayChanged,    this, &TTCutMainWindow::onProjectModified);
+    connect(view, &TTTrackTreeView::languageChanged, this, &TTCutMainWindow::onProjectModified);
+    connect(view, &TTTrackTreeView::nameChanged,     this, &TTCutMainWindow::onProjectModified);
+    connect(view, &TTTrackTreeView::flagChanged,     this, &TTCutMainWindow::onProjectModified);
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -2077,12 +2091,17 @@ void TTCutMainWindow::onSubtitleItemAppended(const TTSubtitleItem&)
 
 /*!
  * onSubtitleItemUpdated
- * Fires on any subtitle item change (delay spinbox, language combo, pending
- * project-file values applied after the async load). The overlay only shows
- * track 0 — re-push it so a delay edit is visible immediately.
+ * Fires on any subtitle item change (delay spinbox, language combo, name and
+ * flags, pending project-file values applied after the async load). The
+ * overlay only shows track 0 and uses only its stream and delay — re-push it
+ * when one of those changed, so a delay edit is visible immediately. A name
+ * fires on every keystroke and changes neither, so it does not redraw.
  */
-void TTCutMainWindow::onSubtitleItemUpdated(const TTSubtitleItem&, const TTSubtitleItem&)
+void TTCutMainWindow::onSubtitleItemUpdated(const TTSubtitleItem& before, const TTSubtitleItem& after)
 {
+  if (before.getSubtitleStream() == after.getSubtitleStream() &&
+      before.getDelayMs() == after.getDelayMs())
+    return;
   showSubtitleTrackZero();
 }
 

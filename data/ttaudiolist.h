@@ -20,6 +20,8 @@
 #include <QString>
 #include <QFileInfo>
 
+#include "../common/tttrackprops.h"
+
 class TTAVItem;
 // moc must see TTAVItem complete to register TTAVItem* in its signals/slots
 Q_MOC_INCLUDE("data/ttavlist.h")
@@ -50,6 +52,8 @@ class TTAudioItem
     void           setDelayMs(int ms);
     QString        getLanguage() const;
     void           setLanguage(const QString& lang);
+    const TTTrackProps& trackProps() const { return mTrackProps; }
+    void           setTrackProps(const TTTrackProps& props) { mTrackProps = props; }
     TTAVItem*  avDataItem() const {return mpAVDataItem;}
 
     const TTAudioItem& operator=(const TTAudioItem& item);
@@ -66,6 +70,7 @@ class TTAudioItem
     QString        audioLength;
     int            mAudioDelayMs;
     QString        mLanguage;  // ISO 639-2/B (deu, eng, fra, ...)
+    TTTrackProps   mTrackProps;  // name + MKV flags
 };
 
 /* /////////////////////////////////////////////////////////////////////////////

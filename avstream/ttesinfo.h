@@ -154,6 +154,11 @@ public:
     bool hasTrackStartOffsets() const;
     int  startOffsetMsForAudioFile(const QString& audioFilePath) const;
 
+    // Subtitle files ([subtitles] sub_N_file): whether the source DVB
+    // subtitle stream was flagged hearing impaired (sub_N_hearing_impaired=1),
+    // matched by file name. False when not listed or the key is absent.
+    bool subtitleHearingImpaired(const QString& subtitleFilePath) const;
+
     // Source file
     QString sourceFile() const { return mSourceFile; }
 
@@ -209,6 +214,7 @@ private:
     bool parseSection(const QString& section, const QMap<QString, QString>& values);
     void parseVideoSection(const QMap<QString, QString>& values);
     void parseAudioSection(const QMap<QString, QString>& values);
+    void parseSubtitlesSection(const QMap<QString, QString>& values);
     void parseMarkersSection(const QMap<QString, QString>& values);
     void parseTimingSection(const QMap<QString, QString>& values);
     void parseWarningsSection(const QMap<QString, QString>& values);
@@ -240,6 +246,7 @@ private:
 
     // Audio tracks
     QList<TTAudioTrackInfo> mAudioTracks;
+    QStringList mHearingImpairedSubtitles;  // file names (no path)
 
     // VDR Markers
     QList<TTMarkerInfo> mMarkers;

@@ -167,6 +167,21 @@ class TTAVItem : public QObject
     void onSwapSubtitleItems(int oldIndex, int newIndex);
     void onSubtitleLanguageChanged(int index, const QString& language);
     void onSubtitleDelayChanged(int index, int delayMs);
+    void onAudioNameChanged(int index, const QString& name);
+    void onAudioFlagChanged(int index, TTTrackFlag flag, bool on);
+    void onSubtitleNameChanged(int index, const QString& name);
+    void onSubtitleFlagChanged(int index, TTTrackFlag flag, bool on);
+
+  public:
+    //! Open-time prefill from the track's current language: "mis" (the
+    //! broadcasters' audio-description track) becomes "deu" + visually
+    //! impaired. Runs once per open, before a project's saved values.
+    void prefillAudioProps(int index);
+    //! Open-time prefill: the source DVB subtitle is flagged hearing impaired.
+    void prefillSubtitleHearingImpaired(int index);
+    //! Name/flags saved in a project file replace the prefill.
+    void applyAudioSavedProps(int index, const TTSavedTrackProps& saved);
+    void applySubtitleSavedProps(int index, const TTSavedTrackProps& saved);
 
   signals:
 		void updated(TTAVItem* avItem);

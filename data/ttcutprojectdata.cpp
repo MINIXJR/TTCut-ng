@@ -147,7 +147,8 @@ void TTCutProjectData::serializeAVDataItem(const TTAVItem* vItem)
     // stored order would otherwise still be the discovery order and a
     // manual arrangement would not survive save/reload (sortByProjectOrder
     // restores exactly this number).
-    QDomElement audio = writeTrackSection(video, "Audio", aStream->filePath(), i, aItem.getLanguage(), aItem.getDelayMs());
+    QDomElement audio = writeTrackSection(video, "Audio", aStream->filePath(), i, aItem.getLanguage(), aItem.getDelayMs(),
+                                          aItem.trackProps());
 
     // Repair items are tagged with the same visible list position (trackIndex()),
     // not nested under the audio list itself - filter by it here.
@@ -167,7 +168,8 @@ void TTCutProjectData::serializeAVDataItem(const TTAVItem* vItem)
     TTSubtitleStream* sStream = sItem.getSubtitleStream();
     // Visible list position, as for audio above: a discovered or added
     // subtitle keeps order -1, and the reorder buttons never touch it.
-    writeTrackSection(video, "Subtitle", sStream->filePath(), i, sItem.getLanguage(), sItem.getDelayMs());
+    writeTrackSection(video, "Subtitle", sStream->filePath(), i, sItem.getLanguage(), sItem.getDelayMs(),
+                      sItem.trackProps());
   }
 }
 
@@ -285,6 +287,19 @@ bool TTCutProjectData::parseTrackLanguageDelay(const QDomNode& node, QString& la
   return false;
 }
 
+bool TTCutProjectData::parseTrackProps(const QDomNode& node, TTSavedTrackProps& saved)
+{
+  if (node.nodeName() == "TrackName") {
+    saved.name = node.toElement().text();
+    return true;
+  }
+  if (node.nodeName() == "TrackFlags") {
+    saved.flags = node.toElement().text();
+    return true;
+  }
+  return false;
+}
+
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
@@ -294,15 +309,18 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
   QString name;
   if (!parseSectionHeader(audioNodesList, "parseAudioSection", order, name)) return;
 
-  // Read optional Language, Delay and Repair elements (added in TTCut-ng
-  // 0.52+, 0.66+ and unreleased). Repair may occur multiple times; any other
-  // child element (future additions) is silently ignored here.
+  // Read optional Language, Delay, TrackName/TrackFlags and Repair elements
+  // (added in TTCut-ng 0.52+, 0.66+ and unreleased). Repair may occur
+  // multiple times; any other child element (future additions) is silently
+  // ignored here.
   QString lang;
   int delayMs = 0;
+  TTSavedTrackProps saved;
   QList<TTAudioRepairItem> repairs;
   for (int n = 2; n < audioNodesList.size(); n++) {
     QDomNode node = audioNodesList.at(n);
     if (parseTrackLanguageDelay(node, lang, delayMs)) continue;
+    if (parseTrackProps(node, saved)) continue;
     if (node.nodeName() == "Repair") {
       QDomNodeList repairNodes = node.childNodes();
       qint64  frameFrom = 0;
@@ -477,6 +495,9 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
   if (delayMs != 0) {
     avData->setPendingAudioDelay(avItem, order, delayMs);
   }
+  if (saved.name || saved.flags) {
+    avData->setPendingAudioProps(avItem, order, saved);
+  }
   if (!repairs.isEmpty()) {
     avData->setPendingAudioRepairs(avItem, order, repairs);
   }
@@ -547,7 +568,8 @@ QDomElement TTCutProjectData::writeVideoSection(const QString& filePath, int ord
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-QDomElement TTCutProjectData::writeTrackSection(QDomElement& parent, const QString& tag, const QString& filePath, int order, const QString& language, int delayMs)
+QDomElement TTCutProjectData::writeTrackSection(QDomElement& parent, const QString& tag, const QString& filePath, int order, const QString& language, int delayMs,
+                                                 const TTTrackProps& props)
 {
   QDomElement track = xmlDocument->createElement(tag);
   parent.appendChild(track);
@@ -563,6 +585,16 @@ QDomElement TTCutProjectData::writeTrackSection(QDomElement& parent, const QStri
   if (delayMs != 0) {
     addTextElement(track, "Delay", QString::number(delayMs));
   }
+
+  if (!props.name.isEmpty()) {
+    addTextElement(track, "TrackName", props.name);
+  }
+
+  // Always written, empty when no flag is set: its presence tells the loader
+  // that these are the user's flags, replacing the open-time prefill (a
+  // project without it - written before track flags existed - keeps the
+  // prefill).
+  addTextElement(track, "TrackFlags", props.flagsToken());
 
   return track;
 }
@@ -814,11 +846,14 @@ void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAV
   // user saw.
   if (order < 0) order = position;
 
-  // Read optional Language and Delay elements (added in TTCut-ng 0.52+ and 0.81+)
+  // Read optional Language, Delay and TrackName/TrackFlags elements (added
+  // in TTCut-ng 0.52+, 0.81+ and unreleased)
   QString lang;
   int delayMs = 0;
+  TTSavedTrackProps saved;
   for (int n = 2; n < subtitleNodesList.size(); n++) {
-    parseTrackLanguageDelay(subtitleNodesList.at(n), lang, delayMs);
+    if (parseTrackLanguageDelay(subtitleNodesList.at(n), lang, delayMs)) continue;
+    parseTrackProps(subtitleNodesList.at(n), saved);
   }
 
   qDebug("TTCutProjectData::parseSubtitleSection -> before doOpenSubtitleStream...");
@@ -828,6 +863,9 @@ void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAV
   }
   if (delayMs != 0) {
     avData->setPendingSubtitleDelay(avItem, order, delayMs);
+  }
+  if (saved.name || saved.flags) {
+    avData->setPendingSubtitleProps(avItem, order, saved);
   }
   qDebug("after doOpenSubtitleStream...");
 }

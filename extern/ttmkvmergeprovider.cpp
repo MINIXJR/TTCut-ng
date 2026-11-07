@@ -502,9 +502,22 @@ bool TTMkvMergeProvider::setupVideoInput(AVFormatContext* outCtx,
 // the disposition, and without it only the first track would be default)
 // and carry the .info A/V sync offset; per-track user delay is already baked
 // into the cut audio file's keepList times, so it is NOT added here again.
+void TTMkvMergeProvider::applyTrackProps(AVStream* out, const TTTrackProps& props, bool isAudio)
+{
+    if (!props.name.isEmpty())
+        av_dict_set(&out->metadata, "title", props.name.toUtf8().constData(), 0);
+    if (props.original)        out->disposition |= AV_DISPOSITION_ORIGINAL;
+    if (props.hearingImpaired) out->disposition |= AV_DISPOSITION_HEARING_IMPAIRED;
+    // libav writes either flag on any track type without complaint; the
+    // track type decides here (a hand-edited project could carry them).
+    if (isAudio && props.visualImpaired) out->disposition |= AV_DISPOSITION_VISUAL_IMPAIRED;
+    if (!isAudio && props.forced)        out->disposition |= AV_DISPOSITION_FORCED;
+}
+
 bool TTMkvMergeProvider::addMediaInputs(AVFormatContext* outCtx,
                                          const QStringList& files,
                                          const QStringList& languages,
+                                         const QList<TTTrackProps>& props,
                                          int mediaType,
                                          int& nextOutIdx,
                                          QList<MuxInput>& inputs,
@@ -563,6 +576,8 @@ bool TTMkvMergeProvider::addMediaInputs(AVFormatContext* outCtx,
         }
         if (!lang.isEmpty())
             av_dict_set(&out->metadata, "language", lang.toUtf8().constData(), 0);
+        if (i < props.size())
+            applyTrackProps(out, props[i], isAudio);
 
         MuxInput in;
         in.fmtCtx  = inCtx;
@@ -591,11 +606,12 @@ bool TTMkvMergeProvider::addMediaInputs(AVFormatContext* outCtx,
 bool TTMkvMergeProvider::addAudioInputs(AVFormatContext* outCtx,
                                          const QStringList& audioFiles,
                                          const QStringList& languages,
+                                         const QList<TTTrackProps>& props,
                                          int& nextOutIdx,
                                          QList<MuxInput>& inputs,
                                          int audioSyncMs)
 {
-    return addMediaInputs(outCtx, audioFiles, languages, AVMEDIA_TYPE_AUDIO,
+    return addMediaInputs(outCtx, audioFiles, languages, props, AVMEDIA_TYPE_AUDIO,
                           nextOutIdx, inputs, audioSyncMs, mDroppedInputs);
 }
 
@@ -604,7 +620,8 @@ bool TTMkvMergeProvider::addSubtitleInputs(AVFormatContext* outCtx,
                                             int& nextOutIdx,
                                             QList<MuxInput>& inputs)
 {
-    return addMediaInputs(outCtx, subtitleFiles, mSubtitleLanguages, AVMEDIA_TYPE_SUBTITLE,
+    return addMediaInputs(outCtx, subtitleFiles, mSubtitleLanguages, mSubtitleTrackProps,
+                          AVMEDIA_TYPE_SUBTITLE,
                           nextOutIdx, inputs, 0, mDroppedInputs);
 }
 
@@ -1035,7 +1052,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     inputs.append(vin);
 
     int nextOutIdx = 1;
-    addAudioInputs(outCtx, audioFiles, mAudioLanguages, nextOutIdx, inputs,
+    addAudioInputs(outCtx, audioFiles, mAudioLanguages, mAudioTrackProps, nextOutIdx, inputs,
                     mAudioSyncOffsetMs);
     addSubtitleInputs(outCtx, subtitleFiles, nextOutIdx, inputs);
     if (!acceptDroppedInputs(audioFiles.size() + subtitleFiles.size())) {
@@ -1142,7 +1159,8 @@ int TTMkvMergeProvider::videoCodecIdFor(TTAVTypes::AVStreamType type)
 
 bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
                                       const QStringList& audioFiles,
-                                      const QStringList& audioLanguages)
+                                      const QStringList& audioLanguages,
+                                      const QList<TTTrackProps>& audioProps)
 {
     // mWasAborted is an output, not an input: cleared at every run's entry
     // point. mAbortRequested needs no clearing point of its own -- providers
@@ -1170,7 +1188,7 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
     // so audio output streams start at index 0; sync offset is always 0.
     QList<MuxInput> inputs;
     int nextOutIdx = 0;
-    addAudioInputs(outCtx, audioFiles, audioLanguages, nextOutIdx, inputs, 0);
+    addAudioInputs(outCtx, audioFiles, audioLanguages, audioProps, nextOutIdx, inputs, 0);
 
     // Every exit path below goes through this (same pattern as mux()).
     // avio_closep() tolerates a pb that was never opened.

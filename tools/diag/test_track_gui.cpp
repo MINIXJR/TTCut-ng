@@ -9,24 +9,36 @@
 //       "Length Mismatch" warning, about the 5 s file.
 //   H6  The still-frame overlay shows subtitle track 0 after the tracks
 //       were swapped and after the track it showed was removed.
+//   M1  Editing delay, language, name or a flag, moving or removing a track
+//       in the audio or subtitle list marks the project modified (user
+//       decisions 2026-11-07).
+//   M2  Typing a subtitle name does not redraw the still frame; a delay
+//       edit does (final review 2026-11-07).
 //
 //   usage: test_track_gui <workdir>
 //
 // Build via `cmake --build build --target test_track_gui`.
 #include <QApplication>
+#include <QCheckBox>
+#include <QComboBox>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QRegularExpression>
+#include <QSpinBox>
 #include <QTextStream>
 #include <QTimer>
 #include <QTreeWidget>
 
 #include <cstdio>
+#include <functional>
 
 #include "avstream/ttavstream.h"
+#include "common/ttsettings.h"
+#include "gui/ttaudiotreeview.h"
 #include "gui/ttcurrentframe.h"
 #include "gui/ttcutmainwindow.h"
 #include "gui/ttsubtitletreeview.h"
@@ -77,8 +89,10 @@ int main(int argc, char** argv)
   for (const QString& e : dir.entryList(QDir::Files)) dir.remove(e);
   QFile::link("/usr/local/src/TTCut-ng/tools/testdata/tux_test.264", dir.absoluteFilePath("trk.264"));
   QFile::link(ac3Source, dir.absoluteFilePath("trk_deu.ac3"));
+  QFile::link(ac3Source, dir.absoluteFilePath("trk_eng.ac3"));
   writeFile(dir.absoluteFilePath("trk_a.srt"), "1\n00:00:00,000 --> 00:10:00,000\nAAA\n\n");
   writeFile(dir.absoluteFilePath("trk_b.srt"), "1\n00:00:00,000 --> 00:10:00,000\nBBB\n\n");
+  writeFile(dir.absoluteFilePath("trk_c.srt"), "1\n00:00:00,000 --> 00:10:00,000\nCCC\n\n");
 
   // 5 s of AC3: tux_test.ac3 is 192 kbit/s, 768 bytes per 32 ms frame.
   QFile src(ac3Source);
@@ -104,6 +118,71 @@ int main(int argc, char** argv)
   waitReady(window, 30000);
   printf("  boxes while opening: %s\n", qPrintable(boxes.isEmpty() ? QString("(none)") : boxes.join(" | ")));
   boxes.clear();
+
+  // --- M1 ------------------------------------------------------------------
+  // Each edit in the track lists is stored in the project file, so it has to
+  // mark the project modified ("*" in the title). Saved first, because
+  // opening the video already set the marker.
+  auto* audioTree = window.findChild<QTreeWidget*>("audioListView");
+  auto* subTree   = window.findChild<QTreeWidget*>("subtitleListView");
+  auto* audioView = window.findChild<TTAudioTreeView*>("audioFileList");
+  auto* subView   = window.findChild<TTSubtitleTreeView*>("subtitleFileList");
+  if (!audioTree || !subTree || !audioView || !subView ||
+      audioTree->topLevelItemCount() != 2 || subTree->topLevelItemCount() != 3) {
+    check(false, "M1: two audio and three subtitle rows listed");
+    return 1;
+  }
+  TTSettings::instance()->setProjectFileName(dir.absoluteFilePath("dirty.ttcut"));
+  auto modifiedAfter = [&](const QString& what, const std::function<void()>& edit) {
+    window.onFileSave();
+    pump(100);
+    const bool cleanBefore = !window.windowTitle().endsWith("*");
+    edit();
+    pump(100);
+    printf("  %-28s title=\"%s\"\n", qPrintable(what), qPrintable(window.windowTitle()));
+    check(cleanBefore && window.windowTitle().endsWith("*"), "M1: " + what + " marks the project modified");
+  };
+  auto widget = [](QTreeWidget* tree, int column) { return tree->itemWidget(tree->topLevelItem(0), column); };
+  auto otherIndex = [](QComboBox* c) { return c->currentIndex() == 1 ? 2 : 1; };
+  auto toggle = [](QWidget* w) { auto* c = qobject_cast<QCheckBox*>(w); c->setChecked(!c->isChecked()); };
+
+  modifiedAfter("audio delay", [&]() { qobject_cast<QSpinBox*>(widget(audioTree, 6))->setValue(40); });
+  modifiedAfter("audio language", [&]() {
+    auto* c = qobject_cast<QComboBox*>(widget(audioTree, 7)); c->setCurrentIndex(otherIndex(c)); });
+  modifiedAfter("audio name", [&]() { emit qobject_cast<QLineEdit*>(widget(audioTree, 8))->textEdited("Name"); });
+  modifiedAfter("audio flag Original", [&]() { toggle(widget(audioTree, 9)); });
+  modifiedAfter("subtitle delay", [&]() { qobject_cast<QSpinBox*>(widget(subTree, 2))->setValue(40); });
+  modifiedAfter("subtitle language", [&]() {
+    auto* c = qobject_cast<QComboBox*>(widget(subTree, 3)); c->setCurrentIndex(otherIndex(c)); });
+  modifiedAfter("subtitle name", [&]() { emit qobject_cast<QLineEdit*>(widget(subTree, 4))->textEdited("Name"); });
+  modifiedAfter("subtitle flag Forced", [&]() { toggle(widget(subTree, 7)); });
+  // Up/Down and Delete in the lists emit these (TTTrackTreeView::onItemUp/
+  // onItemDown/onRemoveItem); the order is stored as <Order>.
+  modifiedAfter("audio swap", [&]() { emit audioView->swapItems(0, 1); });
+  modifiedAfter("audio remove", [&]() { emit audioView->removeItem(1); });
+  modifiedAfter("subtitle swap", [&]() { emit subView->swapItems(0, 1); });
+  modifiedAfter("subtitle remove", [&]() { emit subView->removeItem(2); });
+  check(audioTree->topLevelItemCount() == 1 && subTree->topLevelItemCount() == 2,
+        "M1: one audio and two subtitle rows left");
+
+  // --- M2 ------------------------------------------------------------------
+  // The overlay uses only stream and delay of subtitle track 0: typing a
+  // subtitle name (one update per keystroke) must not redraw the still
+  // frame; a delay edit must (control). A redraw sets a new pixmap.
+  auto* stillFrame = window.findChild<TTCurrentFrame*>("currentFrame");
+  if (!stillFrame) { check(false, "M2: still frame found"); return 1; }
+  auto pixmapKey = [&]() { return stillFrame->videoWindow()->pixmap().cacheKey(); };
+  const qint64 keyBefore = pixmapKey();
+  auto* nameEdit = qobject_cast<QLineEdit*>(widget(subTree, 4));
+  for (const char* text : {"U", "UT", "UT ", "UT D", "UT DE"}) { emit nameEdit->textEdited(text); pump(20); }
+  const qint64 keyAfterName = pixmapKey();
+  auto* delaySpin = qobject_cast<QSpinBox*>(widget(subTree, 2));
+  delaySpin->setValue(delaySpin->value() + 100);
+  pump(100);
+  const qint64 keyAfterDelay = pixmapKey();
+  printf("  pixmap keys: before=%lld name=%lld delay=%lld\n", keyBefore, keyAfterName, keyAfterDelay);
+  check(keyBefore != 0 && keyAfterName == keyBefore, "M2: typing a subtitle name does not redraw the still frame");
+  check(keyAfterDelay != keyAfterName, "M2: a subtitle delay edit redraws the still frame (control)");
 
   // --- H6 ------------------------------------------------------------------
   auto* subtitleView = window.findChild<TTSubtitleTreeView*>("subtitleFileList");

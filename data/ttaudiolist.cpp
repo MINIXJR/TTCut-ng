@@ -57,6 +57,7 @@ TTAudioItem::TTAudioItem(const TTAudioItem& item)
   audioLength   = item.audioLength;
   mAudioDelayMs = item.mAudioDelayMs;
   mLanguage     = item.mLanguage;
+  mTrackProps   = item.mTrackProps;
 }
 
 /*!
@@ -87,6 +88,7 @@ const TTAudioItem& TTAudioItem::operator=(const TTAudioItem& item)
   audioLength   = item.audioLength;
   mAudioDelayMs = item.mAudioDelayMs;
   mLanguage     = item.mLanguage;
+  mTrackProps   = item.mTrackProps;
 
   return *this;
 }
@@ -116,8 +118,14 @@ bool TTAudioItem::operator<(const TTAudioItem& item) const
     return (idx >= 0) ? idx : INT_MAX;
   };
 
-  int thisPrio  = languagePriority(mLanguage);
-  int otherPrio = languagePriority(item.mLanguage);
+  // A visually or hearing impaired track (audio description, "Klare
+  // Sprache") ranks like a language outside the preference list - the place
+  // its broadcaster code "mis"/"qks" had before the open-time prefill turned
+  // it into "deu": behind the main track, which audioStreamAt(0) and the
+  // burst detection rely on.
+  auto accessible = [](const TTTrackProps& p) { return p.visualImpaired || p.hearingImpaired; };
+  int thisPrio  = accessible(mTrackProps) ? INT_MAX : languagePriority(mLanguage);
+  int otherPrio = accessible(item.mTrackProps) ? INT_MAX : languagePriority(item.mLanguage);
   if (thisPrio != otherPrio) return thisPrio < otherPrio;
 
   // Tertiary: Original discovery order

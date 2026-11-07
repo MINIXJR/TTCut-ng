@@ -17,6 +17,7 @@
 
 #include "../common/ttcut.h"
 #include "../common/ttmessagelogger.h"
+#include "../common/tttrackprops.h"
 
 #include <QList>
 #include <QStringList>
@@ -37,23 +38,30 @@ class TTMuxListDataItem
     const QString&     getVideoName() const;
     void               setVideoName(const QString& videoFilePath);
     const QStringList& getAudioNames() const;
-    void               appendAudioFile(const QString& audioFilePath, const QString& language = QString());
+    void               appendAudioFile(const QString& audioFilePath, const QString& language = QString(),
+                                       const TTTrackProps& props = TTTrackProps());
     const QStringList& getSubtitleNames() const;
-    void               appendSubtitleFile(const QString& subtitleFilePath, const QString& language = QString());
+    void               appendSubtitleFile(const QString& subtitleFilePath, const QString& language = QString(),
+                                          const TTTrackProps& props = TTTrackProps());
     const QStringList& getAudioLanguages() const;
     const QStringList& getSubtitleLanguages() const;
+    const QList<TTTrackProps>& getAudioTrackProps() const    { return audioTrackProps; }
+    const QList<TTTrackProps>& getSubtitleTrackProps() const { return subtitleTrackProps; }
 
     const TTMuxListDataItem& operator=(const TTMuxListDataItem& item);
 
   private:
     // Field-wise copy shared by the copy constructor and operator=; the
-    // language lists are copied only as far as the file lists reach.
+    // language and track-prop lists are copied only as far as the file lists
+    // reach.
     void copyFrom(const TTMuxListDataItem& item);
     QString     videoFileName;
     QStringList audioFileNames;
     QStringList audioLanguageList;
     QStringList subtitleFileNames;
     QStringList subtitleLanguageList;
+    QList<TTTrackProps> audioTrackProps;
+    QList<TTTrackProps> subtitleTrackProps;
 };
 
 

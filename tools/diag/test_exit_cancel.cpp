@@ -67,7 +67,7 @@ void armDialogAnswers(QMessageBox::StandardButton answer, int* questionsSeen, in
 }
 
 // Pumps until the window title carries the "modified" marker: opening a
-// video appends an AV item, which is one of the eight signals that mark the
+// video appends an AV item, which is one of the signals that mark the
 // project dirty - and only a dirty project is asked about on close.
 bool waitForDirty(TTCutMainWindow& wnd, int timeoutMs)
 {

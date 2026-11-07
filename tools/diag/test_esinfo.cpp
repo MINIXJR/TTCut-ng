@@ -172,6 +172,26 @@ int main()
     check(TTESInfo::effectiveAudioDelayMs(100, QString(), "/x/y/o_deu.mp2") == 100, "effective delay: no video path -> user delay");
   }
 
+  // --- [subtitles] sub_N_hearing_impaired (MKV track flags, 2026-11-06) ---
+  {
+    const QString p4 = dir + "/subs.info";
+    QFile f4(p4);
+    if (!f4.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) { fprintf(stderr, "cannot write\n"); return 1; }
+    QTextStream o4(&f4);
+    o4 << "[video]\nfile=x.264\ncodec=h264\nframe_rate=50/1\n\n"
+          "[subtitles]\ncount=3\nsub_0_file=x_deu.mks\nsub_0_hearing_impaired=1\n"
+          "sub_1_file=x_deu.srt\nsub_1_hearing_impaired=1\nsub_2_file=x_eng.srt\n";
+    f4.close();
+    TTESInfo e4(p4);
+    check(e4.isLoaded(), "subs: loaded");
+    check(e4.subtitleHearingImpaired("/a/x_deu.srt"), "subs: x_deu.srt hearing impaired");
+    check(e4.subtitleHearingImpaired("/a/x_deu.mks"), "subs: x_deu.mks hearing impaired");
+    check(!e4.subtitleHearingImpaired("/a/x_eng.srt"), "subs: x_eng.srt without key -> false");
+    check(!e4.subtitleHearingImpaired("/a/y.srt"), "subs: unlisted file -> false");
+    TTESInfo e5(dir + "/offsets.info");   // no [subtitles] section
+    check(!e5.subtitleHearingImpaired("/a/x_deu.srt"), "subs: no [subtitles] section -> false");
+  }
+
   if (failures == 0) {
     printf("PASS\n");
     return 0;

@@ -22,6 +22,7 @@ class TTVideoStream;
 class TTStreamPointModel;
 
 #include "ttstreampoint.h"
+#include "../common/tttrackprops.h"
 
 #include <QFileInfo>
 #include <QDomElement>
@@ -76,7 +77,7 @@ class TTCutProjectData
     QDomElement writeVideoSection(const QString& filePath, int order);
     // <Audio> and <Subtitle> carry the same fields (Order, Name, optional
     // Language and Delay); tag picks the element name.
-    QDomElement writeTrackSection(QDomElement& parent, const QString& tag, const QString& filePath, int order, const QString& language, int delayMs = 0);
+    QDomElement writeTrackSection(QDomElement& parent, const QString& tag, const QString& filePath, int order, const QString& language, int delayMs = 0, const TTTrackProps& props = TTTrackProps());
     QDomElement writeRepairSection(QDomElement& parent, const TTAudioRepairItem& repair);
     QDomElement writeCutSection(QDomElement& parent, int cutIn, int cutOut, int order);
     //! Order and validated path from a section header. <Video>, <Audio> and
@@ -97,6 +98,9 @@ class TTCutProjectData
     //! <Language>/<Delay> child of an <Audio> or <Subtitle> section; true when
     //! 'node' was one of the two.
     static bool parseTrackLanguageDelay(const QDomNode& node, QString& lang, int& delayMs);
+    //! <TrackName>/<TrackFlags> child of an <Audio> or <Subtitle> section;
+    //! true when 'node' was one of the two.
+    static bool parseTrackProps(const QDomNode& node, TTSavedTrackProps& saved);
     void        serializeSettings();
     void        parseSettingsSection(QDomElement settingsElement);
 

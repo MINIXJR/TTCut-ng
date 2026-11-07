@@ -187,6 +187,7 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
 {
     if (section == "video")         parseVideoSection(values);
     else if (section == "audio")    parseAudioSection(values);
+    else if (section == "subtitles") parseSubtitlesSection(values);
     else if (section == "markers")  parseMarkersSection(values);
     else if (section == "timing")   parseTimingSection(values);
     else if (section == "warnings") parseWarningsSection(values);
@@ -225,6 +226,22 @@ void TTESInfo::parseVideoSection(const QMap<QString, QString>& values)
     mHasFrameRate = values.contains("frame_rate")
                  && parseFrameRate(values.value("frame_rate"))
                  && mFrameRateNum > 0;
+}
+
+void TTESInfo::parseSubtitlesSection(const QMap<QString, QString>& values)
+{
+    const int count = qMin(values.value("count", "0").toInt(), 32);
+    mHearingImpairedSubtitles.clear();
+    for (int i = 0; i < count; ++i) {
+        const QString file = values.value(QString("sub_%1_file").arg(i));
+        if (!file.isEmpty() && values.value(QString("sub_%1_hearing_impaired").arg(i)) == "1")
+            mHearingImpairedSubtitles << QFileInfo(file).fileName();
+    }
+}
+
+bool TTESInfo::subtitleHearingImpaired(const QString& subtitleFilePath) const
+{
+    return mHearingImpairedSubtitles.contains(QFileInfo(subtitleFilePath).fileName());
 }
 
 void TTESInfo::parseAudioSection(const QMap<QString, QString>& values)

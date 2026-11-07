@@ -47,6 +47,8 @@ void TTMuxListDataItem::copyFrom(const TTMuxListDataItem& item)
              audioFileNames, audioLanguageList);
   copyTracks(item.subtitleFileNames, item.subtitleLanguageList,
              subtitleFileNames, subtitleLanguageList);
+  audioTrackProps    = item.audioTrackProps.mid(0, item.audioFileNames.count());
+  subtitleTrackProps = item.subtitleTrackProps.mid(0, item.subtitleFileNames.count());
 }
 
 const TTMuxListDataItem& TTMuxListDataItem::operator=(const TTMuxListDataItem& item)
@@ -82,10 +84,12 @@ const QStringList& TTMuxListDataItem::getAudioNames() const
   return audioFileNames;
 }
 
-void TTMuxListDataItem::appendAudioFile(const QString& audioFilePath, const QString& language)
+void TTMuxListDataItem::appendAudioFile(const QString& audioFilePath, const QString& language,
+                                        const TTTrackProps& props)
 {
   audioFileNames.append(audioFilePath);
   audioLanguageList.append(language);
+  audioTrackProps.append(props);
 }
 
 const QStringList& TTMuxListDataItem::getSubtitleNames() const
@@ -93,10 +97,12 @@ const QStringList& TTMuxListDataItem::getSubtitleNames() const
   return subtitleFileNames;
 }
 
-void TTMuxListDataItem::appendSubtitleFile(const QString& subtitleFilePath, const QString& language)
+void TTMuxListDataItem::appendSubtitleFile(const QString& subtitleFilePath, const QString& language,
+                                           const TTTrackProps& props)
 {
   subtitleFileNames.append(subtitleFilePath);
   subtitleLanguageList.append(language);
+  subtitleTrackProps.append(props);
 }
 
 const QStringList& TTMuxListDataItem::getAudioLanguages() const

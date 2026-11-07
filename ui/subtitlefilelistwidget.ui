@@ -257,6 +257,26 @@
      </column>
      <column>
       <property name="text">
+       <string>Name</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Original</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Hearing impaired</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Forced</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
        <string notr="true"/>
       </property>
      </column>

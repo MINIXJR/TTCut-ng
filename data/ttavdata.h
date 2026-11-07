@@ -103,6 +103,8 @@ class TTAVData : public QObject
     void      setPendingAudioRepairs(TTAVItem* avItem, int order, const QList<TTAudioRepairItem>& repairs);
     void      setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QString& lang);
     void      setPendingSubtitleDelay(TTAVItem* avItem, int order, int delayMs);
+    void      setPendingAudioProps(TTAVItem* avItem, int order, const TTSavedTrackProps& saved);
+    void      setPendingSubtitleProps(TTAVItem* avItem, int order, const TTSavedTrackProps& saved);
     void      doCutPreview(TTCutList* cutList);
 
     int       totalProcess() const;
@@ -345,10 +347,20 @@ class TTAVData : public QObject
     // tell them apart.
     QMap<QPair<TTAVItem*, QString>, QString> mPendingInfoAudioLanguages;
     QMap<QPair<TTAVItem*, int>, QString> mPendingSubtitleLanguages;
+    // Subtitle files of a plain open whose .info says the source DVB
+    // subtitle is hearing impaired (sub_N_hearing_impaired=1), keyed by
+    // path like mPendingInfoAudioLanguages. A map (value unused) so
+    // dropPendingTrackValues() treats it like the others.
+    QMap<QPair<TTAVItem*, QString>, bool> mPendingInfoSubtitleHearingImpaired;
 
     // Pending delay overrides from project file (applied after async stream open)
     QMap<QPair<TTAVItem*, int>, int> mPendingAudioDelays;
     QMap<QPair<TTAVItem*, int>, int> mPendingSubtitleDelays;
+
+    // Pending track name/flags from project file (applied after the
+    // open-time prefill, which they replace)
+    QMap<QPair<TTAVItem*, int>, TTSavedTrackProps> mPendingAudioProps;
+    QMap<QPair<TTAVItem*, int>, TTSavedTrackProps> mPendingSubtitleProps;
 
     // Pending audio repair items from project file (applied after async
     // stream open, same mechanism as mPendingAudioDelays).

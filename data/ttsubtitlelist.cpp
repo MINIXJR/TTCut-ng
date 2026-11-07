@@ -54,6 +54,7 @@ TTSubtitleItem::TTSubtitleItem(const TTSubtitleItem& item)
   subtitleLength  = item.subtitleLength;
   mDelayMs        = item.mDelayMs;
   mLanguage       = item.mLanguage;
+  mTrackProps     = item.mTrackProps;
 }
 
 /*!
@@ -84,6 +85,7 @@ const TTSubtitleItem& TTSubtitleItem::operator=(const TTSubtitleItem& item)
   subtitleLength  = item.subtitleLength;
   mDelayMs        = item.mDelayMs;
   mLanguage       = item.mLanguage;
+  mTrackProps     = item.mTrackProps;
 
   return *this;
 }

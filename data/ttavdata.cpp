@@ -333,6 +333,12 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
         }
       }
 
+      // Hearing-impaired flag of the source DVB subtitle, per subtitle file
+      for (const QFileInfo& sf : subtitleInfoList) {
+        if (esInfo.subtitleHearingImpaired(sf.absoluteFilePath()))
+          mPendingInfoSubtitleHearingImpaired.insert(qMakePair(avItem, sf.absoluteFilePath()), true);
+      }
+
       // Load VDR markers
       if (esInfo.hasMarkers()) {
         if (TTSettings::instance()->logCutPipeline())
@@ -870,17 +876,22 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
 
   avItem->appendAudioEntry(aStream, order);
 
-  // Language from the recording's .info (plain open only), then language
-  // and delay saved in the project file, if any. Both before the sort
-  // below, which reads the language.
+  // Language from the recording's .info (plain open only), then the
+  // open-time prefill from that language ("mis" -> "deu" + visually
+  // impaired), then language and delay saved in the project file, if any -
+  // a saved language wins over the prefill. All before the sort below,
+  // which reads the language and the visually-impaired flag.
   const int idx = avItem->audioCount() - 1;
   applyPending(mPendingInfoAudioLanguages, qMakePair(avItem, aStream->filePath()), idx,
                [avItem](int i, const QString& lang) { avItem->onAudioLanguageChanged(i, lang); });
+  avItem->prefillAudioProps(idx);
   const auto key = qMakePair(avItem, order);
   applyPending(mPendingAudioLanguages, key, idx,
                [avItem](int i, const QString& lang) { avItem->onAudioLanguageChanged(i, lang); });
   applyPending(mPendingAudioDelays, key, idx,
                [avItem](int i, int delayMs) { avItem->onAudioDelayChanged(i, delayMs); });
+  applyPending(mPendingAudioProps, key, idx,
+               [avItem](int i, const TTSavedTrackProps& s) { avItem->applyAudioSavedProps(i, s); });
 
   // Apply saved repair items from project file if available. Unlike
   // language/delay these aren't stored per-audio-item, so they don't need
@@ -981,13 +992,18 @@ void TTAVData::onOpenSubtitleFinished(TTAVItem* avItem, TTSubtitleStream* sStrea
 
   avItem->appendSubtitleEntry(sStream, order);
 
-  // Language and delay saved in the project file, if any
+  // Language and delay saved in the project file, if any, then the
+  // hearing-impaired prefill from the recording's .info (plain open only).
   const auto key = qMakePair(avItem, order);
   const int idx = avItem->subtitleCount() - 1;
   applyPending(mPendingSubtitleLanguages, key, idx,
                [avItem](int i, const QString& lang) { avItem->onSubtitleLanguageChanged(i, lang); });
   applyPending(mPendingSubtitleDelays, key, idx,
                [avItem](int i, int delayMs) { avItem->onSubtitleDelayChanged(i, delayMs); });
+  if (mPendingInfoSubtitleHearingImpaired.remove(qMakePair(avItem, sStream->filePath())) > 0)
+    avItem->prefillSubtitleHearingImpaired(idx);
+  applyPending(mPendingSubtitleProps, key, idx,
+               [avItem](int i, const TTSavedTrackProps& s) { avItem->applySubtitleSavedProps(i, s); });
 
   // Project-loaded subtitles (order >= 0 from <Order>) arrive in task-finish
   // order; restore the saved sequence during the initial load, as for audio.
@@ -1467,6 +1483,16 @@ void TTAVData::setPendingAudioDelay(TTAVItem* avItem, int order, int delayMs)
   mPendingAudioDelays.insert(qMakePair(avItem, order), delayMs);
 }
 
+void TTAVData::setPendingAudioProps(TTAVItem* avItem, int order, const TTSavedTrackProps& saved)
+{
+  mPendingAudioProps.insert(qMakePair(avItem, order), saved);
+}
+
+void TTAVData::setPendingSubtitleProps(TTAVItem* avItem, int order, const TTSavedTrackProps& saved)
+{
+  mPendingSubtitleProps.insert(qMakePair(avItem, order), saved);
+}
+
 void TTAVData::setPendingAudioRepairs(TTAVItem* avItem, int order, const QList<TTAudioRepairItem>& repairs)
 {
   mPendingAudioRepairs.insert(qMakePair(avItem, order), repairs);
@@ -1500,8 +1526,11 @@ void TTAVData::dropPendingTrackValues(const TTAVItem* item)
   dropPendingOf(mPendingAudioLanguages, item);
   dropPendingOf(mPendingInfoAudioLanguages, item);
   dropPendingOf(mPendingSubtitleLanguages, item);
+  dropPendingOf(mPendingInfoSubtitleHearingImpaired, item);
   dropPendingOf(mPendingAudioDelays, item);
   dropPendingOf(mPendingSubtitleDelays, item);
+  dropPendingOf(mPendingAudioProps, item);
+  dropPendingOf(mPendingSubtitleProps, item);
   dropPendingOf(mPendingAudioRepairs, item);
 }
 
@@ -1918,7 +1947,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
         return createCutFileName(tgtFileName,
                                  avItem->audioStreamAt(i)->fileName(), i + 1);
       },
-      [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
+      [&](int i, const QString& path, const QString& lang, bool ok) {
         // Register the path even when the cut did NOT succeed: an aborted
         // audio cut leaves a partial file behind (TTAudioCutter::cut
         // finalizes the container before returning false — see its own
@@ -1927,7 +1956,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
         // Mirrors TTH26xCutTask::doCut's mCreatedFiles handling.
         mCutProducedFiles << path;
         if (ok) {
-          cutVideoTask->muxListItem()->appendAudioFile(path, lang);
+          cutVideoTask->muxListItem()->appendAudioFile(path, lang,
+                                                       avItem->audioListItemAt(i).trackProps());
           audioTracksCut++;
         }
       },
@@ -1955,13 +1985,14 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
         return createCutFileName(tgtFileName,
                                  avItem->subtitleStreamAt(i)->fileName(), i + 1);
       },
-      [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
+      [&](int i, const QString& path, const QString& lang, bool ok) {
         // Registered unconditionally, same reasoning as the audio lambda
         // above: a subtitle write interrupted by a genuine I/O failure can
         // leave a partial .srt behind even though cutSubtitleTracks() has
         // no abort predicate of its own. Mirrors TTH26xCutTask::doCut.
         mCutProducedFiles << path;
-        if (ok) cutVideoTask->muxListItem()->appendSubtitleFile(path, lang);
+        if (ok) cutVideoTask->muxListItem()->appendSubtitleFile(path, lang,
+                                                                avItem->subtitleListItemAt(i).trackProps());
       });
 
   // Abort landed during the synchronous audio/subtitle phase above, before
@@ -2324,6 +2355,8 @@ void TTAVData::onCutFinished()
         params.subtitleFiles     = muxItem.getSubtitleNames();
         params.audioLanguages    = muxItem.getAudioLanguages();
         params.subtitleLanguages = muxItem.getSubtitleLanguages();
+        params.audioTrackProps    = muxItem.getAudioTrackProps();
+        params.subtitleTrackProps = muxItem.getSubtitleTrackProps();
 
         // Build MKV output filename
         QFileInfo videoInfo(muxItem.getVideoName());
