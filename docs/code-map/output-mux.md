@@ -1,6 +1,6 @@
 ---
-base_commit: 6dd2d5585a25572facffdf41dafb423b2102bd93
-last_verified: 2026-10-14
+base_commit: ec738ddee287368270227fe3340d87c0743a84ea
+last_verified: 2026-11-06
 sources:
   - extern/ttmkvmergeprovider.h
   - extern/ttmkvmergeprovider.cpp
@@ -10,6 +10,7 @@ sources:
   - extern/ttmuxlistdata.cpp
   - data/ttmuxtask.h
   - data/ttmuxtask.cpp
+  - common/tttrackprops.h
   - data/tth26xcuttask.h
   - data/tth26xcuttask.cpp
   - data/ttaudioonlycuttask.cpp
@@ -76,9 +77,9 @@ flowchart TD
   INFO -->|mAvSyncOffsetMs| AVD
   INFO -->|avOffsetMs| PREV
   INFO -->|avOffsetMs| PLAY
-  AVI -->|track languages| H26X
-  AVI -->|file + language per cut track| MLI
-  AVI -->|file + language per cut track| AONLY
+  AVI -->|track languages + props| H26X
+  AVI -->|file, language, props per cut track| MLI
+  AVI -->|file, language, props per cut track| AONLY
   SC -->|display order| H26X
   SC -->|display order| PREV
   CHAP -->|chapter file path| H26X
@@ -94,7 +95,7 @@ flowchart TD
   M2O -->|display order| MUX
   MUX --> MKV
   MUX --> PMKV
-  AONLY -->|files + languages| MAO
+  AONLY -->|files, languages, props| MAO
   MAO --> MKA
   MPLEX --> MPG
 ```
@@ -107,21 +108,21 @@ flowchart TD
 | `TTESInfo` → `TTAVData::onCutFinished` | Same value, read by hand in `TTAVData::onDoCut` (`findInfoFile` + `TTESInfo`, same two conditions) into the member `mAvSyncOffsetMs`; that branch keeps the `TTESInfo` object because `loadExtraFrameIndices` needs it too. |
 | `TTESInfo` → `ttConfigurePreviewMux` | `ttResolvePreviewSource` fills `TTPreviewSource::avOffsetMs` from `timingForVideo`. |
 | `TTESInfo` → `TTPlaybackMuxTask` | `TTCurrentFrame::buildPlaybackMuxParams` builds `TTPlaybackMuxParams::video` from `timingForVideo`; audio is the first track's **source** ES (uncut), so no per-track delay is in it (see playback.md). The offset handed to the muxer is that track's start offset (`trackStartOffsetMs` by file name) when the `.info` has per-track offsets, else `avOffsetMs`. |
-| `TTAVItem` → `TTH26xCutTask` | Audio languages: `audioListItemAt(i).getLanguage()` for **every** track `0..audioCount()-1`, collected after the track-count check guaranteed all tracks were cut, so index `i` lines up with the file list. Subtitle files and languages come from the `cutSubtitleTracks` callback, appended only for `ok` tracks — the two lists stay aligned with each other. |
-| `TTAVItem` → `TTMuxListDataItem` | MPEG-2 synchronous phase in `onDoCut`: `appendAudioFile(path, lang)` / `appendSubtitleFile(path, lang)` per `ok` callback; `lang` is the same `getLanguage()` of the track list. Must complete before the pool starts (see the ordering comment above the `connect` in `onDoCut`). |
-| `TTAVItem` → `TTAudioOnlyCutTask` | `trackFiles`/`trackLanguages` from the `cutAudioTracks` callback, `ok` tracks only. A track short of the requested count ends the run **before** the MKA mux, like the video cuts. |
+| `TTAVItem` → `TTH26xCutTask` | Audio languages: `audioListItemAt(i).getLanguage()` for **every** track `0..audioCount()-1`, collected after the track-count check guaranteed all tracks were cut, so index `i` lines up with the file list; `trackProps()` is collected in the same loop. Subtitle files, languages and `trackProps()` come from the `cutSubtitleTracks` callback, appended only for `ok` tracks — the three lists stay aligned with each other. Both prop lists go to `setAudioTrackProps` / `setSubtitleTrackProps`. |
+| `TTAVItem` → `TTMuxListDataItem` | MPEG-2 synchronous phase in `onDoCut`: `appendAudioFile(path, lang, props)` / `appendSubtitleFile(path, lang, props)` per `ok` callback; `lang` is the same `getLanguage()` of the track list, `props` the `trackProps()` of the callback's track index. `copyFrom` cuts the prop lists to the file lists like the languages. Must complete before the pool starts (see the ordering comment above the `connect` in `onDoCut`). |
+| `TTAVItem` → `TTAudioOnlyCutTask` | `trackFiles`/`trackLanguages`/`trackProps` from the `cutAudioTracks` callback, `ok` tracks only. A track short of the requested count ends the run **before** the MKA mux, like the video cuts. |
 | `TTESSmartCut` → `TTH26xCutTask` / preview | `outputDisplayOrder()` — one source display rank per written AU, empty on any anomaly (see smart-cut.md). Copied into `TTMkvVideoOptions::displayOrder` after the cut, unchanged. |
 | `generateChapterFile` → callers | Path of a `QTemporaryFile` `ttcut-chapters-XXXXXX.txt` in `cutDirPath`, written only when `workingMkvCreateChapters && workingMkvChapterInterval > 0` and `mLastCutResultMs > 0`; the caller removes it after the mux and on a cancel. Chapters sit at fixed intervals from 0, named `Chapter NN`; they do **not** follow the cut points. The H.26x path also demands `finalOutput.endsWith(".mkv")`, which `doH264Cut` already guarantees. |
 | `TTMuxListDataItem` → `onCutFinished` | `mpMuxList->appendItem(*cutVideoTask->muxListItem())`, then `itemAt(count()-1)`. The list is created once per `TTAVData` and never cleared, so it holds one item per **MPEG-2** cut of the session; nothing else appends to it. The mplex branch reads the whole list; the MKV branch reads only the item just appended. |
-| `onCutFinished` → `TTMuxTask` | `TTMuxTaskParams`, copied on the GUI thread: `video` = `videoOptionsFor(first video of the run list, its frameRate(), mAvSyncOffsetMs)`, the item's files and languages, chapter file, `totalDurationMs`, and `cleanupOnAbort` = the whole `mCutProducedFiles` (ownership handover; the member is cleared). Output: `<cutDirPath>/<video ES base>.mkv`. |
+| `onCutFinished` → `TTMuxTask` | `TTMuxTaskParams`, copied on the GUI thread: `video` = `videoOptionsFor(first video of the run list, its frameRate(), mAvSyncOffsetMs)`, the item's files, languages and track props (`audioTrackProps` / `subtitleTrackProps`), chapter file, `totalDurationMs`, and `cleanupOnAbort` = the whole `mCutProducedFiles` (ownership handover; the member is cleared). Output: `<cutDirPath>/<video ES base>.mkv`. |
 | `onCutFinished` → `TTMplexProvider` | The whole `mpMuxList` plus `lastIdx`; `setAudioSyncOffset(mAvSyncOffsetMs)`. `workingMuxMode == 1` writes the script (one mplex line per list item), else `mplexPart(lastIdx)` runs mplex synchronously on the GUI thread. mplex gets `-f<n>` (`TTEncoderNames::mpeg2MuxFormat(workingMpeg2Target)`), `-O <offset>ms`, `-o`, video and audio paths; subtitles, languages and chapters of the item have no place in an MPG. |
 | callers → option setters | `TTMkvVideoOptions` (frame rate, PAFF + `log2_max_frame_num`, codec id, A/V offset, display order) through `setVideoOptions()`; languages, chapters, total duration and `setRequireAllInputs()` separately. See the configuration matrix below. The provider is created fresh per operation. |
-| option setters → `mux()` | `setVideoOptions()` turns the frame rate into `mTrackOptions[0].defaultDuration` (`"<n>ns"`, only when `frameRate > 0`), `mIsPAFF`/`mH264Log2MaxFrameNum`, `mVideoCodecId`, `mVideoDisplayOrder`, `mAudioSyncOffsetMs`; plus `mAudioLanguages`/`mSubtitleLanguages`, `mChapterFile`, `mTotalDurationMs`, `mRequireAllInputs`. |
+| option setters → `mux()` | `setVideoOptions()` turns the frame rate into `mTrackOptions[0].defaultDuration` (`"<n>ns"`, only when `frameRate > 0`), `mIsPAFF`/`mH264Log2MaxFrameNum`, `mVideoCodecId`, `mVideoDisplayOrder`, `mAudioSyncOffsetMs`; plus `mAudioLanguages`/`mSubtitleLanguages`, `mAudioTrackProps`/`mSubtitleTrackProps`, `mChapterFile`, `mTotalDurationMs`, `mRequireAllInputs`. |
 | `buildMpeg2DisplayOrder` → `mux()` | Only when no display order was set and the codec is MPEG-2: display rank = GOP base + `temporal_reference`, per-GOP permutation check; empty on any gap → linear PTS. Tested by `tools/diag/test_mpeg2order`. |
 | `mux()` → `.mkv` | Video track 0, then one track per audio file, then one per subtitle file; title from the output file name (`_cut` stripped, VDR `#XX` decoded, `_` → space); chapters from the file. With `mRequireAllInputs` (default) any unusable audio/subtitle file fails the mux before the output file exists. |
-| `mux()` → preview / playback `.mkv` | Preview clips: `TTCutPreviewTask::createPreviewFileName(index, "mkv")` in the temp directory; playback: `TTPlaybackMuxParams::outputFile` (one name per mux, cached by fingerprint — playback.md). Same track layout as the final MKV, but only the first audio track, no languages, no subtitles, no chapters, and `setRequireAllInputs(false)`: a track the muxer cannot use is skipped and logged. |
+| `mux()` → preview / playback `.mkv` | Preview clips: `TTCutPreviewTask::createPreviewFileName(index, "mkv")` in the temp directory; playback: `TTPlaybackMuxParams::outputFile` (one name per mux, cached by fingerprint — playback.md). Same track layout as the final MKV, but only the first audio track, no languages, no track names or flags, no subtitles, no chapters, and `setRequireAllInputs(false)`: a track the muxer cannot use is skipped and logged. |
 | `TTAudioOnlyCutTask` → `muxAudioOnly` | `<cutDirPath>/<target base>.mka`, removed first if it exists; sync offset fixed at 0 (no video to be in sync with); all inputs required. Progress is forwarded (`forwardProgressOf`). |
-| `muxAudioOnly` → `.mka` | Tracks interleaved by PTS (`writeInterleaved`), languages per track. Afterwards the task removes the track files only when `TTAudioOnlyCutParams::deleteTrackFiles` (= `workingMuxDeleteES` at dispatch) is set. |
+| `muxAudioOnly` → `.mka` | Tracks interleaved by PTS (`writeInterleaved`), languages and track props per track (`audioProps` argument). Afterwards the task removes the track files only when `TTAudioOnlyCutParams::deleteTrackFiles` (= `workingMuxDeleteES` at dispatch) is set. |
 | `TTMplexProvider` → `.mpg` | `<muxOutputPath or video dir>/<video ES base>.mpg`. The MKV and MKA outputs ignore `muxOutputPath` and always go to `cutDirPath`. |
 
 ### Configuration matrix
@@ -195,6 +196,15 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
   source ES name `<base>_<lang>.<ext>`; the preview clips' audio files are named
   `preview_NNN.<ext>` / `preview_audio_temp.<ext>`, so their MKVs carry no
   language). Every audio track is flagged default (`AV_DISPOSITION_DEFAULT`).
+- **Track name and flags:** `applyTrackProps` per output stream whose index has
+  an entry in the props list (index beyond the list = nothing): `title` from a
+  non-empty name, `ORIGINAL` and `HEARING_IMPAIRED` on any track,
+  `VISUAL_IMPAIRED` on audio only, `FORCED` on subtitles only. libav writes
+  every one of them on any track type without complaint (measured
+  2026-11-06), so the type filter here is what keeps a hand-edited project
+  from putting `forced` on audio. Not written to MPG (mplex has no field) nor
+  to preview/playback MKVs. Gates `mkvmux_trackprops` (libav read-back) and
+  `trackprops_autocut` (H.264 + MPEG-2 `--auto-cut`, ffprobe).
 - **Abort:** `checkAbort()` polls per packet in `writeInterleaved()`, i.e. only
   after the output file is open and the header written; the tasks therefore
   poll once more right before calling `mux()`. An abort sets `mLastError`
@@ -214,8 +224,9 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
   `partial_track`, `mkv_framerate`, `mkvmux_inputs`, `mka_interleave`,
   `mplex_target`, `chapter_file`, `mux_script`, the cases
   `previewcut_muxfail(_mpeg2)` of `previewcut_abort`, `preview_clip` and
-  `preview_clip_index`. What a finished container holds is checked for track
-  count, interleaving, chapters and timestamps; languages and the A/V offset
+  `preview_clip_index`, `mkvmux_trackprops`, `trackprops_autocut`. What a
+  finished container holds is checked for track count, interleaving,
+  chapters, timestamps, track names and flags; languages and the A/V offset
   are not gated.
 
 ## Redundancy / consolidation candidates

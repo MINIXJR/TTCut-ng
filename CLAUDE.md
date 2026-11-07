@@ -187,8 +187,12 @@ Key classes:
 
 - **Preference list**: `TTCut::audioLanguagePreference` (QStringList) — user-configurable sort priority, persisted in QSettings
 - **Normalization**: `TTCut::normalizeLangCode()` accepts 2-letter, canonical 3-letter, and alternative ISO 639-2 forms (ger→deu, fre→fra, nld→dut, ces→cze, zho→chi, ell→gre, slk→slo, ron→rum, mkd→mac, fas→per); unknown codes return empty string
-- **Sort logic**: `TTAudioItem::operator<` — AC3 > preference index (0..N-1, unmatched = INT_MAX) > discovery order. Empty list → fall back to system locale
+- **Sort logic**: `TTAudioItem::operator<` — AC3 > preference index (0..N-1, unmatched = INT_MAX; a visually or hearing impaired track always INT_MAX) > discovery order. Empty list → fall back to system locale
 - **UI**: QLineEdit in settings Allgemein tab, input normalized on save (unknown codes silently dropped)
+
+### MKV Track Names and Flags
+
+- **`TTTrackProps`** (common/tttrackprops.h): per audio/subtitle track name + Original / visually impaired (audio) / hearing impaired / forced (subtitle), editable in the track lists, saved as `<TrackName>`/`<TrackFlags>` in the project file, written by `TTMkvMergeProvider::applyTrackProps` (type-filtered). Prefill: audio language `mis` → visually impaired + language `deu`, `qks` (ARD "Klare Sprache") → hearing impaired + language `deu`; `.info` `sub_N_hearing_impaired=1` (ttcut-demux, DVB disposition) → hearing impaired. Original and forced are never prefilled.
 
 ### SRT Subtitle Support
 

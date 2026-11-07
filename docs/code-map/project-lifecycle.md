@@ -1,11 +1,12 @@
 ---
-base_commit: 6dd2d5585a25572facffdf41dafb423b2102bd93
-last_verified: 2026-10-14
+base_commit: ec738ddee287368270227fe3340d87c0743a84ea
+last_verified: 2026-11-07
 sources:
   - gui/ttcutmainwindow.h
   - gui/ttcutmainwindow.cpp
   - gui/ttcutmainwindow_headless.cpp
   - gui/ttcutmain.cpp
+  - gui/tttracktreeview.h
   - data/ttavdata.h
   - data/ttavdata.cpp
   - data/ttavlist.h
@@ -45,6 +46,7 @@ flowchart TD
     IDENT["Project identity<br/>mProjectDisplayName,<br/>TTSettings::projectFileName"]
     DIRTY["Dirty flag<br/>mProjectModified"]
     SIGS["TTAVData<br/>cutItem*, avItem* signals"]
+    TRKSIGS["Audio / subtitle list<br/>delay, language, name,<br/>flag edits"]
     TITLE["updateWindowTitle"]
     SAVE["onFileSave / onFileSaveAs"]
     WRITE["TTAVData::writeProjectFile"]
@@ -67,6 +69,7 @@ flowchart TD
     FIN -- "display name, clean flag" --> IDENT
     FIN -- "path" --> RECENT
     SIGS -. "onProjectModified" .-> DIRTY
+    TRKSIGS -. "onProjectModified" .-> DIRTY
     DIRTY -- "* suffix" --> TITLE
     IDENT -- "base name" --> TITLE
     MENU -. "Save / Save as" .-> SAVE
@@ -89,7 +92,8 @@ flowchart TD
 | Menu / Recent / CLI → `openProjectFile` | A file path. The menu dialog filters `*.ttcut` and "Legacy Project (*.prj)"; `.prj` is **the same XML format** under the old extension (saving always writes `.ttcut`, no converter exists). The command line treats a positional file by extension (`.prj`/`.ttcut` → project, anything else → `onReadVideoStream`), takes `--project` only when no positional file exists, and defers the open by a 100 ms timer so the window is up. Recent entries carry the path in `QAction::data`. |
 | `openProjectFile` → `closeProject` → load chain | `closeProject` runs first **only when `avCount() > 0`**; `lastDirPath` is set to the project's directory; `mProjectLoadInProgress = true`; the finished/aborted connections to `TTAVData` are made per open and dropped again in the handlers (`onOpenProjectFileFinished` returns before the `disconnect` calls when no current item exists). Then `TTAVData::readProjectFile` (`stream-open-project-load.md`). |
 | Load chain → `onOpenProjectFileFinished` | `readProjectFileFinished(path)` after `TTAVData` has restored items, stream points, logo data and the `<Settings>` section. The handler releases the flag, queues the auto anomaly scan, and — only when a current item exists — inserts the path into the recent list, sets `mProjectDisplayName` to the base name and **clears the dirty flag** (the `avItemAppended` signals of the load had set it). It does **not** set `TTSettings::projectFileName` (see pitfalls). `onOpenProjectFileAborted` releases the flag and the connections and calls `closeProject()` unconditionally (a second, harmless run when `onAVItemChanged(nullptr)` already closed): no recent entry, dirty flag cleared, cut list empty. |
-| `TTAVData` signals → `onProjectModified` | Exactly six signals mark the project dirty: `cutItemAppended/Removed/Updated`, `cutOrderUpdated`, `avItemAppended/Removed`. Cuts and the video list, that is. **Not** dirty-tracked: stream points (manual marker, analysis, delete), audio repairs, audio/subtitle language and delay, track reorder, the logo profile, and every `<Settings>` value (output name, mux working set, encoder) — all of which the file stores. `onProjectModified` only flips false → true and refreshes the title. |
+| `TTAVData` signals → `onProjectModified` | Six `TTAVData` signals mark the project dirty: `cutItemAppended/Removed/Updated`, `cutOrderUpdated`, `avItemAppended/Removed`. Cuts and the video list, that is. **Not** dirty-tracked: stream points (manual marker, analysis, delete), audio repairs, a track added by hand (`audioItemAppended`/`subtitleItemAppended` reach only the length check and the overlay), the logo profile, and every `<Settings>` value (output name, mux working set, encoder) — all of which the file stores. `onProjectModified` only flips false → true and refreshes the title. |
+| Track lists → `onProjectModified` | `connectAVDataSignals` connects `swapItems`, `removeItem`, `delayChanged`, `languageChanged`, `nameChanged` and `flagChanged` of `audioFileList` and `subtitleFileList` (declared on `TTTrackTreeView`). The views emit them only for user input — each editor gets its value before it is connected — so loading a project or rebuilding a list leaves the flag alone (user decisions 2026-11-07, gate `track_gui` M1). |
 | Dirty flag / identity → `updateWindowTitle` | `"<display name> - <version>"` or just the version string, plus `" *"` when dirty. The display name is the base name of the last opened **or saved** project; empty for a plain video. A plain video open therefore shows `"TTCut-ng x.y *"` — dirty through `avItemAppended`, no name. |
 | `onFileSave` → identity → `writeProjectFile` | Refuses without items. When `projectFileName` is empty it asks through `askProjectFileName` (default `<video base>.ttcut` in `lastDirPath`) and returns on cancel without changing anything. When the chosen name has no suffix, `.ttcut` is appended to `TTSettings::projectFileName` (and so to the display name); the `QFileInfo` handed to `writeProjectFile` is built from the name with its extension, so the file on disk and `projectFileName` agree (gate `save_suffix`). Returns whether a file was written — the close handler needs that. Then `TTLogoProjectData` is built from `mLogoDetector` (markad path **or** ROI) and `writeProjectFile(fInfo, mpStreamPointModel->points(), logoData)` runs inside `try`: a `TTException` is logged (`errorMsg`) and the method returns — no dialog, flag stays dirty, display name unchanged. On success: display name = chosen base name, flag clean. `insertRecentFile` is **not** called on save. |
 | `onFileSaveAs` → `onFileSave` | Asks through the same `askProjectFileName` (default `<video base>.ttcut`, not the current project's name), and only a real answer becomes the save target and the new `lastDirPath`; then `onFileSave` writes without asking again. Cancel changes nothing, the save target stays. |
@@ -110,7 +114,7 @@ flowchart TD
 
 - **Two identities by design** — `mProjectDisplayName` is for the title and set by open and save; `TTSettings::projectFileName` is the save target and set **only by saving** (header comment). Consequence: after Open, the first Save behaves like Save as, pre-filled with `<video base>.ttcut` in `lastDirPath`, not with the opened file. Saving under the opened name is the user's job. Read-derived.
 - **Exit and the close event** — `onFileExit` is `close()` and nothing else, so the unsaved-changes dialog decides. Gate: `tools/diag/test_exit_cancel` (Cancel keeps the window and asks once, Discard closes and ends the application, Save with a cancelled file dialog keeps the window). Measured on the way there: `qApp->quit()` on Qt 6.10.2 runs `closeEvent` on the open windows instead of leaving the loop, which is why the old code asked twice rather than quitting.
-- **Dirty flag covers cuts and the video list only** — stream points, repairs, delays, languages, logo and the `<Settings>` values are saved but never mark the project dirty; New / Exit do not warn about them. A plain video open is "dirty" through `avItemAppended`.
+- **Dirty flag covers cuts, the video list and track edits, moves and removals only** — stream points, repairs, a track added by hand, logo and the `<Settings>` values are saved but never mark the project dirty; New / Exit do not warn about them. A plain video open is "dirty" through `avItemAppended`.
 - **Version check is advisory** — wrong `<Version>` or a foreign root element is logged and then parsed as if fine.
 - **A project that starts no video ends as aborted** — when every `<Video>` is missing or rejected by `resolveProjectPath`, no task is queued and the pool emits neither `exit` nor `aborted`; since `01c6116f` `readProjectFile` sees the zero count and calls `onReadProjectFileAborted` itself, so the flag falls and the headless wait ends (gate `tools/diag/test_project_load_rejected`). `readProjectFile` deletes a previous `TTCutProjectData` before creating the new one (`mpProjectData` is initialised to `nullptr`). A video that exists but fails to open still goes through the task's abort route and is reported.
 - **A project whose video file is missing** — the `<Video>` section starts an open task (the path is well-formed), the task fails, and the load ends through `onReadProjectFileAborted`. The item `doOpenVideoStream` created never joined `mpAVList` (that happens in `onOpenVideoFinished`), so `onAVItemChanged(nullptr)` saw no change and nothing closed: the project's cuts stayed in the global cut list and the window stayed dirty (measured 2026-09-24 offscreen, closing asked "Save changes?"). Now `TTAVData` keeps such items in `mPendingVideoItems` and frees them in `endAbortedProjectLoad`, shows "Project Not Loaded" with the task's reason (unless non-interactive), and `onOpenProjectFileAborted` closes the project. Gate `project_missing_video`.
