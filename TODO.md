@@ -945,6 +945,25 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
   Karten der unkartierten Hauptfunktionen → Audit nach Karte) mit Stand und
   Regeln in [docs/quality-roadmap.md](docs/quality-roadmap.md).
 
+- **Gates zusammenfassen, wo sie dasselbe prüfen** (User-Wunsch 2026-11-07,
+  nicht untersucht). `run-gates.sh` kennt 151 Gates. Zu prüfen: welche Gates
+  dieselbe Eigenschaft am selben Material prüfen oder dasselbe Programm mit
+  fast gleichen Fällen starten, und ob sie sich zu einem Gate mit mehreren
+  Fällen (`cases`) zusammenlegen lassen, ohne dass ein Fehlschlag seinen
+  Fall verliert.
+
+- **Laufzeit des vollen Gate-Laufs senken** (User-Wunsch 2026-11-07, nicht
+  untersucht). Gemessen im vollen Lauf vom 2026-11-07: 714 s Gate-Zeit,
+  die Gates laufen nacheinander. 140 von 151 Gates brauchen unter 5 s; die
+  zehn längsten zusammen rund 5 Minuten (`slider_wheel` 47 s, `open_cancel`
+  47 s, `slider_end` 35 s, `logo_roi` 35 s, `cutsequence_abort` 29 s,
+  `marker_delete_repair` 29 s, `quality_check` 28 s, `mpeg2_end_frame` 24 s,
+  `h26xcut_abort` 21 s, `marker_cutpoint` 20 s). Zwei Hebel: Gates parallel
+  laufen lassen (Gates mit Zeitmessung oder gemeinsamen Dateien ausnehmen,
+  siehe die Fallen zu Fremdlast und gemeinsamem Temp-Verzeichnis) und in den
+  langsamen GUI-Gates feste Wartezeiten durch Warten auf ein Ereignis
+  ersetzen. Wie viel davon Warten ist, ist nicht gemessen.
+
 - **MPEG-2-Neu-Encode am Schnitt: Sprung je Bild vs. sequentiell — an einem
   echten Beispiel prüfen** (Audit-Lauf 13, H6, 2026-09-27, User: „muss ich an
   einem echten Beispiel sehen“). `TTTranscodeProvider::encodeFrames` ruft für
