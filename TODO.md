@@ -964,6 +964,20 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
   langsamen GUI-Gates feste Wartezeiten durch Warten auf ein Ereignis
   ersetzen. Wie viel davon Warten ist, ist nicht gemessen.
 
+- **Wie sollen künftige Releases verteilt werden?** (User-Wunsch 2026-11-07,
+  nicht untersucht). Heute baut `build-package.sh` ein `.deb` für Debian
+  forky, das nur lokal liegt; das GitHub-Release trägt kein Binärpaket.
+  Abzuwägen sind Flatpak, Snap, Docker, ein Ubuntu-PPA und das offizielle
+  Debian-Archiv: Aufwand für Bau und Pflege je Release, erreichte Nutzer, und
+  ob das Format zum Programm passt. Zu prüfen ist dabei, ob die Werkzeuge,
+  die `tools/ttcut-demux` aufruft, in einer Sandbox (Flatpak, Snap) oder
+  einem Container erreichbar sind. Es braucht die CLI-Programme `ffmpeg` und
+  `ffprobe`, das mitgelieferte `ttcut-audiofix` und, für die Untertitel,
+  `ccextractor` (`debian/control`: Recommends `ffmpeg`, `mjpegtools`, `mpv`,
+  `python3-numpy`, `mkvtoolnix`; Suggests `ccextractor`, `python3-pil`).
+  Ebenso, wie ein Container das Wayland-/X11-Fenster und die
+  libmpv-Wiedergabe bekommt.
+
 - **MPEG-2-Neu-Encode am Schnitt: Sprung je Bild vs. sequentiell — an einem
   echten Beispiel prüfen** (Audit-Lauf 13, H6, 2026-09-27, User: „muss ich an
   einem echten Beispiel sehen“). `TTTranscodeProvider::encodeFrames` ruft für
