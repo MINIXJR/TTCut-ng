@@ -222,8 +222,14 @@ static void testNoRepairElement()
     check(avDst.avCount() == 1, "no-repair project: one AV item loaded");
     if (avDst.avCount() != 1) return;
 
+    // The fixture is written by tools/ttcut-screenshots.sh from the template
+    // tools/ttcut-test.ttcut; its track count follows the screenshots (two
+    // audio tracks since v0.87.0), so it is counted, not assumed.
+    QFile fixture(kNoRepairProject);
+    const int audioInFile = fixture.open(QIODevice::ReadOnly) ? int(fixture.readAll().count("<Audio>")) : -1;
     TTAVItem* item = avDst.avItemAt(0);
-    check(item->audioCount() == 1, "no-repair project: one audio track loaded");
+    check(audioInFile >= 1 && item->audioCount() == audioInFile,
+          QString("no-repair project: every audio track loaded (%1 of %2)").arg(item->audioCount()).arg(audioInFile));
     check(item->audioRepairList().isEmpty(),
           "no-repair project: audioRepairList() is empty");
 }

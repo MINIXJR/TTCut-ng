@@ -6,7 +6,8 @@
 # that the three pictures of the audio repair dialog come out - one per view:
 # mute (C+LFE burst), fade-out (lasting stop), fill (hole) -, that they
 # differ from each other, that nothing else is written and that the tracked
-# docs/MainWindow.png is left alone. Then the usual set, which until
+# docs/MainWindow.png is left alone. Then the usual set (it must take the
+# main window and the audio and subtitle track lists), which until
 # 2026-10-14 copied its main-window picture over docs/MainWindow.png on every
 # run (offscreen: a light Fusion picture into the repository); it must leave
 # the file alone as well. The file's bytes are kept aside and put back if a
@@ -46,6 +47,16 @@ if ! TTCUT_QPA_PLATFORM=offscreen "$ROOT/tools/ttcut-screenshots.sh" "$OUT2" > "
   echo "FAIL: ttcut-screenshots.sh (usual set) failed"; tail -n 15 "$W/run-usual.log"; RC=1
 elif [ -f "$OUT2/ttcutng-main.png" ]; then echo "PASS: the usual set took the main-window picture"
 else echo "FAIL: the usual set wrote no ttcutng-main.png"; RC=1; fi
+# The track lists (audio and subtitle tab, since v0.87.0): both pictures, not
+# the same, and the main window still shows the video tab (it is taken first).
+for n in audiolist subtitlelist; do
+  f="$OUT2/ttcutng-$n.png"
+  if [ -f "$f" ] && [ "$(stat -c %s "$f")" -gt 2000 ]; then echo "PASS: picture of the $n ($(stat -c %s "$f") bytes)"
+  else echo "FAIL: picture of the $n is missing or empty"; RC=1; fi
+done
+if [ -f "$OUT2/ttcutng-audiolist.png" ] && cmp -s "$OUT2/ttcutng-audiolist.png" "$OUT2/ttcutng-subtitlelist.png"; then
+  echo "FAIL: the audiolist and subtitlelist pictures are the same"; RC=1
+elif [ -f "$OUT2/ttcutng-audiolist.png" ]; then echo "PASS: the audiolist and subtitlelist pictures differ"; fi
 if cmp -s "$DOCPNG" "$W/MainWindow.before.png"; then echo "PASS: the usual set leaves docs/MainWindow.png alone"
 else echo "FAIL: the usual set changed docs/MainWindow.png (put back)"; cp -p "$W/MainWindow.before.png" "$DOCPNG"; RC=1; fi
 exit $RC

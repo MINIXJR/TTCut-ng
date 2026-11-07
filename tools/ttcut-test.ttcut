@@ -8,7 +8,23 @@
    <Order>0</Order>
    <Name>__AUDIO_PATH__</Name>
    <Language>deu</Language>
+   <TrackName>Deutsch</TrackName>
+   <TrackFlags>original</TrackFlags>
   </Audio>
+  <Audio>
+   <Order>1</Order>
+   <Name>__AUDIO_PATH__</Name>
+   <Language>deu</Language>
+   <TrackName>Hörfilm</TrackName>
+   <TrackFlags>visual-impaired</TrackFlags>
+  </Audio>
+  <Subtitle>
+   <Order>0</Order>
+   <Name>__SUBTITLE_PATH__</Name>
+   <Language>deu</Language>
+   <TrackName>Deutsch (Hörgeschädigte)</TrackName>
+   <TrackFlags>hearing-impaired</TrackFlags>
+  </Subtitle>
   <Cut>
    <Order>0</Order>
    <CutIn>100</CutIn>

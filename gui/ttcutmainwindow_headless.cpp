@@ -15,6 +15,9 @@
 #include <QTimer>
 #include <QFileInfo>
 #include <QThreadPool>
+#include <QAbstractButton>
+#include <QHeaderView>
+#include <QTreeWidget>
 #include "ttcutmainwindow.h"
 #include "ttcutavcutdlg.h"
 #include "ttquickjumpdialog.h"
@@ -43,6 +46,34 @@ void TTCutMainWindow::saveWidgetScreenshot(QWidget* widget, const QString& filen
   pixmap.save(path, "PNG");
   if (TTSettings::instance()->logUI())
     qDebug() << "Screenshot:" << path << pixmap.width() << "x" << pixmap.height();
+}
+
+// A track list fills the whole tab page; the picture keeps only what is in
+// use: the tab bar, the list buttons, the header and the rows, up to the last
+// column.
+static void saveTrackListScreenshot(QTabWidget* tabs, QWidget* listView, const QString& filename)
+{
+  QTreeWidget* tree = listView->findChild<QTreeWidget*>();
+  if (tree == nullptr || tree->topLevelItemCount() == 0) {
+    qWarning("Screenshot mode: %s: no rows in the track list", qPrintable(filename));
+    return;
+  }
+  const QRect last = tree->visualItemRect(tree->topLevelItem(tree->topLevelItemCount() - 1));
+  int bottom = tree->viewport()->mapTo(tabs, last.bottomLeft()).y();
+  for (QAbstractButton* b : listView->findChildren<QAbstractButton*>())
+    if (b->isVisible()) bottom = qMax(bottom, b->mapTo(tabs, QPoint(0, b->height())).y());
+  // The last section stretches to the edge: its start plus its own size hint
+  // ends where its content does.
+  const QHeaderView* header = tree->header();
+  const int lastSection = header->logicalIndex(header->count() - 1);
+  const int contentEnd = header->sectionViewportPosition(lastSection) + header->sectionSizeHint(lastSection);
+  const int right = tree->viewport()->mapTo(tabs, QPoint(contentEnd, 0)).x();
+  const QRect area(0, 0, qMin(tabs->width(), right + 12), qMin(tabs->height(), bottom + 12));
+
+  const QString path = QDir(TTSettings::instance()->screenshotDir()).filePath(filename);
+  tabs->grab(area).save(path, "PNG");
+  if (TTSettings::instance()->logUI())
+    qDebug() << "Screenshot:" << path << area.width() << "x" << area.height();
 }
 
 bool TTCutMainWindow::waitForProjectLoad(int timeoutMs)
@@ -255,8 +286,19 @@ void TTCutMainWindow::runScreenshotMode()
     return;
   }
 
-  // 1. Main window
+  // 1. Main window (video tab)
   saveWidgetScreenshot(this, "ttcutng-main.png", 1200);
+
+  // 1b. Audio and subtitle track lists with their name and flag columns;
+  // back to the video tab afterwards, which every later picture expects.
+  tabFileView->setCurrentWidget(tab_2);
+  QApplication::processEvents();
+  saveTrackListScreenshot(tabFileView, audioFileList, "ttcutng-audiolist.png");
+  tabFileView->setCurrentWidget(tab_5);
+  QApplication::processEvents();
+  saveTrackListScreenshot(tabFileView, subtitleFileList, "ttcutng-subtitlelist.png");
+  tabFileView->setCurrentWidget(tab);
+  QApplication::processEvents();
 
   // 2. Both frames (CutOut + Current) — grab parent widget containing both
   QWidget* framesParent = cutOutFrame->parentWidget();

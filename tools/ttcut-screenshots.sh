@@ -33,6 +33,7 @@ OUTPUT_DIR="${1:-/usr/local/src/TTCut-ng.wiki/images}"
 # Paths for generated test media
 VIDEO_FILE="$TESTDATA_DIR/tux_test.264"
 AUDIO_FILE="$TESTDATA_DIR/tux_test.ac3"
+SUBTITLE_FILE="$TESTDATA_DIR/tux_test.srt"
 PROJECT_FILE="$TESTDATA_DIR/tux_test.ttcut"
 SVG_FILE="$PROJECT_DIR/ui/pixmaps/Tux.svg"
 TEMPLATE_FILE="$SCRIPT_DIR/ttcut-test.ttcut"
@@ -184,11 +185,26 @@ audio_0_trimmed_ms=0
 EOF
 
 #-----------------------------------------------------------------------------
+# Subtitle for the subtitle-list picture. Its first cue starts at 10 s, so the
+# still frames (taken at 0 s) show no overlay.
+#-----------------------------------------------------------------------------
+cat > "$SUBTITLE_FILE" << 'SRT'
+1
+00:00:10,000 --> 00:00:14,000
+Tux sitzt.
+
+2
+00:00:40,000 --> 00:00:44,000
+Tux sitzt immer noch.
+SRT
+
+#-----------------------------------------------------------------------------
 # Create project file from template (replace placeholders with absolute paths)
 #-----------------------------------------------------------------------------
 echo "Creating project file..."
 sed -e "s|__VIDEO_PATH__|$VIDEO_FILE|g" \
     -e "s|__AUDIO_PATH__|$AUDIO_FILE|g" \
+    -e "s|__SUBTITLE_PATH__|$SUBTITLE_FILE|g" \
     "$TEMPLATE_FILE" > "$PROJECT_FILE"
 
 #-----------------------------------------------------------------------------
