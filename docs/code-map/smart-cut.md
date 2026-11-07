@@ -1,6 +1,6 @@
 ---
-base_commit: 5df23670a91c7aa65afd3df6825fd55e8cb6fa3c
-last_verified: 2026-10-17
+base_commit: 16637ceb09067df1b2884e6f71a8174ec3d3dfed
+last_verified: 2026-11-07
 sources:
   - common/ttexception.cpp
   - data/tth26xcuttask.cpp

@@ -1,6 +1,6 @@
 ---
-base_commit: 7d38cc6524b96780321851b669b361eba1129f9a
-last_verified: 2026-10-16
+base_commit: 16637ceb09067df1b2884e6f71a8174ec3d3dfed
+last_verified: 2026-11-07
 sources:
   - avstream/ttsrtsubtitlestream.h
   - avstream/ttsrtsubtitlestream.cpp

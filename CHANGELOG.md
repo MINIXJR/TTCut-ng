@@ -2,6 +2,35 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.87.0 (2026-11-07)
+
+**Track names and MKV flags for audio and subtitle tracks**
+
+### Added
+- **Each audio and subtitle track can carry a name and MKV flags.** The
+  track lists have new columns: Name, Original, Visually impaired (audio),
+  Hearing impaired, and Forced (subtitles). The values are saved in the
+  project file and written to the MKV (and to the MKA of an audio-only
+  cut) on every cut path, including `--auto-cut`.
+- **The flags are prefilled from the recording**, with the reason as
+  tooltip: an audio track with language code `mis` (audio description) is
+  marked visually impaired, one with `qks` (ARD "Klare Sprache") hearing
+  impaired; both get the language German. DVB subtitles that the broadcast
+  marks for the hearing impaired are marked hearing impaired. Original and
+  Forced are never prefilled. A language stored in the project file wins.
+- **ttcut-demux writes `sub_N_hearing_impaired=1` to the `.info`** for
+  DVB subtitles flagged for the hearing impaired. Copy the new
+  `ttcut-demux` to where you run it from; no new option.
+
+### Changed
+- **A visually or hearing impaired audio track sorts behind the main
+  track.** Before, `mis` and `qks` tracks landed there only because their
+  language code is in no preference list; now that they get the language
+  German, the flag keeps them behind the German main track.
+- **Editing, moving or removing a track marks the project modified.**
+  Delay, language, name and flag edits in the track lists put the "*" in
+  the title, and New / Exit ask before dropping them.
+
 ## v0.86.6 (2026-10-29)
 
 **Keyboard shortcuts for menus and playback, reverse playback starts at once**

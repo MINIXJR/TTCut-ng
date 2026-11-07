@@ -1,6 +1,6 @@
 ---
-base_commit: 6dd2d5585a25572facffdf41dafb423b2102bd93
-last_verified: 2026-10-14
+base_commit: 9416e2b403b0992c5affa32c66df4f398cca08bb
+last_verified: 2026-11-07
 sources:
   - avstream/ttmpeg2videostream.cpp
   - avstream/ttmpeg2videostream.h

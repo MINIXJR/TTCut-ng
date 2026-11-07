@@ -1,6 +1,6 @@
 ---
-base_commit: 6dd2d5585a25572facffdf41dafb423b2102bd93
-last_verified: 2026-10-18
+base_commit: 16637ceb09067df1b2884e6f71a8174ec3d3dfed
+last_verified: 2026-11-07
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttframepositiontext.h

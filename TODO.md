@@ -589,6 +589,12 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
     demselben Ton.
 ## Low Priority
 
+- **Eine von Hand hinzugefügte Spur markiert das Projekt nicht als
+  geändert** (2026-11-07, nicht beauftragt). Bearbeiten, Verschieben und
+  Entfernen einer Ton- oder Untertitelspur setzen seit v0.87.0 das „*“;
+  eine Spur aus „Öffnen“ in der Spurliste nicht — `audioItemAppended`/
+  `subtitleItemAppended` erreichen nur Längenprüfung und Overlay
+  (`project-lifecycle.md`). Beim Beenden fragt TTCut-ng dann nicht nach.
 - **H.265-Rückwärtswiedergabe startet erst nach ~2 s** (gemessen 2026-10-28,
   nicht untersucht). mpv ohne Fenster auf dem Abspiel-MKV, wie
   `repro_playback_mkv` es baut: Tux-4K-HEVC (`tux_hevc4k_cra_test.265` +

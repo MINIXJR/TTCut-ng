@@ -5340,6 +5340,21 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 Kurzfassung ausgelieferter Funktionen, neueste zuerst. Ausführlich zu den
 Punkten, die oben einen eigenen Abschnitt haben, steht es dort.
 
+- [x] Track names and MKV flags (2026-11-07, v0.87.0) — per audio/subtitle
+      track a name plus Original, visually impaired (audio), hearing
+      impaired and forced (subtitle) in the track lists, saved as
+      `<TrackName>`/`<TrackFlags>`, written by `TTMkvMergeProvider::
+      applyTrackProps` on every cut path. Prefill: `mis` → visually
+      impaired + `deu`, `qks` → hearing impaired + `deu`, `.info`
+      `sub_N_hearing_impaired=1` (ttcut-demux, DVB disposition) → hearing
+      impaired; never Original/forced. Evidence for `qks` and the audio
+      hearing-impaired column: 5 corpus recordings with `qks` carry EPG
+      `X 2 41 deu Klare Sprache` (EN 300 468 component_type 0x41), RFC 9559
+      FlagHearingImpaired applies to any track type. Track edits, moves and
+      removals mark the project modified. Gates `track_props`,
+      `track_persist`, `track_gui` (M1/M2), `mkvmux_trackprops`,
+      `trackprops_autocut`, `demux_sub_hi`, `esinfo`. Maps
+      `track-management.md`, `output-mux.md`, `project-lifecycle.md`.
 - [x] New logo (2026-10-25, v0.86.5) — film strip with scissors and Tux,
       simplified drawing for 16-32 px, window icon and About dialog, hicolor
       icons in the package; gates `logo` and `app_icon`. See "Logo für
