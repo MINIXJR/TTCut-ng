@@ -42,6 +42,7 @@ extern "C" {
 #include <QDebug>
 #include <QDir>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QFile>
 #include <QGridLayout>
 #include <QTimer>
@@ -59,6 +60,14 @@ extern "C" {
 static const double kSpeedSteps[] = { -4.0, -2.0, 1.0, 2.0, 4.0 };
 static constexpr int kSpeedStepNormal = 2;  // index of 1× in kSpeedSteps
 
+// Live position updates during playback (position label, slider, Set Cut-In/
+// Out state): at most one per interval. mpv reports time-pos for every
+// displayed frame (50 per second on a 50 fps stream, measured 2026-11-08);
+// every update repaints large parts of the main window in the GUI thread,
+// which at frame rate cost 40 % of a core and, on a loaded machine, made mpv
+// drop most frames for being late.
+static constexpr qint64 kLivePositionIntervalMs = 100;
+
 //! Default constructor
 TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   :QWidget(parent)
@@ -73,6 +82,7 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   connect(mpWheelTimer, &QTimer::timeout, this, &TTCurrentFrame::onWheelTimer);
   laCurrentPosition->setCursor(Qt::PointingHandCursor);
   laCurrentPosition->setToolTip(tr("Click to go to a frame or timecode"));
+  fixPositionLabelWidth();
 
   // mpegWindow steckt heute direkt im gbCurrentFrame-Grid. Wir kapseln es in
   // einen Stack-Container, sodass das libmpv-Render-Widget bei Playback
@@ -579,6 +589,47 @@ void TTCurrentFrame::updateCurrentPosition(int pos)
   emit newFramePosition( actualPos );
 }
 
+//! QLabel::setText() asks the parent layout to recompute unless the label
+//! has a fixed size; with a flexible width every new position text sent a
+//! LayoutRequest up the whole widget chain to the main window, which then
+//! repainted most of its area (measured 2026-11-08: 46 LayoutRequests per
+//! second on each ancestor during 50 fps playback). The height is already
+//! fixed in the .ui file; this fixes the width to the widest text
+//! ttFramePositionText() produces: widest digit everywhere, seven digits of
+//! frame index (55 hours at 50 fps), widest frame type tag.
+void TTCurrentFrame::fixPositionLabelWidth()
+{
+  const QFontMetrics fm(laCurrentPosition->font());
+  QChar widestDigit('0');
+  for (char c = '1'; c <= '9'; ++c)
+    if (fm.horizontalAdvance(QChar(c)) > fm.horizontalAdvance(widestDigit))
+      widestDigit = QChar(c);
+  const QString d2 = QString(2, widestDigit);
+  const QString digits = d2 + ':' + d2 + ':' + d2 + '.' + QString(3, widestDigit)
+                       + " (" + QString(7, widestDigit) + ')';
+
+  // The label's own sizeHint adds its frame and margins to the text width.
+  const QString shown = laCurrentPosition->text();
+  laCurrentPosition->setMinimumWidth(0);
+  laCurrentPosition->setMaximumWidth(QWIDGETSIZE_MAX);
+  int width = 0;
+  for (int type = 1; type <= 3; ++type) {
+    laCurrentPosition->setText(digits + ttFrameTypeTag(type));
+    width = qMax(width, laCurrentPosition->sizeHint().width());
+  }
+  laCurrentPosition->setText(shown);
+  laCurrentPosition->setFixedWidth(width);
+  mPositionLabelReady = true;
+}
+
+void TTCurrentFrame::changeEvent(QEvent* event)
+{
+  QWidget::changeEvent(event);
+  if (mPositionLabelReady
+      && (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange))
+    fixPositionLabelWidth();
+}
+
 void TTCurrentFrame::navigateAndUpdate(int newFramePos)
 {
   dropPendingWheel();
@@ -728,6 +779,8 @@ void TTCurrentFrame::onPlayVideo()
     mPlayer->stop();
     return;
   }
+
+  mLivePositionClock.invalidate();   // first live position of this playback passes
 
   // Player + renderWidget entstehen im Konstruktor, der GL-Context beim
   // Stream-Open (realizeRenderContext via onAVDataChanged). Als Netz hier
@@ -952,6 +1005,12 @@ void TTCurrentFrame::onPlaybackPositionChanged(double seconds)
   float frameRate = videoStream->frameRate();
   if (frameRate <= 0.0f) return;
 
+  // Throttle (see kLivePositionIntervalMs). The stop position does not come
+  // through here (onPlaybackFinished), so it stays frame-exact.
+  if (mLivePositionClock.isValid() && mLivePositionClock.elapsed() < kLivePositionIntervalMs)
+    return;
+  mLivePositionClock.start();
+
   // Display frame -> stream index, with the MPEG-2 field-picture correction
   // onPlaybackFinished applies to the stop position (they used to disagree
   // by the number of extras before the position; code-audit run 3,
@@ -963,8 +1022,8 @@ void TTCurrentFrame::onPlaybackPositionChanged(double seconds)
   // (frameType / frameTime) — no stream seek, no decode. It emits
   // newFramePosition, which advances the slider, stores the integer in
   // TTAVData and runs TTCutFrameNavigation::checkCutPosition (the Set Cut-In/
-  // Out buttons and the position they would take follow the live position);
-  // all cheap at observer rate (~10 Hz).
+  // Out buttons and the position they would take follow the live position).
+  // The widgets it touches repaint in the GUI thread, hence the throttle.
   updateCurrentPosition(framePos);
 }
 

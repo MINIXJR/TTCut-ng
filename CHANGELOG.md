@@ -2,6 +2,19 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Fixed
+- **Playback in "Current Frame" stuttered on a busy machine.** During
+  playback the position below the picture, the slider and the Set Cut-In/Out
+  buttons followed every single frame, and each update made most of the main
+  window repaint. That alone took 40 % of a CPU core; with a video encoder
+  running in parallel the window could no longer keep up and mpv dropped
+  about three of four frames (sound stayed in sync). The position now
+  follows ten times per second and repaints only itself. Measured on a
+  720p50 H.264 recording with HandBrake running: 44–52 instead of 12–17
+  frames shown per second. The stop position is still frame-exact.
+
 ## v0.87.0 (2026-11-07)
 
 **Track names and MKV flags for audio and subtitle tracks**

@@ -59,6 +59,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 
   protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   public slots:
     void onAVDataChanged(TTAVItem* avData);
@@ -94,6 +95,8 @@ void onGotoFramePreview(int pos);
 
   private:
     void updateCurrentPosition(int pos = -1);
+    //! Fixes the width of laCurrentPosition to its widest possible text.
+    void fixPositionLabelWidth();
     //! Show newFramePos, make it the cut position and update the label - the
     //! tail every navigation slot shares once the stream has moved.
     void navigateAndUpdate(int newFramePos);
@@ -153,6 +156,12 @@ void onGotoFramePreview(int pos);
     int                 mWheelPreviewed = -1;   // target of the last preview
     bool                mInWheelDecode = false;
     QList<qint64>       mExactDecodeMs;         // last three, navigateAndUpdate()
+    // Since the last live position update during playback (invalid = none
+    // yet in this playback); onPlaybackPositionChanged passes at most one
+    // update per kLivePositionIntervalMs.
+    QElapsedTimer       mLivePositionClock;
+    // changeEvent may arrive during setupUi(), before laCurrentPosition exists.
+    bool                mPositionLabelReady = false;
     TTVideoStream*      videoStream;
     TTAVItem*           mAVItem;
     TTAVItem*           currentCutAVItem;
