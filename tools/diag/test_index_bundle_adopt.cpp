@@ -10,13 +10,16 @@
 /*                                                                            */
 /* usage: test_index_bundle_adopt <es-file> <display-index> [expected-AU]     */
 /*        BREAK_METADATA=1  adopt the index with deliberately wrong metadata; */
-/*                          the decode MUST fail, but quickly (bound B).      */
+/*                          the decode MUST fail, quickly, with one neighbour */
+/*                          attempt and one error message (bound B).          */
 /*----------------------------------------------------------------------------*/
 
 #include "../../extern/ttffmpegwrapper.h"
 #include "../../avstream/ttframeindexer.h"
+#include "../../common/ttmessagelogger.h"
 
 #include <QElapsedTimer>
+#include <QFile>
 
 #include <cstdio>
 #include <cstdlib>
@@ -76,6 +79,10 @@ int main(int argc, char** argv)
     printf("expected AU derived from display map: %d\n", expectAU);
   }
 
+  // What the decode logs: the logger's file grows by exactly these lines.
+  const QString logPath = TTMessageLogger::getInstance()->logFilePath();
+  const qint64 logBefore = QFile(logPath).size();   // 0 when not written yet
+
   QElapsedTimer t; t.start();
   QImage img = adopter.decodeFrame(display);
   const qint64 ms = t.elapsed();
@@ -84,7 +91,25 @@ int main(int argc, char** argv)
 
   if (breakMetadata) {
     // Bound B: wrong metadata must still fail fast instead of draining to EOF.
-    check(ms < 1000, "wrong metadata fails in under 1 s (bound B holds)");
+    // On the gate's Tux PAFF sample the tags then step by two and stay odd,
+    // the even target never comes, and the failure costs four bounded skip
+    // loops (two attempts each for the frame and its neighbour, ~290 outputs
+    // each): 1069-1114 ms idle over five runs. The same failure with the
+    // pre-fix bound (the whole index) took 15 910-15 979 ms (probe build,
+    // 2026-11-08). 4 s sits a factor of 3.6 above the one and four below the
+    // other. The former 1 s came from 06x03 (SD PAFF),
+    // where the wrong metadata happened to deliver a picture in 325 ms.
+    check(img.isNull(), "wrong metadata delivers no picture");
+    check(ms < 4000, "wrong metadata fails in under 4 s (a drain to EOF takes ~16 s on the Tux PAFF sample)");
+    QFile log(logPath);
+    QStringList added;
+    if (log.open(QIODevice::ReadOnly | QIODevice::Text) && log.seek(logBefore))
+      added = QString::fromUtf8(log.readAll()).split('\n', Qt::SkipEmptyParts);
+    const int errors     = added.filter("[error]").size();
+    const int neighbours = added.filter("trying frame").size();
+    printf("log during the decode: %d error(s), %d neighbour attempt(s)\n", errors, neighbours);
+    check(neighbours == 1, "exactly one neighbour attempt");
+    check(errors == 1, "exactly one error message");
   } else {
     check(!img.isNull(), "decodeFrame returned an image");
     const QList<TTFrameInfo>& idx = adopter.frameIndex();

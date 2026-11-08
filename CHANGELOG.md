@@ -14,6 +14,9 @@ All notable changes to TTCut-ng are documented in this file.
   follows ten times per second and repaints only itself. Measured on a
   720p50 H.264 recording with HandBrake running: 44–52 instead of 12–17
   frames shown per second. The stop position is still frame-exact.
+- **A frame that could not be decoded logged two errors.** H.264/H.265 retry
+  the frame before it once; that attempt logged its own error on top of the
+  one for the requested frame. It is one error now, naming both frames.
 
 ## v0.87.0 (2026-11-07)
 

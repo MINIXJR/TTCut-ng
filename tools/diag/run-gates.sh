@@ -811,7 +811,11 @@ gate_h26x_framerate()    { need "$V264" "$MBAFF" "$PAFF" "$H265"
                                "$W/paff.264=25:StreamTiming" "$W/hevc.265=50:StreamTiming" \
                                "$W/withinfo.264=50:Info" "$W/mismatch.264=30:Info:warn" \
                                "$W/norate.264=50:StreamTiming:log=.info without frame_rate, frame rate from the SPS timing"; }
-gate_index_bundle_adopt() { need "$PAFF"; "$D/test_index_bundle_adopt" "$PAFF" 200; }
+# Second case = bound B of the 2026-08-28 frame-index-bundle spec: with wrong
+# metadata the decode must fail fast, with one neighbour attempt and one error.
+gate_index_bundle_adopt() { cases 120 index_bundle_delivery index_bundle_wrong_metadata; }
+case_index_bundle_delivery()       { need "$PAFF"; "$D/test_index_bundle_adopt" "$PAFF" 200; }
+case_index_bundle_wrong_metadata() { need "$PAFF"; BREAK_METADATA=1 "$D/test_index_bundle_adopt" "$PAFF" 200; }
 # The Tux timeline has no aspect switch: the gate is "exactly 0 transitions".
 gate_aspectscan_mpeg2()  { need "$M2V"; "$D/test_aspectscan_mpeg2" "$M2V" 2 0; }
 gate_aspect_window() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1

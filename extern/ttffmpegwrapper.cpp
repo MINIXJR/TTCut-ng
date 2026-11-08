@@ -529,14 +529,20 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
         mCurrentFrameIndex = frameIndex;
 
         cacheFrame(frameIndex, result);
-    } else if (!isCancelled()) {
+    } else if (!isCancelled() && fallbackDepth == 0) {
+        // One error per failed request: the neighbour attempt (depth 1)
+        // stays silent and this message names both frames. Before, each
+        // level logged its own error, two for one undeliverable frame.
         if (mSearchMode && TTSettings::instance()->logFFmpegDecoder()) {
             qDebug() << "Search-mode decodeFrame: failure at frame" << frameIndex
                      << "(possibly non-IDR I-slice with DPB inconsistency)";
         }
+        const QString frames = (frameIndex > 0)
+            ? QString("frame %1 and its neighbour %2").arg(frameIndex).arg(frameIndex - 1)
+            : QString("frame %1 (no neighbour to try)").arg(frameIndex);
         TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
-            QString("decodeFrame: FAILED to decode frame %1 and fallback (total_frames=%2)")
-                .arg(frameIndex).arg(mBundle.index.size()));
+            QString("decodeFrame: FAILED to decode %1 (total_frames=%2)")
+                .arg(frames).arg(mBundle.index.size()));
     }
     return result;
 }
