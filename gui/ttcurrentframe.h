@@ -56,6 +56,11 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
     void refreshCurrentFrame();
 
     void wheelEvent(QWheelEvent * e);
+    //! True when none of the last three exact decodes took 200 ms or more
+    //! (also when none was measured yet). Decides whether a wheel notch with
+    //! FastSlider off shows the exact frame at once or a keyframe preview
+    //! first; public so the wheel gate can check the path the widget takes.
+    bool exactDecodeIsCheap() const;
 
   protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -143,9 +148,6 @@ void onGotoFramePreview(int pos);
     //! Forgets a pending wheel target - any other navigation or a stream
     //! change wins over it. No-op while the wheel's own decode runs.
     void                dropPendingWheel();
-    //! True when none of the last three exact decodes took 200 ms or more
-    //! (also when none was measured yet).
-    bool                exactDecodeIsCheap() const;
 
   private:
     bool                isControlEnabled;

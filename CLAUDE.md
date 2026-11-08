@@ -70,7 +70,13 @@ gate script that needs only repository fixtures (`--quick` for the
 material-free tier, `--list` for the table) and prints one PASS/FAIL/SKIP
 line per gate. It also prints the compiler warnings of its build and the
 number of files that build compiled: the build is incremental, so the count
-covers the whole tree only after `rm -rf build`.
+covers the whole tree only after `rm -rf build`. And it prints the machine
+load at the start and the end, with a warning above a quarter of the CPUs: a
+gate with a time bound (`slider_wheel`, `index_bundle_adopt`, …) can then
+fail for that reason alone — measured 2026-11-08, one frame decode took
+27 ms idle and 140–243 ms beside a 4K HEVC decode (HandBrake) sharing the
+L3 cache. Rerun on an idle machine
+before calling such a FAIL a regression.
 
 When to run it (user decision 2026-10-14 — full runs are not to be repeated
 without need):

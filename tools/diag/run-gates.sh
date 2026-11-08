@@ -28,7 +28,10 @@
 # earlier session is ever run (tools/diag binaries are gitignored and
 # invisible to git status). The run prints the compiler warnings of that
 # build and the number of files it compiled, after the build and again below
-# the verdict line; the count does not change the exit code.
+# the verdict line; the count does not change the exit code. Likewise the
+# machine load (1-minute average) at the start and at the end, with a warning
+# when other processes keep the machine busy: gates with a time bound can
+# then fail for that reason alone. The load changes no verdict either.
 #
 # Deliberately NOT in the table:
 #   need a display (refuse offscreen): test_dialog_then_cut,
@@ -1168,7 +1171,7 @@ QUICK=0; BUILD=1; LIST=0; SELECT=()
 for a in "$@"; do
   case "$a" in
     --quick) QUICK=1 ;; --no-build) BUILD=0 ;; --list) LIST=1 ;;
-    --help|-h) sed -n '2,25p' "$0"; exit 0 ;;
+    --help|-h) sed -n '2,/^[^#]/{/^#/p}' "$0"; exit 0 ;;   # the header comment
     -*) echo "unknown option $a"; exit 2 ;;
     *) SELECT+=("$a") ;;
   esac
@@ -1190,8 +1193,25 @@ for s in "${SELECT[@]}"; do
   table | awk -v n="$s" '$1==n{f=1} END{exit !f}' || { echo "unknown gate $s (see --list)"; exit 2; }
 done
 
+# Machine load beside the verdicts. Measured 2026-11-08: a software 4K HEVC
+# decode (HandBrake) on the same CCD slowed one TTCut frame decode from 27 ms
+# to 140-243 ms by sharing the L3 cache, and slider_wheel/index_bundle_adopt
+# failed on master for that reason alone. Read before the build: the build
+# itself loads every CPU. Warning above a quarter of the CPUs busy. The load
+# average counts the whole machine, so all CPUs: plain nproc counts only the
+# CPUs this process may use (2 under taskset -c 2,18).
+load_note() {                           # label -> one line
+  local l n; l=$(cut -d' ' -f1 /proc/loadavg); n=$(nproc --all)
+  printf 'load: %s (1-minute average, %s CPUs) %s' "$l" "$n" "$1"
+  awk -v l="$l" -v n="$n" 'BEGIN{exit !(l > n/4)}' &&
+    printf ' - WARNING: other processes keep the machine busy; a gate with a time bound can fail for that reason alone'
+  echo
+}
+
 RUN="$GATES_ROOT/$(date +%Y%m%d-%H%M%S)"; mkdir -p "$RUN"
 echo "run directory: $RUN"
+load_start=$(load_note "at the start, before the build")
+echo "$load_start"
 # Build and gates run outside the terminal's cgroup memory limit where
 # systemd-run is available (reference_konsole_memory_high_cgroup: a 1 GB
 # memory.high slows a full build by a factor of five and a mux by 25).
@@ -1246,6 +1266,8 @@ done < <(table)
 
 echo "---- $pass PASS, $fail FAIL, $skip SKIP  (logs: $RUN)"
 echo "$build_note"
+echo "$load_start"
+load_note "at the end"
 [ $fail -gt 0 ] && exit 1
 [ $skip -gt 0 ] && exit 2
 exit 0

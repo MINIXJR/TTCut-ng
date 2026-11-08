@@ -91,7 +91,13 @@ int main(int argc, char** argv)
     bool delivered = display >= 0 && display < idx.size() &&
                      idx[display].deliveredDecodeIndex == expectAU;
     check(delivered, "deliveredDecodeIndex == expected target AU (no fallback)");
-    check(ms < 100, "delivery under 100 ms");
+    // The drain this guards against decodes from the seek point to EOF. On
+    // the gate's Tux PAFF sample (6000 packets) a single-threaded decode to
+    // EOF takes ~4360 ms idle (ffmpeg -threads 1, 2026-11-08); a correct
+    // delivery takes 27 ms idle and up to 243 ms while another process
+    // shares the L3 cache (4K HEVC decode, HandBrake, same day). 1 s sits a
+    // factor of four from both. The former 100 ms bound failed under load.
+    check(ms < 1000, "delivery under 1 s (a drain to EOF takes ~4 s on the Tux PAFF sample)");
   }
 
   return failures == 0 ? 0 : 1;

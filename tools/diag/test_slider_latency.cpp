@@ -33,8 +33,11 @@
 //          I-frame (forward the first at/after, backward the last at/before),
 //          and three single notches each way must each report exactly that
 //          I-frame - before 2026-10-18 a notch showed the keyframe, then the
-//          exact frame. FastSlider off on cheap material (Tux H.264): three
-//          single notches each way must each report exactly the exact frame.
+//          exact frame. FastSlider off: three single notches each way must
+//          each end on the exact frame; when the widget's exact decodes are
+//          cheap (exactDecodeIsCheap(), e.g. Tux H.264 on an idle machine)
+//          with exactly one report, when they are expensive the keyframe
+//          preview may come first (at most two reports; printed as NOTE).
 //   gateclick: five page-step clicks and five jumps, median time to the new
 //          picture at most 300 ms. Meant for FastSlider on and Tux H.265 4K,
 //          where the exact decode of the I-frame took ~600-750 ms before the
@@ -488,6 +491,7 @@ int main(int argc, char** argv)
   // --- wheel over the current frame ------------------------------------------
   int wheelReports = -1, wheelFinal = -1, wheelTarget = -2;
   int wheelSingleFails = 0;
+  int wheelSingleExpensive = 0;   // notches the widget served with a preview first
   if (!gate || gateWheel) {
     auto wheel = [&](bool post, bool forward = true) {
       const QPointF p(cur->width() / 2, cur->height() / 2);
@@ -526,11 +530,19 @@ int main(int argc, char** argv)
       printStats("picture changed after", lat);
     }
     // One notch = one report: FastSlider on the expected I-frame, off the
-    // exact frame (cheap material only: on UHD a notch previews first).
+    // exact frame. FastSlider off with expensive exact decodes (the widget's
+    // own exactDecodeIsCheap(), asked before the notch: UHD material, or any
+    // material on a machine whose L3 cache another process thrashes -
+    // measured 2026-11-08, 27 ms idle against 140-243 ms beside a 4K HEVC
+    // decode on the same CCD) the widget shows a keyframe preview first by
+    // design; then the notch may report the preview before the exact frame,
+    // and only the last report has to be the exact frame.
     for (int i = 0; i < (gateWheel ? 6 : 0); ++i) {
       const bool forward = i < 3;
       spin(500);
       const int from = shownPos;
+      const bool previewAllowed = !fast && !cur->exactDecodeIsCheap();
+      if (previewAllowed) ++wheelSingleExpensive;
       const size_t logBefore = shownLog.size();
       const qint64 t0 = gClock.elapsed();
       wheel(true, forward);
@@ -538,15 +550,17 @@ int main(int argc, char** argv)
       QString steps;
       for (size_t k = logBefore; k < shownLog.size(); ++k)
         steps += QString(" %1@%2ms").arg(shownLog[k].second).arg(shownLog[k].first - t0);
-      const bool once = shownLog.size() == logBefore + 1;
+      const size_t reports = shownLog.size() - logBefore;
+      const bool countOk = previewAllowed ? (reports == 1 || reports == 2) : reports == 1;
       const int got = shownPos;
       const int expected = notchTarget(from, forward);
       cur->onGotoFrame(got, 0);
-      const bool ok = once && got == expected;
+      const bool ok = countOk && got == expected;
       if (!ok) ++wheelSingleFails;
-      printf("  wheel notch %s %d: %d -> %d, expected %d; positions:%s%s\n",
-             forward ? "forward" : "back", i % 3 + 1, from, got, expected,
-             qPrintable(steps), ok ? "" : "  <- wrong");
+      printf("  wheel notch %s %d%s: %d -> %d, expected %d; positions:%s%s\n",
+             forward ? "forward" : "back", i % 3 + 1,
+             previewAllowed ? " (exact decode expensive: preview allowed)" : "",
+             from, got, expected, qPrintable(steps), ok ? "" : "  <- wrong");
     }
     for (int round = 0; round < (gate ? 1 : 2); ++round) {
       spin(1500);
@@ -656,6 +670,9 @@ int main(int argc, char** argv)
              wheelSingleFails, fast ? "I-frame" : "frame");
       return 1;
     }
+    if (wheelSingleExpensive > 0)
+      printf("NOTE: %d of 6 single notches ran with expensive exact decodes (preview first); "
+             "the at-once check for cheap material did not run for them\n", wheelSingleExpensive);
     if (wheelFinal != wheelTarget) {
       printf("FAIL: wheel ended at %d, expected %d\n", wheelFinal, wheelTarget);
       return 1;
