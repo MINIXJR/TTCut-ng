@@ -81,3 +81,6 @@ tools/test-videos/cache/
 docs/plans/
 docs/superpowers/
 tools/ttcut-burst-probe/ttcut-burst-probe
+
+# Local publish target for build-package.sh --publish (may be a symlink)
+/.env
