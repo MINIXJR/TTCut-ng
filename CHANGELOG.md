@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.87.1 (2026-11-15)
+
+**Smooth playback on a busy machine**
 
 ### Fixed
 - **Playback in "Current Frame" stuttered on a busy machine.** During

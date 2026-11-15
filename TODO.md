@@ -171,11 +171,16 @@ _None._
     (0 verworfene Frames bei Echtzeit-Wiedergabe, 24,7× Reserve bei reiner
     Dekodierung), mpv-Konfiguration (beide Player teilen sich
     `gui/ttmpvlibbackend.cpp` samt `hwdec=no`).
-  - **Offen und ausdrücklich ungemessen:** ob die Zusatzstufe des Stapels
-    (Render-to-Texture plus Komposition pro Frame statt direkter Darstellung)
-    tatsächlich die Reserve kostet, die der Vorschau das Ruckeln erspart.
-    Nächster Schritt wäre, die Last künstlich nachzustellen und beide Fenster
-    gegeneinander laufen zu lassen.
+  - **Ursache des Ruckelns gefunden und behoben (2026-11-08, `d9ef8ce0`) —
+    nicht der Stapel:** mpv meldete die Position bei jedem Bild (50/s), jede
+    Meldung setzte die Positionsanzeige mit flexibler Breite, und das
+    Hauptfenster malte fast ganz neu (40 % eines Kerns ohne Last). Drossel
+    100 ms + feste Breite: unter HandBrake-Last 44–52 statt 12–17 Bilder/s
+    (Kante und Falle in `docs/code-map/playback.md`).
+  - **Weiter offen:** ob die Zusatzstufe des Stapels (Render-to-Texture plus
+    Komposition pro Frame statt direkter Darstellung) Reserve kostet.
+    Gemessener Rest nach dem Fix: 9×/s malen Positionsanzeige, Schieber und
+    `mpegWindow` UNTER dem GL-Widget neu (StackAll) — nicht beauftragt.
   - **Zu klären ist dann:** Braucht es die Überlagerung überhaupt noch, oder
     gibt es eine bessere — auch gern kompliziertere — Lösung für den
     KWin-Repaint-Fehler, die ohne zweites gleichzeitig sichtbares Widget
@@ -1044,6 +1049,10 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
 - **Wie sollen künftige Releases verteilt werden?** (User-Wunsch 2026-11-07,
   nicht untersucht). Heute baut `build-package.sh` ein `.deb` für Debian
   forky, das nur lokal liegt; das GitHub-Release trägt kein Binärpaket.
+  Für die eigenen Rechner kann `build-package.sh` die Pakete seit
+  `a90a675d` in ein privates reprepro-Repo veröffentlichen (Suite sid,
+  `--publish`/`--publish-only`, Ziel aus `.env`) — die Frage nach einem
+  öffentlichen Weg bleibt davon unberührt.
   Abzuwägen sind Flatpak, Snap, Docker, ein Ubuntu-PPA und das offizielle
   Debian-Archiv: Aufwand für Bau und Pflege je Release, erreichte Nutzer, und
   ob das Format zum Programm passt. Zu prüfen ist dabei, ob die Werkzeuge,

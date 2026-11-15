@@ -1200,17 +1200,17 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
 <context>
     <name>TTCurrentFrame</name>
     <message>
-        <location filename="../gui/ttcurrentframe.cpp" line="75"/>
+        <location filename="../gui/ttcurrentframe.cpp" line="84"/>
         <source>Click to go to a frame or timecode</source>
         <translation>Klick: zu Frame oder Timecode springen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcurrentframe.cpp" line="869"/>
+        <location filename="../gui/ttcurrentframe.cpp" line="922"/>
         <source>Preparing playback (muxing video and audio)...</source>
         <translation>Wiedergabe wird vorbereitet (Video und Ton werden gemuxt) …</translation>
     </message>
     <message>
-        <location filename="../gui/ttcurrentframe.cpp" line="870"/>
+        <location filename="../gui/ttcurrentframe.cpp" line="923"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
@@ -1989,7 +1989,7 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1731"/>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="417"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="459"/>
         <source>
 
 Source:  %1
@@ -2028,7 +2028,7 @@ Ergebnis:  %2  (%3 entfernt)</translation>
         <translation type="vanished">Logo-Profil konnte nicht verifiziert werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="352"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="394"/>
         <source>%1 decode errors detected in %2 region(s) during demux.
 
 This MPEG-2 stream has defective GOPs that may cause A/V sync issues.
@@ -2374,28 +2374,28 @@ Marker und Reparaturen löschen?</numerusform>
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="357"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="399"/>
         <source>Affected regions:</source>
         <translation>Betroffene Regionen:</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="358"/>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="359"/>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="360"/>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="361"/>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="362"/>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="363"/>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="364"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="400"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="401"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="402"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="403"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="404"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="405"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="406"/>
         <source>errors</source>
         <translation>Fehler</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="367"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="409"/>
         <source>Stream Integrity Warning</source>
         <translation>Stream-Integritätswarnung</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="369"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="411"/>
         <source>Import as Stream Points</source>
         <translation>Als Landezonen übernehmen</translation>
     </message>
@@ -2406,13 +2406,13 @@ Marker und Reparaturen löschen?</numerusform>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1761"/>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="422"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="464"/>
         <source>Cutting Complete</source>
         <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1762"/>
-        <location filename="../gui/ttcutmainwindow_headless.cpp" line="423"/>
+        <location filename="../gui/ttcutmainwindow_headless.cpp" line="465"/>
         <source>Video cutting has finished successfully.
 
 Output file:
