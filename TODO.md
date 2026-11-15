@@ -9,6 +9,83 @@ _None._
 
 ## Medium Priority
 
+- **Logo-Erkennung trifft schlecht — prüfen und verbessern** (Anwender,
+  2026-11-09; nichts untersucht). Heute: `TTLogoDetector`
+  (`data/ttlogodetector.cpp`) mit manueller ROI (Kantenprofil aus 10
+  I-Frames, 70-%-Regel) oder markad-PGM (bündig in die Ecke gelegt, ohne
+  Prüfung); die Suche in `data/ttsearchtask_logo.cpp`; Karten
+  `stream-points.md` und `detection-and-search.md`. Zuerst Fälle sammeln,
+  an denen sie versagt (Aufnahme, Sender, Bildnummer; erwartet vs.
+  gefunden: zu früh, zu spät, gar nicht), und dort messen, bevor etwas
+  geändert wird.
+- **Mehrere Tonspuren: Vorschau, „Aktueller Frame“, Burst-Prüfung**
+  (Anwender, 2026-11-09; vorbereitet, nicht begonnen). Anlass: Aufnahmen
+  mit deutscher und englischer Spur — heute ist überall nur die Spur mit
+  Index 0 hörbar bzw. geprüft. Index 0 ist die oberste Zeile der Tonliste
+  (einmal beim Laden sortiert, danach tauschen die Auf/Ab-Knöpfe in
+  derselben Liste, `TTAudioList::swap`; gelesen, nicht in der Oberfläche
+  ausprobiert). Drei Teile, Reihenfolge noch offen; Burst und Vorschau
+  berühren sich an der Burst-Zeile des Dialogs und gehören zusammen
+  entworfen.
+  - **Vorschau** (vom Anwender bestätigt): jeder Clip enthält alle
+    Tonspuren in der Reihenfolge der Tonliste; Auswahl im Dialog, Vorgabe
+    die oberste Spur. Eine Spur, die sich nicht schneiden lässt, fehlt im
+    Clip, und der Dialog zeigt einen sichtbaren Hinweis. Die Versatz-Spalte
+    der Schnittliste bleibt bei der ersten Spur. Annahme, nicht bestätigt:
+    die gewählte Spur bleibt beim Clipwechsel und nach „Schnitt
+    verschieben“ erhalten. Heute fest Index 0 an vier Stellen (Clip-Bau
+    doppelt, siehe P3): `TTCutPreviewTask::operation` (MPEG-2,
+    `data/ttcutpreviewtask.cpp:307`), `createH264PreviewClip` (`:562`),
+    `ttRebuildMpeg2PreviewClip` und `ttRebuildSmartCutPreviewClip`
+    (`data/ttpreviewclip.cpp:266`, `:359`); dazu Aufräumen
+    (`data/ttcutpreviewtask.cpp:707`), `ttResolvePreviewSource`
+    (`data/ttpreviewclip.cpp:71`) und
+    `TTCutPreview::applyOutputChannels` (`gui/ttcutpreview.cpp:846`).
+    `cutAudioTracks` und `TTMkvMergeProvider::mux` nehmen schon Listen.
+    Fallen: `TTMpvWrapper::load()` setzt vor jeder Datei `aid=auto`
+    (`setSpeed(1.0)`), die Spurwahl muss nach jedem Laden neu gesetzt
+    werden, ebenso die Kanal-Festlegung (5.1 nur bei AC3); fehlt eine Spur
+    im Clip, verschiebt sich die Nummerierung — die Auswahl darf nicht nach
+    Position zählen.
+  - **Fehlgeschlagener Tonschnitt in der Vorschau wird verschwiegen**
+    (Lesebefund 2026-11-09, nicht nachgestellt; Anwender: „hört sich nach
+    einem Bug an“). MPEG-2 beim Aufbau bricht mit Meldung ab
+    (`0bd07c93`); H.26x beim Aufbau schreibt nur eine Warnung ins Log
+    (`data/ttcutpreviewtask.cpp:596`), beide Neubauten reagieren gar
+    nicht — der Clip läuft jeweils ohne Ton, als wäre nichts. Wird mit dem
+    Hinweis oben behoben. Vorher nachstellen (wie Gate-Fall
+    `previewcut_noread`, aber mit unlesbarer Tondatei).
+  - **„Aktueller Frame“** (Anwender: „würde auch Sinn machen“): dieselbe
+    Spurwahl bei der Wiedergabe. H.26x: das Abspiel-MKV
+    (`TTPlaybackMuxTask`) enthält nur die erste Spur, und der
+    Fingerabdruck des Zwischenspeichers kennt nur deren Pfad
+    (`playback.md`); MPEG-2 spielt die Tondatei direkt. Dieselbe
+    `aid=auto`-Falle.
+  - **Burst-Prüfung: welche Spur** (Anwender). Heute prüfen alle drei
+    Anzeigen nur Index 0 über `detectCutInBurst`/`detectCutOutBurst`
+    (`data/ttavdata.cpp:2910`, `:3391`): Spalte 5 der Schnittliste
+    (`TTCutTreeView::burstHint`), die Burst-Zeile der Vorschau und der
+    Warndialog vor dem Schnitt (`data/ttavdata.cpp:1673`). Offen: alle
+    Spuren prüfen oder nur die gewählte, und was die drei Anzeigen dann
+    zeigen.
+  - **Burst-Ausreißer mitmachen** (Anwender, 2026-11-09): die kurzen
+    Ausreißer am Schnittrand, die der heutige Detektor verpasst — siehe
+    „Multi-frame audio burst at cut boundaries“ unter Known Limitations.
+    Reale Fälle unter der 20-dB-Schwelle: Futurama (≈ 7 dB) und Benders
+    (≈ 12 dB); Idee des Anwenders: Kontrast zu den Nachbarn davor und
+    danach statt Median des Fensters. Vor dem Entwurf messen: trifft das
+    Kriterium die beiden Fälle, und wie viele Fehlalarme bringt es.
+- **Prüfen: markad (Standalone-Programm) als eine Art Plugin einbinden**
+  (Anwender, 2026-11-09; nichts untersucht). Heute liest TTCut-ng nur
+  Ergebnisse von markad: die VDR-`marks`-Datei (über `ttcut-demux`) und
+  das Logo-PGM (`loadMarkadLogoProfile`). markad ist auf dieser Maschine
+  nicht installiert. Zu klären: wie markad aufgerufen wird und was es
+  erwartet (VDR-Aufnahmeverzeichnis mit TS; TTCut-ng arbeitet auf den ES
+  nach dem Demux), ob die Einbindung daher in `ttcut-demux` oder in
+  TTCut-ng gehört, Aufruf als externes Programm vs. Einbinden des Codes,
+  Lizenz (TTCut-ng GPL-3, markad nicht nachgesehen), und Bezug zum Punkt
+  Logo-Erkennung oben.
+
 - **Nach der Zeitstempel-Regel in `ttcut-demux` offen** (2026-10-08; die Regel
   selbst und ihre Messungen stehen in `docs/completed-work.md`, „Ton nach
   Zeitstempeln platzieren")
