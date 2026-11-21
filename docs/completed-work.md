@@ -763,6 +763,9 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     verlängert). PASS unter 9.1 und 9.0.2. `TTAC3ReEncoder` (libav-API,
     eigenes Priming) ist nicht betroffen: `ac3_reencode` misst unter 9.1
     0 Samples Versatz.
+  - Stand vorher in `TODO.md` unter den kleineren Befunden der Durchsicht
+    vom 2026-10-08 („der Startversatz-Nachweis hängt am Komma am
+    Zeilenende von ffprobes CSV"); dort mit v0.87.2 entfernt.
 
 - **Fester Pfad des Quellbaums in der Helfer-Suche** → **ERLEDIGT
   (2026-10-11)**, Zweig `fix/duplicate-cut-and-glyph-path` (Lesebefund der
@@ -1356,6 +1359,9 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     equal to the jitter-free one) and 18 (1.4-picture gap is no hole); RED
     before the fix under gawk and mawk, GREEN after. Recordings demuxed
     since 2026-10-08 from such a channel need a new demux.
+  - Was listed in `TODO.md` among the minor findings of the 2026-10-08
+    review ("zwei Definitionen eines Lochs … bei Bild-PTS-Jitter fiele Ton
+    ohne gemeldetes Loch weg, nicht gesehen"); removed there with v0.87.2.
 
 - **`gate_av_sync_real.sh` missed the slot-rule jitter defect** → **DONE**
   (2026-11-21, branch `feature/av-sync-gate-whole-recording`).

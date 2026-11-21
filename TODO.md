@@ -161,14 +161,10 @@ _None._
     VDR-Aufnahmen ohne Störung an der Grenze nicht gemessen. Das Gate
     `demux_slot_e2e` hat keinen Mehrdatei-Fall.
   - **Kleinere Befunde der Durchsicht vom 2026-10-08, nicht umgesetzt:**
-    zwei Definitionen eines Lochs (Bildachse: Abstand > 1,5 Bilddauern; Ton:
-    Rahmen fällt ab PTS ≥ Bild + 1 Bilddauer) — bei Bild-PTS-Jitter fiele
-    Ton ohne gemeldetes Loch weg, nicht gesehen; `write_silence` nimmt die
-    erste Position, die als Rahmen liest, ungeprüft als Kopfvorlage; der
-    Startversatz-Nachweis hängt am Komma am Zeilenende von ffprobes CSV;
-    `plan_audio_slots` liest bei leerer Slot-Datei die Tonliste als Slots
-    (der Aufrufer fängt den Fall ab); `-p` begrenzt `s N` eines kaputten
-    Plans nicht.
+    `write_silence` nimmt die erste Position, die als Rahmen liest,
+    ungeprüft als Kopfvorlage; `plan_audio_slots` liest bei leerer
+    Slot-Datei die Tonliste als Slots (der Aufrufer fängt den Fall ab);
+    `-p` begrenzt `s N` eines kaputten Plans nicht.
 
 - **Zwei überlagerte Widgets in „Aktueller Frame" — sind sie nötig?**
   (2026-08-26, vertagt auf User-Entscheid: „aber nicht heute")

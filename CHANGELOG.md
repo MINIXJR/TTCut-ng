@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.87.2 (2026-11-21)
+
+**ttcut-demux: no audio dropouts on HD channels, ffmpeg 9.1**
 
 ### Fixed
 - **ttcut-demux: short audio dropouts on some HD channels.** Some
@@ -15,6 +17,19 @@ All notable changes to TTCut-ng are documented in this file.
   BR Fernsehen Süd HD recording: 38 dropped MP2 frames and 33 AC3 frames,
   and 43 % of the MP2 track 24 ms early; now none. Recordings demuxed with
   v0.86.0 to v0.87.1 from such a channel need a new demux.
+- **ttcut-demux with ffmpeg 9.1: audio lost its start offset.** ffprobe 9.1
+  no longer ends a CSV row with a comma, so the check of the first copied
+  audio frame failed and every track was written without
+  `audio_N_start_offset_ms`, and the audio of a cut sat off: measured on a
+  Comedy Central recording, +13 instead of −11 ms (one MP2 frame).
+  Recordings demuxed with ffmpeg 9.1 before this release need a new demux;
+  ffmpeg 9.0 was not affected.
+
+### Changed
+- **A/V gate checks whole recordings.** `gate_av_sync_real.sh` now counts
+  lost and inserted audio frames away from picture gaps over the whole
+  recording instead of the first 250 MB, and the gates read the recording
+  corpus from a local mirror (`tools/diag/corpus.sh`).
 
 ## v0.87.1 (2026-11-15)
 

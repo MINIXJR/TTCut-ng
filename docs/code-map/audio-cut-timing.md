@@ -1,5 +1,5 @@
 ---
-base_commit: 16637ceb09067df1b2884e6f71a8174ec3d3dfed
+base_commit: 59e7d64d802a1e29111ec7956ff891485d1f6966
 last_verified: 2026-11-07
 sources:
   - data/ttavdata.cpp
