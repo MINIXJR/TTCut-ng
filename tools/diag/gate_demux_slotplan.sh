@@ -27,6 +27,14 @@ gen_video() {   # START N [SKIP_FROM SKIP_N] - N pictures at 20 ms from START, o
 gen_audio() {   # START N [SKIP_FROM SKIP_N] - N frames at 24 ms, size 576
     LC_ALL=C awk -v s="$1" -v n="$2" -v hf="${3:--1}" -v hn="${4:-0}" 'BEGIN { for (i = 0; i < n; i++) { if (hf >= 0 && i >= hf && i < hf + hn) continue; printf "%.6f 576\n", s + i * 0.024 } }'
 }
+gen_video_ticks() {   # N SHIFTS [FROM ADD] - N pictures at 1800 ticks (90 kHz) from 100.0 s; SHIFTS "IDX:TICKS ..." moves single pictures, pictures >= FROM move by ADD ticks
+    LC_ALL=C awk -v n="$1" -v sh="$2" -v from="${3:--1}" -v add="${4:-0}" 'BEGIN {
+        m = split(sh, a, " "); for (j = 1; j <= m; j++) { split(a[j], kv, ":"); mv[kv[1] + 0] = kv[2] + 0 }
+        for (i = 0; i < n; i++) { t = 9000000 + i * 1800 + mv[i]; if (from >= 0 && i >= from) t += add; printf "%.6f\n", t / 90000 } }'
+}
+gen_audio_ticks() {   # START_TICKS N STEP_TICKS SIZE
+    LC_ALL=C awk -v s="$1" -v n="$2" -v d="$3" -v z="$4" 'BEGIN { for (i = 0; i < n; i++) printf "%.6f %d\n", (s + i * d) / 90000, z }'
+}
 stat_of() { grep -oP "(^| )$1=\K[^ ]+" "$ST"; }
 count_op() { grep -c "^$1 " "$P"; }
 mid_sil() { grep -c . "$SI"; }     # silence inserts inside the recording (head and tail excluded)
@@ -159,6 +167,37 @@ run_checks() {
     video_slots "$V" h26x 100.0 1/50 "$S" "$H" && plan_audio_slots "$S" "$A" 1/50 1152/44100 "$P" "$ST" "$SI"
     [ ! -s "$SI" ] && [ "$(stat_of dropped)" = 0 ] && [ "$(stat_of tail_silence)" = 0 ] && [ "$(stat_of tail_dropped)" -lt 80 ] \
         && ok "$IMPL: 44.1 kHz audio, 30 min: no mid-stream edit" || bad "$IMPL: 44.1 kHz: silence inserts '$(head -2 "$SI" | tr '\n' ' ')', dropped=$(stat_of dropped) tail_dropped=$(stat_of tail_dropped) tail_silence=$(stat_of tail_silence)"
+
+    # 17. one-tick picture jitter (broadcaster clock steering: BR Fernsehen Süd
+    #     HD 2026-11-17, 1799/1801 ticks instead of 1800) is no hole. Audio PTS
+    #     equal a picture PTS every 5th MP2 / every 4th AC3 frame; at such a
+    #     point with the picture one tick late the frame was dropped (MP2 then
+    #     ran 24 ms early, AC3 got a silence frame). Reference: the same audio
+    #     on the jitter-free grid - the plans must be identical.
+    #     MP2 -8 ms offset: audio PTS = picture PTS at pictures 2 mod 6 (1502,
+    #     1508); AC3 +8 ms: at pictures 2 mod 8 (1506). 1508 is one tick early.
+    JIT="1502:+1 1506:+1 1508:-1"
+    for TR in "MP2 8956080 1680 2160 576 1152 -8" "AC3 8943120 1250 2880 1536 1536 8"; do
+        read -r TN TS TC TD TZ TF TO <<< "$TR"
+        gen_audio_ticks "$TS" "$TC" "$TD" "$TZ" > "$A"
+        gen_video_ticks 2000 "" > "$V"
+        video_slots "$V" h26x 100.0 1/50 "$S" "$H" && plan_audio_slots "$S" "$A" 1/50 "$TF/48000" "$P" "$ST" "$SI"
+        cp "$P" "$P.ref"
+        gen_video_ticks 2000 "$JIT" > "$V"
+        video_slots "$V" h26x 100.0 1/50 "$S" "$H" && plan_audio_slots "$S" "$A" 1/50 "$TF/48000" "$P" "$ST" "$SI"
+        [ "$(stat_of dropped)" = 0 ] && [ "$(mid_sil)" = 0 ] && [ "$(stat_of start_offset_ms)" = "$TO" ] && [ ! -s "$H" ] && cmp -s "$P.ref" "$P" \
+            && ok "$IMPL: one-tick jitter ($TN, +1 and -1 tick): nothing dropped, no silence, plan as without jitter" \
+            || bad "$IMPL: one-tick jitter ($TN): dropped=$(stat_of dropped) mid silence=$(mid_sil) offset=$(stat_of start_offset_ms) holes '$(head -1 "$H")' plan $(cmp -s "$P.ref" "$P" && echo same || echo differs)"
+    done
+
+    # 18. a gap of 1.4 pictures is no hole (video_slots: > 1.5): pictures from
+    #     1004 on 720 ticks late; the MP2 frame at the nominal place of 1004
+    #     falls into the gap and stays
+    gen_video_ticks 2000 "" 1004 720 > "$V"; gen_audio_ticks 8956080 1680 2160 576 > "$A"
+    video_slots "$V" h26x 100.0 1/50 "$S" "$H" && plan_audio_slots "$S" "$A" 1/50 1152/48000 "$P" "$ST" "$SI"
+    [ ! -s "$H" ] && [ "$(stat_of dropped)" = 0 ] && [ "$(mid_sil)" = 0 ] \
+        && ok "$IMPL: 1.4-picture gap: no hole, nothing dropped, no silence" \
+        || bad "$IMPL: 1.4-picture gap: holes '$(head -1 "$H")' dropped=$(stat_of dropped) mid silence=$(mid_sil)"
 
     # 13. start offset never prints "-0"
     gen_video 100.0 500 > "$V"; gen_audio 99.9998 438 > "$A"; run_plan 100.0

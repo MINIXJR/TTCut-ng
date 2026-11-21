@@ -2,6 +2,20 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Fixed
+- **ttcut-demux: short audio dropouts on some HD channels.** Some
+  broadcasters steer their clock, so single pictures arrive a tick
+  (1/90000 s) early or late. Where an audio frame started exactly on such a
+  picture, ttcut-demux took the tiny gap for missing pictures and dropped
+  the frame: AC3 got 32 ms of silence there, and MP2 lost 24 ms and then
+  played one frame early, often for tens of seconds, until a later such
+  picture put it back with 48 ms of silence. Measured on a two-hour
+  BR Fernsehen Süd HD recording: 38 dropped MP2 frames and 33 AC3 frames,
+  and 43 % of the MP2 track 24 ms early; now none. Recordings demuxed with
+  v0.86.0 to v0.87.1 from such a channel need a new demux.
+
 ## v0.87.1 (2026-11-15)
 
 **Smooth playback on a busy machine**

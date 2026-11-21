@@ -1294,6 +1294,36 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     per-segment decode testing with custom AVIOContext, multi-threaded, integrated into ttcut-demux and TTCut-ng
   - H.265 false positives fixed: `AV_EF_CAREFUL` only for H.264/H.265 (not MPEG-2)
 
+- **Slot rule dropped audio at one-tick picture jitter** → **DONE**
+  (2026-11-21, branch `fix/slot-rule-pts-jitter`). Reported by
+  the user as short dropouts in BR Fernsehen Süd HD recordings (vdrslz),
+  first suspected as hardware or DVB driver.
+  - Measured on "Tatort – Schlangengrube" (7199 s): the TS is intact (CC,
+    TEI, sync 0 errors over 63.4 M packets, no PTS jump, VDR journal clean);
+    picture intervals are 1799 or 1801 ticks instead of 1800 (367× / 216×).
+  - Replay of `pts_runs` + `video_slots` + `plan_audio_slots` (unchanged,
+    from v0.87.1) on the ffprobe PTS lists gives exactly the demux log's
+    numbers: MP2 kept 299885, dropped 38, silence 55; AC3 kept 224907,
+    dropped 33, silence 48. With the fix: dropped 0, no silence insert
+    inside the recording, slot table identical.
+  - Cause: an audio frame exactly one frame duration behind a picture whose
+    successor is 1801 ticks away was neither advanced to that successor nor
+    inside its slot (1e-6 s tolerance, one tick = 11.1 µs) and was dropped
+    "in a hole"; `video_slots` calls only > 1.5 frame durations a hole.
+    AC3 (+8 ms start offset) got one silence frame right after. MP2 (−8 ms)
+    continued on `last + 1` inside the 0.75·fd window and ran one frame
+    (24 ms) early until a later jitter point put it back with two silence
+    frames: 129,931 of 299,885 frames (43 %) sat 24 ms early, and the drops
+    without silence appeared in no `audio_gap_frames` entry.
+  - Introduced with the slot rule (`9b32909d`, 2026-10-08).
+    `gate_av_sync_real.sh` did not see it: it demuxes the first 250 MB
+    (~150 s here, first jitter point at 246.5 s) and bounds each frame at
+    ±1 audio frame, which the 24 ms shift just meets.
+  - Gate `demux_slotplan` cases 17 (MP2 and AC3 on a ±1-tick grid, plan
+    equal to the jitter-free one) and 18 (1.4-picture gap is no hole); RED
+    before the fix under gawk and mawk, GREEN after. Recordings demuxed
+    since 2026-10-08 from such a channel need a new demux.
+
 ### Suche und Dekodierung
 
 - **Audit-Lauf 18: Lese-Hypothesen der Karte `quality-check.md`** → **DONE

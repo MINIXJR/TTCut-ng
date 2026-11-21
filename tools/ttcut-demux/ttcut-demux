@@ -449,7 +449,14 @@ video_slots() {
 
 # The slot rule. Every audio packet gets the picture slot its PTS names:
 #   t   = slot time of the picture at p (+ offset inside it); p in a hole
-#         (no picture) or before slot 0 -> the frame is dropped ("d SIZE")
+#         (no picture) or before slot 0 -> the frame is dropped ("d SIZE").
+#         A hole is what video_slots calls one: no next picture in the run,
+#         or the next more than 1.5 frame durations away. Behind its slot
+#         with the next picture nearer, the frame stays on that slot: one
+#         PTS tick is 11.1 us, and a broadcaster steering its clock sends
+#         1799/1801 instead of 1800 ticks (BR Fernsehen Süd HD, 2026-11-17);
+#         an audio frame exactly one frame duration behind such a picture
+#         was dropped as "in a hole".
 #   k   = last+1 when |t - (last+1)*FD| <= 0.75*FD (a frame continues the
 #         run - plain rounding flaps on exact halves), else round(t/FD), an
 #         exact half going to the EARLIER slot: Das Erste HD starts its MP2
@@ -499,7 +506,8 @@ plan_audio_slots() {
                 if (ptr < rfirst[vr] || ptr > rlast[vr]) ptr = rfirst[vr]
                 while (ptr < rlast[vr] && spts[ptr + 1] <= p + 0.000001) ptr++
                 while (ptr > rfirst[vr] && spts[ptr] > p + 0.000001) ptr--
-                if (p < spts[ptr] - 0.000001 || p >= spts[ptr] + fdur - 0.000001) {
+                nexthole = (ptr >= rlast[vr]) || (spts[ptr + 1] - spts[ptr] > 1.5 * fdur)
+                if (p < spts[ptr] - 0.000001 || (p >= spts[ptr] + fdur - 0.000001 && nexthole)) {
                     printf "d %d\n", size > plan                  # before slot 0 of the run, or in a hole
                     if (last < 0 && vr == 0 && p < spts[0]) head++
                     else if (vr == nruns - 1 && p >= spts[nslots - 1] + fdur - 0.000001) taild++
