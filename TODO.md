@@ -20,9 +20,11 @@ _None._
   im Original unter drei Verschiebungen (zwei 160 ms auseinander, die dritte
   101,5 s daneben = der gemeldete Materialverlust); die Kontrolle (bloßes
   Umpacken) misst 0. Zuerst klären, ob die Messung (Bildzuordnung über MD5)
-  oder der Schnitt daneben liegt. Arbeitsdaten:
-  `/usr/local/src/CLAUDE_TMP/TTCut-ng/av-gate-jitter/v-corpus/MPEG2_SD576i25_16-9_AV-async_MP2-deu_eng_Comedy-Central_/`
-  (`chain.txt`, `demux.log`).
+  oder der Schnitt daneben liegt. Gemessen unter ffmpeg 9.0.2; seit
+  2026-11-21 läuft 9.1 (siehe `docs/completed-work.md`, ffprobe 9.1), vor
+  dem Vergleich neu messen. Arbeitsdaten neu erzeugen (`chain.txt`,
+  `demux.log` im Arbeitsverzeichnis):
+  `KEEP=1 tools/diag/gate_av_sync_real.sh /net/nase2021/Video/Sonstiges/TTCut-ng-Test-Files/SDTV/MPEG2_SD576i25_16-9_AV-async_MP2-deu+eng_Comedy-Central/2026-04-30.20.18.23-0.rec`
 
 - **Logo-Erkennung trifft schlecht — prüfen und verbessern** (Anwender,
   2026-11-09; nichts untersucht). Heute: `TTLogoDetector`
@@ -1038,6 +1040,14 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
 
 ## Entwicklungs-Workflow
 
+- **`gate_audiofix.sh` Check 18 („demux integration“) ohne Testdatei**
+  (gefunden 2026-11-21, auch auf master). Der Check demuxt
+  `/usr/local/src/CLAUDE_TMP/TTCut-ng/audiobug/defect_slice.ts`; die Datei
+  fehlt, der Check meldet FAIL („ranges='' es_rc=2“). Woraus der Ausschnitt
+  geschnitten war, ist nicht geprüft. CLAUDE_TMP wird nicht gesichert: die
+  Testdatei entweder neu erzeugen und an einen gesicherten Ort legen
+  (Korpus auf der NAS) oder durch eine erzeugte ersetzen.
+
 - **Qualitäts-Fahrplan**: Reihenfolge der Qualitätsarbeit (Gate-Läufer →
   Karten der unkartierten Hauptfunktionen → Audit nach Karte) mit Stand und
   Regeln in [docs/quality-roadmap.md](docs/quality-roadmap.md).
@@ -1076,9 +1086,11 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
     Frame 2000 hinaus reichen; die nötige Größe je Bitrate vorher messen
     (die Kontrolle — bloßes Umpacken — muss weiter 0 ms messen).
   - **Mehrere Aufnahmen gleichzeitig:** das Gate arbeitet sie nacheinander
-    ab, die Maschine hat 32 Kerne. Grenze ist vermutlich der NFS-Durchsatz
-    (nicht gemessen); getrennte Arbeitsverzeichnisse gibt es schon, die
-    Ausgabe je Aufnahme müsste beisammen bleiben.
+    ab, die Maschine hat 32 Kerne. Getrennte Arbeitsverzeichnisse gibt es
+    schon, die Ausgabe je Aufnahme müsste beisammen bleiben.
+  Die Zeiten oben sind von der NAS gelesen; seit 2026-11-21 liest das Gate
+  den lokalen Spiegel (`tools/diag/corpus.sh`, Demux von 7,5 GB 124,6 s von
+  der NAS gegen 29,9 s lokal). Vor dem nächsten Hebel neu messen.
 
 - **Wie sollen künftige Releases verteilt werden?** (User-Wunsch 2026-11-07,
   nicht untersucht). Heute baut `build-package.sh` ein `.deb` für Debian

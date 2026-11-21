@@ -19,10 +19,15 @@
 #
 #   usage: gate_av_sync_real.sh <recording-dir | 00001.ts | file.ts> [more ...]
 #
+# Recordings under the NAS corpus are read from its local mirror, synced
+# first (tools/diag/corpus.sh); corpus lists keep NAS paths.
+#
 # Not in the run-gates.sh table: it needs recordings and decodes them (minutes
 # per recording). Exit 0 all PASS/SKIP, 1 a FAIL, 2 usage.
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=tools/diag/corpus.sh
+. "$ROOT/tools/diag/corpus.sh"
 DEMUX="$ROOT/tools/ttcut-demux/ttcut-demux"
 WORK="${W:-/usr/local/src/CLAUDE_TMP/TTCut-ng/av-sync-real}"
 HEAD_MB="${HEAD_MB:-250}"
@@ -33,8 +38,10 @@ mkdir -p "$WORK"
 export XDG_CACHE_HOME="$WORK/xdg"
 export PATH="$ROOT/tools/ttcut-audiofix:$ROOT/tools/ttcut-ac3fix:$PATH"
 NPASS=0; NFAIL=0; NSKIP=0
+corpus_sync
 
 for arg in "$@"; do
+    arg=$(corpus_path "$arg")
     if [ -d "$arg" ]; then
         first=$(find "$arg" -maxdepth 2 \( -name '00001.ts' -o -name '001.vdr' \) | sort | head -1)
         [ -n "$first" ] || first=$(find "$arg" -maxdepth 2 -name '*.ts' | sort | head -1)

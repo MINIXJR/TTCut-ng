@@ -6,6 +6,8 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=tools/diag/ttcut-project.sh
 . "$ROOT/tools/diag/ttcut-project.sh"
+# shellcheck source=tools/diag/corpus.sh
+. "$ROOT/tools/diag/corpus.sh"
 TOOL="${AUDIOFIX_TOOL:-$ROOT/tools/ttcut-audiofix/ttcut-audiofix}"
 WORK=/usr/local/src/CLAUDE_TMP/TTCut-ng/audiofix-tests
 
@@ -223,7 +225,10 @@ else bad "AC3 fix junk+crc (rc=$RC crc=$CB3, byte-identisch=$(cmp -s "$FIXJC" "$
 # E-AC3-Material einmalig aus der SES-UHD-Demo extrahieren (Cache in $WORK)
 EAC3="$WORK/ses_demo.eac3"
 SES="/net/nase2021/Video/Sonstiges/TTCut-ng-Test-Files/UHDTV/HEVC_Main10-HDR10_2160p50_IDRonly-noRASL-noB_EAC3-2.0-deu_SES-UHD-Demo/2026-06-22.17.15.87-0.rec/00001.ts"
-[ -s "$EAC3" ] || ffmpeg -v error -i "$SES" -map 0:a:0 -c copy "$EAC3"
+if [ ! -s "$EAC3" ]; then
+    corpus_sync; SES=$(corpus_path "$SES")
+    ffmpeg -v error -i "$SES" -map 0:a:0 -c copy "$EAC3"
+fi
 
 # Byte-Offset von Rahmen N und N+1 (0-basiert) ueber Syncword-Kette
 eac3_frame_offset() {  # $1=Datei $2=RahmenNr -> stdout: offset
@@ -379,6 +384,7 @@ grep -q 'audio_._corrupt_ranges' "$CLEAN_B"/*.info && CLEAN_OK=0
 # else falls back to TTSettings' compiled-in defaults.
 if [ "$RUN_FULL" -eq 1 ]; then
     REALTS="/net/nase2021/Video/Sonstiges/TTCut-ng-Test-Files/SDTV/MPEG2_SD576i25_aspect-switch-4-3-to-16-9_MP2-deu_RTLZWEI/2023-10-19.02.32.5-0.rec/00001.ts"
+    corpus_sync; REALTS=$(corpus_path "$REALTS")
     FULLDIR="$WORK/full"
     if [ ! -s "$REALTS" ]; then
         bad "real-recording end-to-end: source TS not found ($REALTS) -- dev-machine-only corpus"

@@ -183,6 +183,7 @@ vdr_example_names      unit  120  -
 ocr_glyphs_selftest    unit  60   -
 ffmpeg_edge_packets    unit  120  -
 audiofix_log_text      unit  60   -
+corpus_mirror          unit  60   -
 audiofix_edge          unit  240  -
 audiofix_assemble      unit  120  -
 ac3fix_contract        unit  120  -
@@ -521,6 +522,7 @@ gate_ocr_glyphs_selftest() {
 }
 gate_ffmpeg_edge_packets()   { need "$DEMUX"; "$D/gate_ffmpeg_edge_packets.sh" "$DEMUX"; }
 gate_audiofix_log_text()     { need "$DEMUX"; "$D/gate_audiofix_log_text.sh" "$DEMUX"; }
+gate_corpus_mirror()         { "$D/gate_corpus_mirror.sh" "$W"; }
 gate_audiofix_edge() { cases 120 audiofix_edge_ac3 audiofix_edge_mp2; }
 case_audiofix_edge_ac3()     { need "$AUDIOFIX" "$A264"; "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$A264" 768; }
 case_audiofix_edge_mp2()     { need "$AUDIOFIX" "$MP2";  "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$MP2" 576; }

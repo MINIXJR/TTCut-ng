@@ -1,5 +1,5 @@
 ---
-base_commit: 74fd658bf992c7810ddf0b4f8ce7c1938d26e252
+base_commit: 841ab89868eb227a7db706cc3a921246e6b4550b
 last_verified: 2026-11-21
 sources:
   - tools/ttcut-demux/ttcut-demux
@@ -348,7 +348,11 @@ history and the measurements that led to it are in `docs/completed-work.md`
   audio through the script and `av_track_audit.py`: leading track, late
   track, a picture hole, an old `ttcut-audiofix`, mawk under de_DE), `esinfo`. With recordings:
   `gate_av_sync_real.sh` (whole-recording demux → audit → `--auto-cut` of
-  the first 250 MB → `av_chain_check.py`).
+  the first 250 MB → `av_chain_check.py`). It and `gate_audiofix.sh` read
+  NAS corpus paths through `tools/diag/corpus.sh`: one-way `rsync` of the
+  NAS corpus into the local mirror `/media/Daten/Video_Tmp/TTCut-ng-Test-Files`
+  first, skipped when the NAS holds no file (with `--delete` an empty source
+  would wipe the mirror) or the mirror's disk is missing; gate `corpus_mirror`.
 - **Measurement tools**: `tools/diag/av_track_audit.py` (original TS + ES
   set → every audio frame against the picture at its PTS, whole recording,
   no decoding; per track also source frames missing from the ES and ES
