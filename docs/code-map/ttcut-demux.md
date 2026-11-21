@@ -347,10 +347,15 @@ history and the measurements that led to it are in `docs/completed-work.md`
   (`-p`), `demux_slot_e2e` (generated MPEG-2 and H.264 recordings with noise
   audio through the script and `av_track_audit.py`: leading track, late
   track, a picture hole, an old `ttcut-audiofix`, mawk under de_DE), `esinfo`. With recordings:
-  `gate_av_sync_real.sh` (demux → audit → `--auto-cut` → `av_chain_check.py`).
+  `gate_av_sync_real.sh` (whole-recording demux → audit → `--auto-cut` of
+  the first 250 MB → `av_chain_check.py`).
 - **Measurement tools**: `tools/diag/av_track_audit.py` (original TS + ES
   set → every audio frame against the picture at its PTS, whole recording,
-  no decoding) and `tools/diag/av_chain_check.py` (original TS + cut MKV →
+  no decoding; per track also source frames missing from the ES and ES
+  frames the source does not carry, outside 1 s of a picture hole, run
+  break, edge or — for inserted ones — a gap of the source track or the
+  time before / after it: the slot
+  rule's one-tick-jitter drop stayed inside the ±1-frame bound) and `tools/diag/av_chain_check.py` (original TS + cut MKV →
   offset per track, picture MD5 / packet MD5, with the plain-remux control).
   `measure_es_offset.py` (byte-pattern search of one audio ES in another, CBR frame size converts offset to time) predates both.
 - **Unguarded dialog, unreachable headless** (pre-existing):

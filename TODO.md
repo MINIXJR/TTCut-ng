@@ -9,6 +9,21 @@ _None._
 
 ## Medium Priority
 
+- **Comedy Central „AV-async“: Ketten-Prüfung von `gate_av_sync_real.sh`
+  schlägt fehl** (gefunden 2026-11-21 beim Korpus-Lauf mit dem korrigierten
+  `ttcut-demux` von `fix/slot-rule-pts-jitter`; nicht untersucht, nicht
+  bewertet). Aufnahme `SDTV/MPEG2_SD576i25_16-9_AV-async_MP2-deu+eng_Comedy-Central`
+  (im Oktober-Lauf nicht dabei). Die ES-Prüfung (`av_track_audit.py`) liegt
+  bei −3…+5 ms ohne verlorene oder fremde Frames; `av_chain_check.py` am
+  Schnitt 500–2000 misst beide Spuren abwechselnd +5 / −35 ms (MKV 0–21 s)
+  und +13 / −27 ms (22–60 s), Grenze ±25 ms. Die Bilder der MKV finden sich
+  im Original unter drei Verschiebungen (zwei 160 ms auseinander, die dritte
+  101,5 s daneben = der gemeldete Materialverlust); die Kontrolle (bloßes
+  Umpacken) misst 0. Zuerst klären, ob die Messung (Bildzuordnung über MD5)
+  oder der Schnitt daneben liegt. Arbeitsdaten:
+  `/usr/local/src/CLAUDE_TMP/TTCut-ng/av-gate-jitter/v-corpus/MPEG2_SD576i25_16-9_AV-async_MP2-deu_eng_Comedy-Central_/`
+  (`chain.txt`, `demux.log`).
+
 - **Logo-Erkennung trifft schlecht — prüfen und verbessern** (Anwender,
   2026-11-09; nichts untersucht). Heute: `TTLogoDetector`
   (`data/ttlogodetector.cpp`) mit manueller ROI (Kantenprofil aus 10
@@ -1045,6 +1060,25 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG v0.82.0).
   siehe die Fallen zu Fremdlast und gemeinsamem Temp-Verzeichnis) und in den
   langsamen GUI-Gates feste Wartezeiten durch Warten auf ein Ereignis
   ersetzen. Wie viel davon Warten ist, ist nicht gemessen.
+
+- **`gate_av_sync_real.sh` schneller machen, ohne Abdeckung zu verlieren**
+  (User-Wunsch 2026-11-21; nicht begonnen). Seit 2026-11-21 prüft das Gate
+  jede Aufnahme ganz; der Korpus (20 Aufnahmen, ~109 GB auf der NAS) braucht
+  damit rund eine Stunde (14:16–15:19). Kürzen ist keine Lösung: der
+  Slot-Regel-Fehler zeigte sich erst ab 246 s. Gemessen an den Dateizeiten
+  des Laufs vom 2026-11-21 (Demux / Audit / Schnitt + Ketten-Prüfung):
+  ServusTV 54 / 16 / 102 s, Entenfellner 33 / 6 / 179 s, Moon Crash
+  34 / 9 / 196 s, The Stolen 48 / 14 / 255 s, Whitney Houston (15 GB)
+  245 / 60 / 78 s, Rookie 07x11 52 / 15 / 15 s. Zwei Hebel:
+  - **Kleinerer Kopf für die Ketten-Prüfung:** `av_chain_check.py`
+    dekodiert jedes Bild von `head.ts` (`HEAD_MB`, 250 MB), der Schnitt
+    braucht nur die Frames 500–2000. Das Original muss nur etwas über
+    Frame 2000 hinaus reichen; die nötige Größe je Bitrate vorher messen
+    (die Kontrolle — bloßes Umpacken — muss weiter 0 ms messen).
+  - **Mehrere Aufnahmen gleichzeitig:** das Gate arbeitet sie nacheinander
+    ab, die Maschine hat 32 Kerne. Grenze ist vermutlich der NFS-Durchsatz
+    (nicht gemessen); getrennte Arbeitsverzeichnisse gibt es schon, die
+    Ausgabe je Aufnahme müsste beisammen bleiben.
 
 - **Wie sollen künftige Releases verteilt werden?** (User-Wunsch 2026-11-07,
   nicht untersucht). Heute baut `build-package.sh` ein `.deb` für Debian

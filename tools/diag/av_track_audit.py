@@ -24,8 +24,23 @@ first at the same byte. (libav skips the first MP2 frame of a file when the
 second frame's header differs in mode, copyright, original or emphasis -
 every timestamp it reports is then one frame early.)
 
-Exit: 0 every section of at least 20 frames is within the bound,
-      1 a section is outside, 2 the measurement failed (no frame matched).
+The reading alone misses a frame the demuxer lost or a silence frame it
+inserted where the source has audio: a dropped MP2 frame without silence
+shifts the track by exactly one frame, which the bound still allows, and a
+dropped AC3 frame replaced by silence leaves the reading unchanged (slot rule
+at one-tick picture jitter, 2026-11-21). So per track, also counted:
+  lost    - whole-frame source packets (unique payload, inside the pictures)
+            with no copy in the ES;
+  foreign - ES frames the source track does not carry;
+both only farther than 1 s from a picture hole, run break or recording edge
+(foreign also from a gap of the source track) - there the slot rule drops
+and fills by design. A packet that is not a whole frame (damage) is not
+lost. Any count above 0 is a failure.
+
+Exit: 0 every section of at least 20 frames is within the bound and no frame
+        is lost or foreign,
+      1 a section is outside, or a frame is lost or foreign,
+      2 the measurement failed (no frame matched).
 
 --check-offset additionally requires, per track, that the first section's
 reading plus the .info start offset is 0 within 1 ms: the offset the demuxer
@@ -44,6 +59,8 @@ import sys
 
 ENV = dict(os.environ, LC_ALL="C")
 MIN_SECTION = 20
+ALLOWED_WINDOW_S = 1.0  # lost/foreign frames this close to a hole, run break, edge (or source gap) are the slot
+                        # rule's job; measured 2026-11-21 on 19 corpus recordings: the farthest such one 0.85 s
 AC3_KBPS = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640]
 MP2_KBPS = [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384]
 MP2_RATE = [44100, 48000, 32000]
@@ -92,7 +109,7 @@ def libav_view(path):
 
 
 def probe(segments):
-    """Video PTS in stream order, {audio stream: [(md5, pts)]}, video codec."""
+    """Video PTS in stream order, {audio stream: [(md5, pts, size)]}, video codec."""
     video, audio, vcodec = [], collections.defaultdict(list), ""
     for seg in segments:
         kinds = {}
@@ -105,7 +122,7 @@ def probe(segments):
         vidx = min(i for i, (t, _) in kinds.items() if t == "video")
         vcodec = kinds[vidx][1]
         pr = subprocess.Popen(["ffprobe", "-v", "error", "-show_packets", "-show_data_hash", "md5", "-show_entries",
-                               "packet=stream_index,pts_time,data_hash", "-of", "default=nw=1", seg],
+                               "packet=stream_index,pts_time,size,data_hash", "-of", "default=nw=1", seg],
                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=ENV)
         cur = {}
         for l in pr.stdout:
@@ -117,7 +134,7 @@ def probe(segments):
                     if i == vidx:
                         video.append(p)
                     elif kinds.get(i, ("", ""))[0] == "audio":
-                        audio[i].append((v.split(":")[-1].lower(), p))
+                        audio[i].append((v.split(":")[-1].lower(), p, int(cur.get("size", "0") or 0)))
                 cur = {}
         pr.wait()
     return video, audio, vcodec
@@ -179,6 +196,15 @@ class PictureTimeline:
         self.holes = [(s[i], round((s[i + 1] - s[i]) / dur) - 1)
                       for s in self.runs for i in range(len(s) - 1) if round((s[i + 1] - s[i]) / dur) != 1]
 
+    def allowed_places(self):
+        """Picture time of the places where audio may legitimately be dropped
+        or replaced: recording start and end, every run break, every hole."""
+        places = [0.0, self.count * self.dur] + [b * self.dur for b in self.base[1:]]
+        for r, s in enumerate(self.runs):
+            places += [(self.base[r] + i + 1) * self.dur for i in range(len(s) - 1)
+                       if round((s[i + 1] - s[i]) / self.dur) != 1]
+        return sorted(places)
+
     def time_of(self, pts):
         r = next((j for j, s in enumerate(self.runs) if s and s[0] - 1 <= pts <= s[-1] + 1), 0)
         s = self.runs[r]
@@ -186,6 +212,46 @@ class PictureTimeline:
         if i < 0:
             return pts - s[0]
         return (self.base[r] + i) * self.dur + min(pts - s[i], self.dur)
+
+
+def far_from(places, times):
+    """The times more than ALLOWED_WINDOW_S away from every place (sorted)."""
+    out = []
+    for t in times:
+        j = bisect.bisect_left(places, t)
+        if all(abs(t - places[k]) > ALLOWED_WINDOW_S for k in (j - 1, j) if 0 <= k < len(places)):
+            out.append(t)
+    return out
+
+
+def loss_counts(tl, fd, packets, hashes, whole_sizes):
+    """(lost, foreign): picture times of the source frames missing from the ES
+    and of the ES frames that are not in the source, both outside the places
+    where the slot rule may drop or fill.
+    lost    - a packet of the source track with a payload unique in that track,
+              a PTS inside the pictures, the size of a whole frame (a size the
+              frame walk of the ES finds; a damaged packet is a partial frame)
+              and no copy in the ES. Allowed near a hole, run break or edge.
+    foreign - an ES frame whose payload the source track does not carry
+              (inserted silence). Also allowed near a gap of the source track
+              (more than 1.5 frame durations without a packet) and outside
+              the span the source track covers (a late start, an early end)."""
+    places = tl.allowed_places()
+    esset = set(hashes)
+    count = collections.Counter(h for h, _, _ in packets)
+    first = min(s[0] for s in tl.runs if s)
+    last = max(s[-1] for s in tl.runs if s) + tl.dur
+    lost = sorted(tl.time_of(p) for h, p, size in packets
+                  if count[h] == 1 and h not in esset and first <= p < last and size in whole_sizes)
+    src = sorted(p for _, p, _ in packets)
+    if not src:
+        return far_from(places, lost), []
+    gaps = [tl.time_of(src[i + 1]) for i in range(len(src) - 1) if src[i + 1] - src[i] > 1.5 * fd]
+    # a track that starts after the first picture or ends before the last one
+    # gets silence there by design: only the span the source track covers counts
+    start, end = tl.time_of(src[0]), tl.time_of(src[-1]) + fd
+    foreign = [k * fd for k, h in enumerate(hashes) if h not in count and start <= k * fd < end]
+    return far_from(places, lost), far_from(sorted(places + gaps + [start, end]), foreign)
 
 
 def main():
@@ -228,12 +294,12 @@ def main():
         best = None
         for idx, packets in audio.items():                         # the source track with the most frames in common
             table = collections.defaultdict(list)
-            for h, p in packets:
+            for h, p, _ in packets:
                 table[h].append(p)
-            hits = sum(1 for h in hashes[::50] if h in table)
-            if best is None or hits > best[0]:
-                best = (hits, table)
-        table = best[1] if best else {}
+            hits = sum(1 for h in hashes if h in table)            # all frames: two tracks can be equal for long
+            if best is None or hits > best[0]:                     # stretches (DF1 deu/mul), a sample then ties
+                best = (hits, table, packets)
+        table, packets = (best[1], best[2]) if best else ({}, [])
         sections, matched = [], 0
         for k, h in enumerate(hashes):
             pts = table.get(h)
@@ -255,6 +321,13 @@ def main():
         lo, hi = min(s[0] for s in big), max(s[0] for s in big)
         bound = a.bound_ms if a.bound_ms is not None else a.bound_frames * fd * 1000 + 1.0
         verdict = ("ok" if max(abs(lo), abs(hi)) <= bound else "OUTSIDE") + libav_note
+        lost, foreign = loss_counts(tl, fd, packets, hashes, {s for _, s in frames})
+        if lost:
+            verdict += f", LOST {len(lost)}"
+        if foreign:
+            verdict += f", FOREIGN {len(foreign)}"
+        if verdict.startswith("ok,"):
+            verdict = verdict[4:]
         if a.check_offset:
             try:
                 if abs(big[0][0] + int(offset)) > 1.0:
@@ -267,6 +340,11 @@ def main():
               f"min {lo:+.0f}, max {hi:+.0f} ms; .info start offset {offset} ms  [bound +-{bound:.0f} ms: {verdict}]")
         print("   course: " + " | ".join(f"{s[0]:+.0f} ms from {s[1]:.0f} s" for s in big[:40])
               + (" | ..." if len(big) > 40 else ""))
+        if lost or foreign:
+            def at(ts):
+                return ", ".join(f"{t:.1f}" for t in ts[:12]) + (" ..." if len(ts) > 12 else "")
+            print(f"   loss: lost whole frames {len(lost)}" + (f" (at {at(lost)} s)" if lost else "")
+                  + f", foreign frames {len(foreign)}" + (f" (at {at(foreign)} s)" if foreign else ""))
     return rc if measured or rc else 2
 
 

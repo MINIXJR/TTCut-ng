@@ -1324,6 +1324,38 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     before the fix under gawk and mawk, GREEN after. Recordings demuxed
     since 2026-10-08 from such a channel need a new demux.
 
+- **`gate_av_sync_real.sh` missed the slot-rule jitter defect** → **DONE**
+  (2026-11-21, branch `feature/av-sync-gate-whole-recording`).
+  - Measured on "Schlangengrube" (now in the corpus as
+    `HDTV/H264_High-8bit-SDR_720p50_progressive-pts-jitter-1799-1801_…`),
+    unchanged gate: head mode (250 MB) PASS with identical figures for the
+    broken and the fixed `ttcut-demux`; whole mode PASS as well — MP2
+    alternated +8 / −16 ms (37 sections) inside ±25 ms, AC3 stayed at −8 ms
+    because every drop got a silence frame.
+  - Fix: `av_track_audit.py` counts per track source frames missing from the
+    ES (whole-frame size, unique payload, inside the pictures) and ES frames
+    the source does not carry, each only farther than 1 s from a picture
+    hole, run break, edge (and, for inserted ones, a gap of the source
+    track or the time before / after the source track); any count fails. The gate always audits the whole recording.
+    Broken demux: LOST / FOREIGN 38 / 38 per MP2 track, 33 / 33 AC3 → FAIL;
+    fixed: 0 → PASS.
+  - Evidence the criteria do not fire on correct demuxes: 19 corpus
+    recordings, fixed demux, 0 / 0; farthest allowed event 0.73 s (lost) and
+    0.85 s (inserted) from its place. Final gate run, 20 recordings: 19 PASS,
+    Comedy Central AV-async FAIL from the chain check only (TODO).
+  - Rejected criteria, measured: one reading per track (correct recordings
+    with signal loss have up to 26; one unexplained reading change in Rookie
+    07x12 AC3 at 2892 s; blind to the AC3 side); the demuxer's own `dropped`
+    stats (self-report of the tool under test); a tighter bound (correct
+    readings reach −21 ms AC3, −18 ms MP2).
+  - Traps: (1) the audit picked the source track from every 50th frame —
+    on DF1 The Stolen deu and mul are byte-equal for long stretches and the
+    mul ES was compared against deu (834 "lost" frames); now all frames.
+    (2) Damaged packets are partial frames (968 instead of 576 bytes, 3400
+    instead of 1792): without the size filter both Rookie recordings showed
+    "lost" frames away from holes. (3) Work directories cut to 80 characters
+    made Bibi-Files and Tatort share one; now the full name.
+
 ### Suche und Dekodierung
 
 - **Audit-Lauf 18: Lese-Hypothesen der Karte `quality-check.md`** → **DONE

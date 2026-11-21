@@ -3,15 +3,19 @@
 # the whole chain: original TS -> ttcut-demux -> TTCut-ng --auto-cut -> MKV.
 #
 # Per recording:
-#   1. demux with the repository's ttcut-demux and ttcut-audiofix
-#        single file: the first HEAD_MB megabytes (default 250)
-#        several files (VDR 00001.ts, 00002.ts, ...) or WHOLE=1: everything
+#   1. demux the whole recording (every segment) with the repository's
+#      ttcut-demux and ttcut-audiofix
 #   2. av_track_audit.py over the demuxed set: every audio frame against the
-#      picture at its PTS, bound +-1 audio frame
+#      picture at its PTS, bound +-1 audio frame, and no source frame lost or
+#      ES frame inserted away from picture holes. The whole recording because
+#      a defect can start late: the slot rule's one-tick-jitter drop first hit
+#      at 246.5 s of Tatort "Schlangengrube", the former 250 MB head ended
+#      near 150 s
 #   3. project with every audio track, frames 500-2000 -> --auto-cut ->
-#      av_chain_check.py against the head of the original, bound +-1 frame
-#      (with the plain-remux control). SKIP when TTCut-ng refuses the cut;
-#      the audit then stands alone.
+#      av_chain_check.py against the head of the original (the first HEAD_MB
+#      megabytes, default 250), bound +-1 frame (with the plain-remux
+#      control). SKIP when TTCut-ng refuses the cut; the audit then stands
+#      alone.
 #
 #   usage: gate_av_sync_real.sh <recording-dir | 00001.ts | file.ts> [more ...]
 #
@@ -39,8 +43,10 @@ for arg in "$@"; do
     fi
     [ -f "$first" ] || { echo "FAIL $arg: no TS file found"; NFAIL=$((NFAIL+1)); continue; }
     recdir=$(dirname "$first")
-    tag=$(basename "$recdir" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-60)
-    [ "$(basename "$first")" = "00001.ts" ] && tag=$(basename "$(dirname "$recdir")" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-80)
+    # full name: corpus folders share long prefixes (a cut to 80 characters
+    # put Bibi-Files and Tatort into one directory)
+    tag=$(basename "$recdir" | tr -c 'A-Za-z0-9._-' '_')
+    [ "$(basename "$first")" = "00001.ts" ] && tag=$(basename "$(dirname "$recdir")" | tr -c 'A-Za-z0-9._-' '_')
     D="$WORK/$tag"; rm -rf "$D"; mkdir -p "$D"
     mapfile -t segs < <(find "$recdir" -maxdepth 1 -name '[0-9][0-9][0-9][0-9][0-9].ts' | sort)
     [ "$(basename "$first")" = "00001.ts" ] || segs=("$first")
@@ -49,11 +55,7 @@ for arg in "$@"; do
     # segments (a VDR split is one continuous TS; the first file can be a
     # few seconds only)
     cat "${segs[@]}" 2>/dev/null | head -c $(( HEAD_MB * 1000000 / 188 * 188 )) > "$D/head.ts"
-    if [ "${#segs[@]}" -gt 1 ] || [ "${WHOLE:-0}" = 1 ]; then
-        src="$first"; audit_src=("${segs[@]}"); scope="whole, ${#segs[@]} file(s)"
-    else
-        src="$D/head.ts"; audit_src=("$D/head.ts"); scope="first $HEAD_MB MB"
-    fi
+    src="$first"; scope="whole, ${#segs[@]} file(s)"
 
     rc=0; "$DEMUX" -e --no-subs -n t "$src" "$D/es/" > "$D/demux.log" 2>&1 < /dev/null || rc=$?
     if [ "$rc" != 0 ] || [ ! -s "$D/es/t.info" ]; then
@@ -63,7 +65,7 @@ for arg in "$@"; do
     vfile=$(sed -n '/^\[video\]/,/^\[/s/^file=//p' "$D/es/t.info" | head -1)
 
     verdict=PASS
-    python3 "$ROOT/tools/diag/av_track_audit.py" "$fps" "$D/es" t "${audit_src[@]}" --bound-frames 1 > "$D/audit.txt" 2>&1; arc=$?
+    python3 "$ROOT/tools/diag/av_track_audit.py" "$fps" "$D/es" t "${segs[@]}" --bound-frames 1 > "$D/audit.txt" 2>&1; arc=$?
     [ "$arc" = 0 ] || verdict=FAIL
     audit_fig=$(grep 'sound against picture' "$D/audit.txt" | sed -E 's/^([^:]+): .*min ([-+0-9]+), max ([-+0-9]+) ms; .info start offset ([^ ]+) ms.*\[bound[^:]*: (.*)\]$/\1 \2..\3 (offset \4, \5)/' | tr '\n' ';')
 
