@@ -36,6 +36,14 @@ if ! { noise 48000 -ac 2 -c:a ac3 -b:a 448k stereo.ac3 &&
         noise 48000 -ac 2 -c:a eac3 -b:a 448k -f eac3 eac3.ac3; }; then
   echo "FAIL: fixture generation (ffmpeg)"; exit 1
 fi
+# The ffmpeg 9.1 AC3 encoder appends one frame with the last 256 samples of
+# its delay (251 frames; 9.0.2 wrote 250, measured 2026-11-21); -frames:a
+# does not stop it. Constant 1792-byte frames: cutting the file is exact.
+# Only shorten - truncate would pad a short file with zeros, which the length
+# check below would then pass.
+for f in stereo.ac3 s51.ac3; do
+  [ "$(stat -c %s "$f")" -gt $((250 * 1792)) ] && truncate -s $((250 * 1792)) "$f"
+done
 : > empty.ac3
 if ! python3 - <<'PY'; then echo "FAIL: fixture generation (python)"; exit 1; fi
 import random

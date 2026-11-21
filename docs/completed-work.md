@@ -731,6 +731,39 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **ffprobe 9.1: `audio_N_start_offset_ms` nicht mehr geschrieben** →
+  **ERLEDIGT (2026-11-21)**, Zweig `fix/ffprobe-csv-trailing-comma`.
+  - Anlass: ffmpeg/libav 9.0.2-dmo5 → 9.1-dmo1 (apt, 2026-11-21 16:00:53).
+    Danach meldete ttcut-demux für jede Tonspur „first copied frame does
+    not match its source packet“; `gate_av_sync_real.sh` maß Comedy Central
+    (Mehrdatei) +13 statt −11 ms (ein MP2-Frame), weiterhin in der Grenze.
+  - Gemessen: 9.0.2 privat aus dem apt-Cache entpackt
+    (`LD_LIBRARY_PATH`), derselbe `ffprobe … -of csv=p=0` auf beiden: 1741
+    Paketzeilen, gleicher Inhalt, nur das abschließende Komma fehlt bei
+    9.1 (`…,MD5:a58b…,` gegen `…,MD5:a58b…`). Die Prüfung verglich wörtlich
+    mit dem Komma. Ton-ES unter beiden Versionen byte-gleich; NAS und
+    lokaler Spiegel ebenfalls (viermal demuxt). Kein Spiegel-Fehler.
+  - Fix: `PKT_ROW=${PKT_ROW%,}`, Vergleich ohne Komma (wie
+    `COUNTED_FRAMES`). `demux_slot_e2e` unter 9.1 vorher 9/17 (alle FAIL
+    „START OFFSET MISSING“), nachher 17/17; unter 9.0.2 17/17. Comedy
+    Central unter 9.1 mit Fix: `.info` und Ketten-Prüfung gleich dem
+    9.0.2-Lauf (−5 ms Versatz, −11 ms Kette) — die 24 ms kamen allein vom
+    fehlenden Versatz, nicht von libav 9.1 im Schnitt.
+  - Übrige ffprobe-CSV-Auswertungen (ttcut-demux, Python-Werkzeuge,
+    Gates) durchgesehen: `tr -d ','`, `cut`, `IFS=, read`, `awk -F,`,
+    `rstrip(",")` — mit beiden Formen richtig. Falle:
+    `gate_cut_identity.sh` vergleicht Paketlisten von `ref` und `cand`;
+    aus verschiedenen ffmpeg-Versionen meldet es DIFFERENT.
+  - Zweite Änderung von 9.1, im vollen Gate-Lauf (150 PASS, 1 FAIL):
+    `ffmpeg -c:a ac3` hängt einen letzten Frame mit den 256 Samples der
+    Encoder-Verzögerung an (`duration 256`, Skip Samples) — 8 s Rauschen
+    ergeben 251 statt 250 Frames, `-frames:a N` ergibt N+1.
+    `ac3fix_contract` brach beim Erzeugen der Testdateien ab; jetzt werden
+    die beiden 448k-Dateien auf 250 × 1792 Byte gekürzt (nur gekürzt, nie
+    verlängert). PASS unter 9.1 und 9.0.2. `TTAC3ReEncoder` (libav-API,
+    eigenes Priming) ist nicht betroffen: `ac3_reencode` misst unter 9.1
+    0 Samples Versatz.
+
 - **Fester Pfad des Quellbaums in der Helfer-Suche** → **ERLEDIGT
   (2026-10-11)**, Zweig `fix/duplicate-cut-and-glyph-path` (Lesebefund der
   vollen Kartenprüfung; der erste Wortlaut im `TODO.md` war falsch).

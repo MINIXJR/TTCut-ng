@@ -1684,8 +1684,10 @@ if $ES_MODE; then
                 ES_MD5=$(tail -c +$(( COPY_OFF + 1 )) "$AF" | head -c "$C_SIZE" | md5sum | cut -d' ' -f1)
                 PKT_ROW=$(_ffprobe "$idx" -read_intervals "%+#$((COPY_PKT + 1))" -show_data_hash md5 \
                     -show_entries packet=pts_time,data_hash -of csv=p=0 "${SLOT_SEGMENTS[0]}" | tail -1)
+                # ffprobe up to 9.0 ends a packet row with a comma, 9.1 does not
+                PKT_ROW=${PKT_ROW%,}
             fi
-            if [ -n "$ES_MD5" ] && [ "$PKT_ROW" = "$C_PTS,MD5:$ES_MD5," ]; then
+            if [ -n "$ES_MD5" ] && [ "$PKT_ROW" = "$C_PTS,MD5:$ES_MD5" ]; then
                 TRACK_START_OFFSET_MS[$i]="$S_OFFSET"
                 info "    start offset ${S_OFFSET} ms (verified on the frame with PTS ${C_PTS}s)"
             else
